@@ -231,13 +231,22 @@ var PathAnomalyPatterns = []string{
 	`\\[0-9]{6,}\.(exe|dll)$`,                 // Numeric filename
 	`(?i)\\windows\\system\\(?!32)`,           // Fake system path
 	`(?i)\\temp\\.*\.(exe|dll|ps1|bat|cmd)$`,  // Temp folder executable
-	`(?i)\\appdata\\.*\.(exe|dll)$`,           // AppData executable
+	`(?i)\\appdata\\(?!local\\programs\\).*\.(exe|dll)$`, // AppData executable (excluding Local\Programs)
 	`(?i)\\users\\public\\.*\.(exe|dll)$`,     // Public folder executable
 	`(?i)\\programdata\\.*\.(exe|dll)$`,       // ProgramData executable
 	`(?i)\\recycler\\`,                        // Recycle bin execution
 }
 
-// TyposquatTargets - System processes commonly typosquatted (24)
+// LegitimateAppDataPaths - Legitimate paths in AppData that should not trigger alerts
+var LegitimateAppDataPaths = []string{
+	`(?i)\\appdata\\local\\programs\\`,        // User-installed apps (VSCode, Discord, etc.)
+	`(?i)\\appdata\\local\\microsoft\\`,       // Microsoft apps
+	`(?i)\\appdata\\local\\google\\chrome\\`,  // Chrome
+	`(?i)\\appdata\\local\\slack\\`,           // Slack
+	`(?i)\\appdata\\local\\discord\\`,         // Discord
+}
+
+// TyposquatTargets - System processes commonly typosquatted (26)
 var TyposquatTargets = map[string]string{
 	"svchost.exe":    `C:\Windows\System32\svchost.exe`,
 	"lsass.exe":      `C:\Windows\System32\lsass.exe`,
@@ -250,6 +259,7 @@ var TyposquatTargets = map[string]string{
 	"spoolsv.exe":    `C:\Windows\System32\spoolsv.exe`,
 	"taskhost.exe":   `C:\Windows\System32\taskhost.exe`,
 	"taskhostw.exe":  `C:\Windows\System32\taskhostw.exe`,
+	"sihost.exe":     `C:\Windows\System32\sihost.exe`,
 	"dwm.exe":        `C:\Windows\System32\dwm.exe`,
 	"conhost.exe":    `C:\Windows\System32\conhost.exe`,
 	"dllhost.exe":    `C:\Windows\System32\dllhost.exe`,
@@ -261,6 +271,7 @@ var TyposquatTargets = map[string]string{
 	"sppsvc.exe":     `C:\Windows\System32\sppsvc.exe`,
 	"ctfmon.exe":     `C:\Windows\System32\ctfmon.exe`,
 	"wmiprvse.exe":   `C:\Windows\System32\wbem\WmiPrvSE.exe`,
+	"RuntimeBroker.exe": `C:\Windows\System32\RuntimeBroker.exe`,
 	"System":         `System`,
 	"Idle":           `System Idle Process`,
 }

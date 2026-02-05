@@ -201,6 +201,15 @@ func (d *Detector) DetectTyposquatting(processes []types.ProcessInfo) []types.De
 		nameLower := strings.ToLower(proc.Name)
 		pathLower := strings.ToLower(proc.Path)
 
+		// Skip if this process is itself a known system process (prevents system process vs system process false positives)
+		// e.g., smss.exe should not be flagged as similar to lsass.exe or csrss.exe
+		if _, isKnownSystem := TyposquatTargets[proc.Name]; isKnownSystem {
+			continue
+		}
+		if _, isKnownSystem := TyposquatTargets[strings.ToLower(proc.Name)]; isKnownSystem {
+			continue
+		}
+
 		for targetName, expectedPath := range TyposquatTargets {
 			targetLower := strings.ToLower(targetName)
 
@@ -224,7 +233,12 @@ func (d *Detector) DetectTyposquatting(processes []types.ProcessInfo) []types.De
 				detections = append(detections, detection)
 			}
 
-			// Check if name matches but path doesn't
+			// Check if name matches but path doesn't (masquerading detection)
+			// Skip if path is empty (couldn't read path != wrong path)
+			if proc.Path == "" {
+				continue
+			}
+
 			if nameLower == targetLower && !strings.EqualFold(pathLower, expectedPath) {
 				// Verify it's not just a different valid path
 				if !isValidSystemPath(proc.Path, targetName) {
@@ -393,7 +407,7 @@ func getPathPatternDescription(index int) string {
 		"Numeric filename",
 		"Fake system path",
 		"Temp folder executable",
-		"AppData executable",
+		"AppData executable (non-standard location)",
 		"Public folder executable",
 		"ProgramData executable",
 		"Recycle bin execution",

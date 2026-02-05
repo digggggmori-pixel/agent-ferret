@@ -107,6 +107,26 @@ func runScan() {
 		JSON:    jsonOutput,
 	})
 
+	// Check admin privileges
+	if !collector.IsRunningAsAdmin() {
+		fmt.Println()
+		fmt.Println("╔════════════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║  ERROR: Administrator privileges required!                             ║")
+		fmt.Println("╠════════════════════════════════════════════════════════════════════════╣")
+		fmt.Println("║  This tool needs admin rights to:                                      ║")
+		fmt.Println("║    - Read process command line arguments                               ║")
+		fmt.Println("║    - Access Security event logs                                        ║")
+		fmt.Println("║    - Query all system services                                         ║")
+		fmt.Println("║                                                                        ║")
+		fmt.Println("║  Please run as Administrator:                                          ║")
+		fmt.Println("║    1. Right-click on Command Prompt or PowerShell                      ║")
+		fmt.Println("║    2. Select 'Run as administrator'                                    ║")
+		fmt.Println("║    3. Run agent-lite.exe scan                                          ║")
+		fmt.Println("╚════════════════════════════════════════════════════════════════════════╝")
+		fmt.Println()
+		os.Exit(1)
+	}
+
 	// Print header
 	out.PrintHeader(Version)
 
