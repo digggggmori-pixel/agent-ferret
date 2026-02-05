@@ -271,10 +271,13 @@ func runScan() {
 		out.PrintUploadStatus("https://api.agenthunter.io/v1/scan", true)
 	}
 
-	// Save results if output dir specified
-	if outputDir != "" {
-		out.SaveResults(result, outputDir)
+	// Save results - default to current directory
+	saveDir := outputDir
+	if saveDir == "" {
+		saveDir = "."
 	}
+	out.SaveResults(result, saveDir)
+	out.SaveDetailedReport(result, saveDir)
 }
 
 func showStatus() {

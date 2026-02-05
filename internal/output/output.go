@@ -219,3 +219,177 @@ func truncate(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
+
+// SaveDetailedReport saves a detailed human-readable text report
+func (h *Handler) SaveDetailedReport(result *types.ScanResult, outputDir string) {
+	filename := fmt.Sprintf("scan_report_%s.txt", time.Now().Format("2006-01-02_150405"))
+	fullPath := filepath.Join(outputDir, filename)
+
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		h.PrintError("Failed to create output directory: %v", err)
+		return
+	}
+
+	file, err := os.Create(fullPath)
+	if err != nil {
+		h.PrintError("Failed to create report file: %v", err)
+		return
+	}
+	defer file.Close()
+
+	// Write header
+	fmt.Fprintln(file, "================================================================================")
+	fmt.Fprintln(file, "                    AGENT LITE - SECURITY SCAN REPORT")
+	fmt.Fprintln(file, "================================================================================")
+	fmt.Fprintln(file)
+	fmt.Fprintf(file, "Scan ID:       %s\n", result.ScanID)
+	fmt.Fprintf(file, "Agent Version: %s\n", result.AgentVersion)
+	fmt.Fprintf(file, "Scan Time:     %s\n", result.ScanTime.Format("2006-01-02 15:04:05 UTC"))
+	fmt.Fprintf(file, "Duration:      %d ms\n", result.ScanDurationMs)
+	fmt.Fprintln(file)
+
+	// Write host info
+	fmt.Fprintln(file, "--------------------------------------------------------------------------------")
+	fmt.Fprintln(file, "HOST INFORMATION")
+	fmt.Fprintln(file, "--------------------------------------------------------------------------------")
+	fmt.Fprintf(file, "Hostname:      %s\n", result.Host.Hostname)
+	fmt.Fprintf(file, "OS Version:    %s\n", result.Host.OSVersion)
+	fmt.Fprintf(file, "Architecture:  %s\n", result.Host.Arch)
+	fmt.Fprintf(file, "Domain:        %s\n", result.Host.Domain)
+	fmt.Fprintf(file, "IP Addresses:  %v\n", result.Host.IPAddresses)
+	fmt.Fprintln(file)
+
+	// Write summary
+	fmt.Fprintln(file, "--------------------------------------------------------------------------------")
+	fmt.Fprintln(file, "SCAN SUMMARY")
+	fmt.Fprintln(file, "--------------------------------------------------------------------------------")
+	fmt.Fprintf(file, "Total Processes:   %d\n", result.Summary.TotalProcesses)
+	fmt.Fprintf(file, "Total Connections: %d\n", result.Summary.TotalConnections)
+	fmt.Fprintf(file, "Total Services:    %d\n", result.Summary.TotalServices)
+	fmt.Fprintln(file)
+	fmt.Fprintln(file, "Detection Counts:")
+	fmt.Fprintf(file, "  [CRITICAL] %d\n", result.Summary.Detections.Critical)
+	fmt.Fprintf(file, "  [HIGH]     %d\n", result.Summary.Detections.High)
+	fmt.Fprintf(file, "  [MEDIUM]   %d\n", result.Summary.Detections.Medium)
+	fmt.Fprintf(file, "  [LOW]      %d\n", result.Summary.Detections.Low)
+	total := result.Summary.Detections.Critical + result.Summary.Detections.High +
+		result.Summary.Detections.Medium + result.Summary.Detections.Low
+	fmt.Fprintf(file, "  TOTAL:     %d\n", total)
+	fmt.Fprintln(file)
+
+	// Write all detections
+	fmt.Fprintln(file, "================================================================================")
+	fmt.Fprintln(file, "                         DETAILED DETECTIONS")
+	fmt.Fprintln(file, "================================================================================")
+	fmt.Fprintln(file)
+
+	if len(result.Detections) == 0 {
+		fmt.Fprintln(file, "No detections found.")
+	} else {
+		// Group by severity
+		criticals := filterBySeverity(result.Detections, types.SeverityCritical)
+		highs := filterBySeverity(result.Detections, types.SeverityHigh)
+		mediums := filterBySeverity(result.Detections, types.SeverityMedium)
+		lows := filterBySeverity(result.Detections, types.SeverityLow)
+
+		if len(criticals) > 0 {
+			fmt.Fprintln(file, "=== CRITICAL SEVERITY ===")
+			writeDetections(file, criticals)
+		}
+		if len(highs) > 0 {
+			fmt.Fprintln(file, "=== HIGH SEVERITY ===")
+			writeDetections(file, highs)
+		}
+		if len(mediums) > 0 {
+			fmt.Fprintln(file, "=== MEDIUM SEVERITY ===")
+			writeDetections(file, mediums)
+		}
+		if len(lows) > 0 {
+			fmt.Fprintln(file, "=== LOW SEVERITY ===")
+			writeDetections(file, lows)
+		}
+	}
+
+	// Write footer
+	fmt.Fprintln(file)
+	fmt.Fprintln(file, "================================================================================")
+	fmt.Fprintf(file, "Report generated at: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Fprintln(file, "================================================================================")
+
+	if !h.opts.Quiet && !h.opts.JSON {
+		fmt.Printf("Detailed report: %s\n", fullPath)
+	}
+}
+
+func filterBySeverity(detections []types.Detection, severity string) []types.Detection {
+	var result []types.Detection
+	for _, d := range detections {
+		if d.Severity == severity {
+			result = append(result, d)
+		}
+	}
+	return result
+}
+
+func writeDetections(file *os.File, detections []types.Detection) {
+	for i, d := range detections {
+		fmt.Fprintf(file, "\n[%d] %s\n", i+1, d.Description)
+		fmt.Fprintf(file, "    Type:       %s\n", d.Type)
+		fmt.Fprintf(file, "    Severity:   %s\n", d.Severity)
+		fmt.Fprintf(file, "    Confidence: %.0f%%\n", d.Confidence*100)
+		fmt.Fprintf(file, "    Timestamp:  %s\n", d.Timestamp.Format("2006-01-02 15:04:05"))
+
+		if d.Process != nil {
+			fmt.Fprintln(file, "    Process Info:")
+			fmt.Fprintf(file, "      - Name:        %s\n", d.Process.Name)
+			fmt.Fprintf(file, "      - PID:         %d\n", d.Process.PID)
+			fmt.Fprintf(file, "      - PPID:        %d\n", d.Process.PPID)
+			if d.Process.ParentName != "" {
+				fmt.Fprintf(file, "      - Parent:      %s\n", d.Process.ParentName)
+			}
+			if d.Process.Path != "" {
+				fmt.Fprintf(file, "      - Path:        %s\n", d.Process.Path)
+			}
+			if d.Process.CommandLine != "" {
+				fmt.Fprintf(file, "      - CommandLine: %s\n", d.Process.CommandLine)
+			}
+			if d.Process.User != "" {
+				fmt.Fprintf(file, "      - User:        %s\n", d.Process.User)
+			}
+			fmt.Fprintf(file, "      - CreateTime:  %s\n", d.Process.CreateTime.Format("2006-01-02 15:04:05"))
+		}
+
+		if d.Network != nil {
+			fmt.Fprintln(file, "    Network Info:")
+			fmt.Fprintf(file, "      - Protocol:    %s\n", d.Network.Protocol)
+			fmt.Fprintf(file, "      - Local:       %s:%d\n", d.Network.LocalAddr, d.Network.LocalPort)
+			fmt.Fprintf(file, "      - Remote:      %s:%d\n", d.Network.RemoteAddr, d.Network.RemotePort)
+			fmt.Fprintf(file, "      - State:       %s\n", d.Network.State)
+			fmt.Fprintf(file, "      - OwningPID:   %d\n", d.Network.OwningPID)
+		}
+
+		if d.MITRE != nil {
+			fmt.Fprintln(file, "    MITRE ATT&CK:")
+			if len(d.MITRE.Tactics) > 0 {
+				fmt.Fprintf(file, "      - Tactics:     %v\n", d.MITRE.Tactics)
+			}
+			if len(d.MITRE.Techniques) > 0 {
+				fmt.Fprintf(file, "      - Techniques:  %v\n", d.MITRE.Techniques)
+			}
+		}
+
+		if len(d.SigmaRules) > 0 {
+			fmt.Fprintf(file, "    Sigma Rules: %v\n", d.SigmaRules)
+		}
+
+		if len(d.Details) > 0 {
+			fmt.Fprintln(file, "    Additional Details:")
+			for k, v := range d.Details {
+				fmt.Fprintf(file, "      - %s: %v\n", k, v)
+			}
+		}
+
+		fmt.Fprintln(file, "    ------------------------------------------------------------------------")
+	}
+	fmt.Fprintln(file)
+}
