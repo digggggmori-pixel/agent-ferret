@@ -788,8 +788,12 @@ func (d *Detector) DetectServiceVendorTyposquatting(services []types.ServiceInfo
 		for _, vendor := range TrustedVendors {
 			vendorLower := strings.ToLower(vendor)
 
+			// Skip short vendor names (too many false positives)
+			if len(vendorLower) < 4 {
+				continue
+			}
+
 			// Check if display name contains something similar but not exact
-			// First, check if the vendor name appears in display name
 			words := strings.Fields(displayLower)
 			for _, word := range words {
 				// Skip if it's the exact match
@@ -797,17 +801,22 @@ func (d *Detector) DetectServiceVendorTyposquatting(services []types.ServiceInfo
 					continue
 				}
 
+				// Skip common English words that cause false positives
+				if CommonEnglishWords[word] {
+					continue
+				}
+
+				// Skip very short words (3 chars or less)
+				if len(word) <= 3 {
+					continue
+				}
+
 				// Check Levenshtein distance
 				distance := levenshteinDistance(word, vendorLower)
 
-				// For short vendor names (4-5 chars), only flag distance 1
-				// For longer names, flag distance 1-2
-				maxDistance := 2
-				if len(vendorLower) <= 5 {
-					maxDistance = 1
-				}
-
-				if distance > 0 && distance <= maxDistance && len(word) >= len(vendorLower)-1 {
+				// Only flag distance 1 to reduce false positives
+				// Word must be close in length to vendor name
+				if distance == 1 && len(word) >= len(vendorLower)-1 && len(word) <= len(vendorLower)+1 {
 					detection := types.Detection{
 						ID:          fmt.Sprintf("svc-vendor-%s-%d", svc.Name, time.Now().UnixNano()),
 						Type:        types.DetectionTypeServiceVendor,
@@ -844,6 +853,20 @@ func (d *Detector) DetectServiceNameTyposquatting(services []types.ServiceInfo) 
 	for _, svc := range services {
 		nameLower := strings.ToLower(svc.Name)
 
+		// Skip if this is a known Microsoft service (whitelist)
+		if MicrosoftServiceWhitelist[nameLower] {
+			continue
+		}
+
+		// Skip if binary path is from Windows system directory (trusted)
+		pathLower := strings.ToLower(svc.BinaryPath)
+		if strings.Contains(pathLower, `\windows\system32\`) ||
+			strings.Contains(pathLower, `\windows\syswow64\`) ||
+			strings.Contains(pathLower, `\program files\`) ||
+			strings.Contains(pathLower, `\program files (x86)\`) {
+			continue
+		}
+
 		for _, systemSvc := range SystemServices {
 			// Skip exact match
 			if nameLower == systemSvc {
@@ -852,8 +875,8 @@ func (d *Detector) DetectServiceNameTyposquatting(services []types.ServiceInfo) 
 
 			distance := levenshteinDistance(nameLower, systemSvc)
 
-			// Flag distance 1-2
-			if distance > 0 && distance <= 2 {
+			// Only flag distance 1 (stricter) and require similar length
+			if distance == 1 && len(nameLower) >= len(systemSvc)-1 && len(nameLower) <= len(systemSvc)+1 {
 				detection := types.Detection{
 					ID:          fmt.Sprintf("svc-name-%s-%d", svc.Name, time.Now().UnixNano()),
 					Type:        types.DetectionTypeServiceName,
@@ -866,11 +889,11 @@ func (d *Detector) DetectServiceNameTyposquatting(services []types.ServiceInfo) 
 						Techniques: []string{"T1036.005", "T1543.003"},
 					},
 					Details: map[string]interface{}{
-						"service_name":    svc.Name,
-						"display_name":    svc.DisplayName,
-						"system_service":  systemSvc,
-						"distance":        distance,
-						"binary_path":     svc.BinaryPath,
+						"service_name":   svc.Name,
+						"display_name":   svc.DisplayName,
+						"system_service": systemSvc,
+						"distance":       distance,
+						"binary_path":    svc.BinaryPath,
 					},
 				}
 				detections = append(detections, detection)
@@ -892,6 +915,24 @@ func (d *Detector) DetectServicePathAnomalies(services []types.ServiceInfo) []ty
 		}
 
 		pathLower := strings.ToLower(svc.BinaryPath)
+
+		// Skip known Microsoft paths (whitelist)
+		isMicrosoftPath := false
+		for _, msPath := range MicrosoftPathPrefixes {
+			if strings.Contains(pathLower, msPath) {
+				isMicrosoftPath = true
+				break
+			}
+		}
+		if isMicrosoftPath {
+			continue
+		}
+
+		// Skip if it's a known Microsoft service running from system paths
+		nameLower := strings.ToLower(svc.Name)
+		if MicrosoftServiceWhitelist[nameLower] {
+			continue
+		}
 
 		// Check for dangerous paths
 		for _, dangerPath := range DangerousPaths {

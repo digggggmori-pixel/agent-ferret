@@ -387,3 +387,82 @@ var MaliciousKeywords = []string{
 	"c2", "cnc", "beacon", "shell", "mal", "hack", "pwn", "bot",
 	"payload", "exploit", "ransom", "crypt", "stealer", "dropper",
 }
+
+// CommonEnglishWords - Words to exclude from vendor typosquatting detection
+// These are common words that may have low Levenshtein distance to vendor names
+var CommonEnglishWords = map[string]bool{
+	// Common words mistaken for AMD
+	"and": true, "any": true, "add": true, "aid": true, "arm": true,
+	// Common words mistaken for HP
+	"ip": true, "hv": true, "hd": true, "up": true, "hi": true,
+	// Common words mistaken for LG
+	"log": true, "lg": true,
+	// Common words mistaken for Dell
+	"dll": true, "del": true, "deal": true,
+	// Other common short words
+	"the": true, "for": true, "to": true, "in": true, "on": true,
+	"at": true, "by": true, "or": true, "as": true, "is": true,
+	"it": true, "if": true, "of": true, "an": true, "be": true,
+	"so": true, "no": true, "do": true, "go": true, "my": true,
+	"we": true, "he": true, "me": true, "us": true,
+	// Common tech terms
+	"api": true, "cpu": true, "gpu": true, "ram": true, "usb": true,
+	"lan": true, "wan": true, "vpn": true, "tcp": true, "udp": true,
+	"dns": true, "ftp": true, "ssh": true, "ssl": true, "tls": true,
+	"app": true, "sys": true, "net": true, "web": true, "dev": true,
+}
+
+// MicrosoftServiceWhitelist - Known legitimate Microsoft Windows service names
+// These should not be flagged as typosquatting
+var MicrosoftServiceWhitelist = map[string]bool{
+	// Core system services
+	"eventlog": true, "netlogon": true, "dnscache": true, "dhcp": true,
+	"wuauserv": true, "bits": true, "cryptsvc": true, "schedule": true,
+	"spooler": true, "termservice": true, "winrm": true,
+	"wscsvc": true, "wersvc": true, "mpssvc": true, "bfe": true,
+	"sharedaccess": true, "themes": true, "w32time": true, "audiosrv": true,
+	"wlansvc": true, "netprofm": true,
+	// Additional Windows services that were false positives
+	"aesmservice": true, "apxsvc": true, "dcsvc": true, "dsmsvc": true,
+	"dssvc": true, "efs": true, "gpsvc": true, "icssvc": true,
+	"mcmsvc": true, "ngcsvc": true, "nlasvc": true, "nossvc": true,
+	"nsi": true, "sdrsvc": true, "seclogon": true, "sppsvc": true,
+	"svsvc": true, "usosvc": true, "wcmsvc": true, "wcncsvc": true,
+	"wecsvc": true, "whesvc": true, "wisvc": true, "wlidsvc": true,
+	"wlpasvc": true, "wmansvc": true, "wwansvc": true,
+	// Lanman services
+	"lanmanserver": true, "lanmanworkstation": true,
+	// Windows Defender services
+	"windefend": true, "wdnissvc": true, "mdcoresvc": true,
+	// Windows Update services
+	"wuauserv": true, "trustedinstaller": true, "dosvc": true,
+	// Other common services
+	"appinfo": true, "appidsvc": true, "appxsvc": true,
+	"diagtrack": true, "diagsvc": true,
+	"lfsvc": true, "lsm": true, "msiserver": true,
+	"netbt": true, "nettcpportsharing": true,
+	"pcasvc": true, "pla": true, "plugplay": true,
+	"printnotify": true, "remoteaccess": true, "remoteregistry": true,
+	"rpclocator": true, "rpcss": true, "samss": true,
+	"sens": true, "sessionenv": true, "shellhwdetection": true,
+	"ssdpsrv": true, "stisvc": true, "swprv": true,
+	"tapisrv": true, "tbs": true, "tiledatamodelsvc": true,
+	"tzautoupdate": true, "uxsms": true, "vaultscv": true,
+	"vds": true, "vmictimesync": true, "vss": true,
+	"wbiosrvc": true, "wdiservicehost": true, "wdisystemhost": true,
+	"weblient": true, "wiaras": true, "winhttp": true, "winmgmt": true,
+	"wlansvchv": true, "wmiapas": true, "wmpnetworksvc": true,
+	"workfolderssvc": true, "wpcmonsvc": true, "wpdbusenum": true,
+	"wseaudio": true, "wudfhost": true, "xblauthmanager": true,
+}
+
+// MicrosoftPathPrefixes - Known legitimate Microsoft paths that should not trigger service path anomaly
+var MicrosoftPathPrefixes = []string{
+	`\programdata\microsoft\`,
+	`\programdata\package cache\`,
+	`\program files\common files\microsoft shared\`,
+	`\program files\windows defender\`,
+	`\program files (x86)\common files\microsoft shared\`,
+	`\program files\microsoft`,
+	`\program files (x86)\microsoft`,
+}
