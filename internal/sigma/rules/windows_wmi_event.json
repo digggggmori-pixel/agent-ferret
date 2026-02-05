@@ -1,0 +1,260 @@
+{
+  "metadata": {
+    "logsource": "windows_wmi_event",
+    "rule_count": 3,
+    "compiled_at": "2026-02-04T12:28:36.569787",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "fe21810c-2a8c-478f-8dd3-5a287fb2a0e0",
+      "title": "Suspicious Scripting in a WMI Consumer",
+      "status": "test",
+      "description": "Detects suspicious commands that are related to scripting/powershell in WMI Event Consumers",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.t1059.005"
+      ],
+      "logsource": {
+        "category": "wmi_event",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_destination": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Destination__contains_all": {
+                    "field": "Destination",
+                    "value": [
+                      "new-object",
+                      "net.webclient",
+                      ".downloadstring"
+                    ],
+                    "modifiers": [
+                      "contains",
+                      "all"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Destination__contains_all": {
+                    "field": "Destination",
+                    "value": [
+                      "new-object",
+                      "net.webclient",
+                      ".downloadfile"
+                    ],
+                    "modifiers": [
+                      "contains",
+                      "all"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Destination__contains": {
+                    "field": "Destination",
+                    "value": [
+                      " iex(",
+                      " -nop ",
+                      " -noprofile ",
+                      " -decode ",
+                      " -enc ",
+                      "WScript.Shell",
+                      "System.Security.Cryptography.FromBase64Transform"
+                    ],
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "selection_destination",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection_destination"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.005"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Jonhnathan Ribeiro",
+        "date": "2019-04-15",
+        "modified": "2023-09-09",
+        "references": [
+          "https://in.security/an-intro-into-abusing-and-identifying-wmi-event-subscriptions-for-persistence/",
+          "https://github.com/Neo23x0/signature-base/blob/615bf1f6bac3c1bdc417025c40c073e6c2771a76/yara/gen_susp_lnk_files.yar#L19",
+          "https://github.com/RiccardoAncarani/LiquidSnake"
+        ],
+        "falsepositives": [
+          "Legitimate administrative scripts"
+        ],
+        "source_file": "sigma_rules/windows/wmi_event/sysmon_wmi_susp_scripting.yml"
+      }
+    },
+    {
+      "id": "83844185-1c5b-45bc-bcf3-b5bf3084ca5b",
+      "title": "Suspicious Encoded Scripts in a WMI Consumer",
+      "status": "test",
+      "description": "Detects suspicious encoded payloads in WMI Event Consumers",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.execution",
+        "attack.t1047",
+        "attack.persistence",
+        "attack.t1546.003"
+      ],
+      "logsource": {
+        "category": "wmi_event",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_destination": {
+            "type": "field_match",
+            "matchers": {
+              "Destination__base64offset_contains": {
+                "field": "Destination",
+                "value": [
+                  "WriteProcessMemory",
+                  "This program cannot be run in DOS mode",
+                  "This program must be run under Win32"
+                ],
+                "modifiers": [
+                  "base64offset",
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection_destination",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection_destination"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1047",
+          "T1546.003"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "execution",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2021-09-01",
+        "modified": "2022-10-09",
+        "references": [
+          "https://github.com/RiccardoAncarani/LiquidSnake"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/wmi_event/sysmon_wmi_susp_encoded_scripts.yml"
+      }
+    },
+    {
+      "id": "0f06a3a5-6a09-413f-8743-e6cf35561297",
+      "title": "WMI Event Subscription",
+      "status": "test",
+      "description": "Detects creation of WMI event subscription persistence method",
+      "level": "medium",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.persistence",
+        "attack.t1546.003"
+      ],
+      "logsource": {
+        "category": "wmi_event",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  19,
+                  20,
+                  21
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1546.003"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Tom Ueltschi (@c_APT_ure)",
+        "date": "2019-01-12",
+        "modified": "2021-11-27",
+        "references": [
+          "https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon#event-id-19-wmievent-wmieventfilter-activity-detected",
+          "https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon#event-id-20-wmievent-wmieventconsumer-activity-detected",
+          "https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon#event-id-21-wmievent-wmieventconsumertofilter-activity-detected"
+        ],
+        "falsepositives": [
+          "Exclude legitimate (vetted) use of WMI event subscription in your network"
+        ],
+        "source_file": "sigma_rules/windows/wmi_event/sysmon_wmi_event_subscription.yml"
+      }
+    }
+  ]
+}

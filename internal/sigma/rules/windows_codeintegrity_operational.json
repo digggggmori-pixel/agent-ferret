@@ -1,0 +1,1146 @@
+{
+  "metadata": {
+    "logsource": "windows_codeintegrity_operational",
+    "rule_count": 10,
+    "compiled_at": "2026-02-04T12:28:36.360435",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "9b72b82d-f1c5-4632-b589-187159bc6ec1",
+      "title": "CodeIntegrity - Blocked Driver Load With Revoked Certificate",
+      "status": "test",
+      "description": "Detects blocked load attempts of revoked drivers",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1543"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3023,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_revoked_driver_blocked.yml"
+      }
+    },
+    {
+      "id": "5daf11c3-022b-4969-adb9-365e6c078c7c",
+      "title": "CodeIntegrity - Disallowed File For Protected Processes Has Been Blocked",
+      "status": "test",
+      "description": "Detects block events for files that are disallowed by code integrity for protected processes",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3104,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_blocked_protected_process_file.yml"
+      }
+    },
+    {
+      "id": "6f156c48-3894-4952-baf0-16193e9067d2",
+      "title": "CodeIntegrity - Blocked Image Load With Revoked Certificate",
+      "status": "test",
+      "description": "Detects blocked image load events with revoked certificates by code integrity.",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3036,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_revoked_image_blocked.yml"
+      }
+    },
+    {
+      "id": "f8931561-97f5-4c46-907f-0a4a592e47a7",
+      "title": "CodeIntegrity - Unmet Signing Level Requirements By File Under Validation",
+      "status": "experimental",
+      "description": "Detects attempted file load events that did not meet the signing level requirements. It often means the file's signature is revoked or a signature with the Lifetime Signing EKU has expired.\nThis event is best correlated with EID 3089 to determine the error of the validation.\n",
+      "level": "low",
+      "tags": [
+        "attack.execution"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  3033,
+                  3034
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_dtrace": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Program Files\\DTrace\\dtrace.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__endswith": {
+                "field": "ProcessNameBuffer",
+                "value": "\\Windows\\System32\\svchost.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 12,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_av_generic": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__contains": {
+                "field": "FileNameBuffer",
+                "value": "\\Windows\\System32\\DriverStore\\FileRepository\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\igd10iumd64.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 7,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_electron_based_app": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Windows\\System32\\nvspcap64.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__endswith": {
+                "field": "ProcessNameBuffer",
+                "value": [
+                  "\\AppData\\Local\\Keybase\\Gui\\Keybase.exe",
+                  "\\Microsoft\\Teams\\stage\\Teams.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 8,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_bonjour": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Program Files\\Bonjour\\mdnsNSP.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__endswith": {
+                "field": "ProcessNameBuffer",
+                "value": [
+                  "\\Windows\\System32\\svchost.exe",
+                  "\\Windows\\System32\\SIHClient.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": [
+                  8,
+                  12
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_msoffice": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__contains": {
+                "field": "FileNameBuffer",
+                "value": "\\Microsoft Office\\root\\vfs\\ProgramFilesCommonX64\\Microsoft Shared\\OFFICE",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\MSOXMLMF.DLL",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 7,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_slack": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Windows\\System32\\nvspcap64.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__contains": {
+                "field": "ProcessNameBuffer",
+                "value": "\\AppData\\Local\\slack\\app-",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__endswith": {
+                "field": "ProcessNameBuffer",
+                "value": "\\slack.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 8,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_firefox": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": [
+                  "\\Mozilla Firefox\\mozavcodec.dll",
+                  "\\Mozilla Firefox\\mozavutil.dll"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ProcessNameBuffer__endswith": {
+                "field": "ProcessNameBuffer",
+                "value": "\\Mozilla Firefox\\firefox.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 8,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_avast": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": [
+                  "\\Program Files\\Avast Software\\Avast\\aswAMSI.dll",
+                  "\\Program Files (x86)\\Avast Software\\Avast\\aswAMSI.dll"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": [
+                  8,
+                  12
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_gac": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__contains": {
+                "field": "FileNameBuffer",
+                "value": "\\Windows\\assembly\\GAC\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__endswith": {
+                "field": "ProcessNameBuffer",
+                "value": "\\mscorsvw.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__contains": {
+                "field": "ProcessNameBuffer",
+                "value": "\\Windows\\Microsoft.NET\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 8,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_google_drive": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__contains": {
+                "field": "FileNameBuffer",
+                "value": "\\Program Files\\Google\\Drive File Stream\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\crashpad_handler.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessNameBuffer__endswith": {
+                "field": "ProcessNameBuffer",
+                "value": "\\Windows\\ImmersiveControlPanel\\SystemSettings.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 8,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_trend_micro": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Trend Micro\\Client Server Security Agent\\perficrcperfmonmgr.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RequestedPolicy": {
+                "field": "RequestedPolicy",
+                "value": 8,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_mdns_responder": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Program Files\\National Instruments\\Shared\\mDNS Responder\\nimdnsNSP.dll ",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_mcafee": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": [
+                  "\\Program Files\\McAfee\\Endpoint Security\\Threat Prevention\\MfeAmsiProvider.dll",
+                  "\\Program Files\\McAfee\\MfeAV\\AMSIExt.dll"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_eset": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Program Files\\ESET\\ESET Security\\eamsi.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_comodo": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__endswith": {
+                "field": "FileNameBuffer",
+                "value": "\\Program Files\\comodo\\comodo internet security\\amsiprovider_x64.dll",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_sentinel_one": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "FileNameBuffer__contains": {
+                    "field": "FileNameBuffer",
+                    "value": "\\Program Files\\SentinelOne\\Sentinel Agent",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ProcessNameBuffer__contains": {
+                    "field": "ProcessNameBuffer",
+                    "value": "\\Program Files\\SentinelOne\\Sentinel Agent",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          },
+          "filter_optional_national_instruments": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer__contains": {
+                "field": "FileNameBuffer",
+                "value": "\\National Instruments\\Shared\\mDNS Responder\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_kaspersky": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ProcessNameBuffer__contains_all": {
+                    "field": "ProcessNameBuffer",
+                    "value": [
+                      "\\Kaspersky Lab\\",
+                      "\\avp.exe"
+                    ],
+                    "modifiers": [
+                      "contains",
+                      "all"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "FileNameBuffer__contains_all": {
+                    "field": "FileNameBuffer",
+                    "value": [
+                      "\\Kaspersky Lab\\",
+                      "\\antimalware_provider.dll"
+                    ],
+                    "modifiers": [
+                      "contains",
+                      "all"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-01-20",
+        "modified": "2024-12-25",
+        "references": [
+          "https://twitter.com/SBousseaden/status/1483810148602814466",
+          "https://github.com/MicrosoftDocs/windows-itpro-docs/blob/40fe118976734578f83e5e839b9c63ae7a4af82d/windows/security/threat-protection/windows-defender-application-control/event-id-explanations.md#windows-codeintegrity-operational-log",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations"
+        ],
+        "falsepositives": [
+          "Antivirus and other third party products are known to trigger this rule quite a lot. Initial filters and tuning is required before using this rule."
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_attempted_dll_load.yml"
+      }
+    },
+    {
+      "id": "c92c24e7-f595-493f-9c98-53d5142f5c18",
+      "title": "CodeIntegrity - Unsigned Image Loaded",
+      "status": "test",
+      "description": "Detects loaded unsigned image on the system",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3037,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_unsigned_image_loaded.yml"
+      }
+    },
+    {
+      "id": "881b7725-47cc-4055-8000-425823344c59",
+      "title": "CodeIntegrity - Revoked Image Loaded",
+      "status": "test",
+      "description": "Detects image load events with revoked certificates by code integrity.",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  3032,
+                  3035
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_revoked_image_loaded.yml"
+      }
+    },
+    {
+      "id": "320fccbf-5e32-4101-82b8-2679c5f007c6",
+      "title": "CodeIntegrity - Revoked Kernel Driver Loaded",
+      "status": "test",
+      "description": "Detects the load of a revoked kernel driver",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  3021,
+                  3022
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_revoked_driver_loaded.yml"
+      }
+    },
+    {
+      "id": "2f8cd7a0-9d5a-4f62-9f8b-2c951aa0dd1f",
+      "title": "CodeIntegrity - Unmet WHQL Requirements For Loaded Kernel Module",
+      "status": "test",
+      "description": "Detects loaded kernel modules that did not meet the WHQL signing requirements.",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  3082,
+                  3083
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_vmware": {
+            "type": "field_match",
+            "matchers": {
+              "FileNameBuffer": {
+                "field": "FileNameBuffer",
+                "value": [
+                  "system32\\drivers\\vsock.sys",
+                  "System32\\drivers\\vmci.sys"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "2023-06-14",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_whql_failure.yml"
+      }
+    },
+    {
+      "id": "951f8d29-f2f6-48a7-859f-0673ff105e6f",
+      "title": "CodeIntegrity - Unsigned Kernel Module Loaded",
+      "status": "test",
+      "description": "Detects the presence of a loaded unsigned kernel module on the system.",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3001,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-06-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_unsigned_driver_loaded.yml"
+      }
+    },
+    {
+      "id": "e4be5675-4a53-426a-8c81-a8bb2387e947",
+      "title": "CodeIntegrity - Blocked Image/Driver Load For Policy Violation",
+      "status": "test",
+      "description": "Detects blocked load events that did not meet the authenticode signing level requirements or violated the code integrity policy.",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1543"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "codeintegrity-operational"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3077,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-11-10",
+        "modified": "2023-06-07",
+        "references": [
+          "https://twitter.com/wdormann/status/1590434950335320065",
+          "https://github.com/MicrosoftDocs/windows-itpro-docs/blob/40fe118976734578f83e5e839b9c63ae7a4af82d/windows/security/threat-protection/windows-defender-application-control/event-id-explanations.md#windows-codeintegrity-operational-log",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/code_integrity/win_codeintegrity_enforced_policy_block.yml"
+      }
+    }
+  ]
+}

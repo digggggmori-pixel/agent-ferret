@@ -1,0 +1,5875 @@
+{
+  "metadata": {
+    "logsource": "windows_system",
+    "rule_count": 63,
+    "compiled_at": "2026-02-04T12:28:36.563887",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "882fbe50-d8d7-4e29-ae80-0648a8556866",
+      "title": "Crash Dump Created By Operating System",
+      "status": "experimental",
+      "description": "Detects \"BugCheck\" errors indicating the system rebooted due to a crash, capturing the bugcheck code, dump file path, and report ID.",
+      "level": "medium",
+      "tags": [
+        "attack.credential-access",
+        "attack.collection",
+        "attack.t1003.002",
+        "attack.t1005"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-WER-SystemErrorReporting",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 1001,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.002",
+          "T1005"
+        ],
+        "tactics": [
+          "credential_access",
+          "collection"
+        ]
+      },
+      "meta": {
+        "author": "Jason Mull",
+        "date": "2025-05-12",
+        "modified": "",
+        "references": [
+          "https://www.sans.edu/cyber-research/from-crash-compromise-unlocking-potential-windows-crash-dumps-offensive-security/",
+          "https://jasonmull.com/articles/offensive/2025-05-12-windows-crash-dumps-offensive-security/"
+        ],
+        "falsepositives": [],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_wer_systemerrorreporting/win_system_crash_dump_created.yml"
+      }
+    },
+    {
+      "id": "7e9c7999-0f9b-4d4a-a6ed-af6d553d4af4",
+      "title": "Invoke-Obfuscation Via Use MSHTA - System",
+      "status": "test",
+      "description": "Detects Obfuscated Powershell via use MSHTA in Scripts",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "mshta",
+                  "vbscript:createobject"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nikita Nazarov, oscd.community",
+        "date": "2020-10-09",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_use_mshta_services.yml"
+      }
+    },
+    {
+      "id": "6c0a7755-6d31-44fa-80e1-133e57752680",
+      "title": "Windows Defender Threat Detection Service Disabled",
+      "status": "stable",
+      "description": "Detects when the \"Windows Defender Threat Protection\" service is disabled.",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 7036,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "param1": {
+                "field": "param1",
+                "value": [
+                  "Windows Defender Antivirus Service",
+                  "Service antivirus Microsoft Defender"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "param2": {
+                "field": "param2",
+                "value": [
+                  "stopped",
+                  "arrêté"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Ján Trenčanský, frack113",
+        "date": "2020-07-28",
+        "modified": "2024-07-02",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md"
+        ],
+        "falsepositives": [
+          "Administrator actions",
+          "Auto updates of Windows Defender causes restarts"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_defender_disabled.yml"
+      }
+    },
+    {
+      "id": "530a6faa-ff3d-4022-b315-50828e77eef5",
+      "title": "Anydesk Remote Access Software Service Installation",
+      "status": "test",
+      "description": "Detects the installation of the anydesk software service. Which could be an indication of anydesk abuse if you the software isn't already used.",
+      "level": "medium",
+      "tags": [
+        "attack.persistence"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_provider": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName__contains_all": {
+                    "field": "ServiceName",
+                    "value": [
+                      "AnyDesk",
+                      "Service"
+                    ],
+                    "modifiers": [
+                      "contains",
+                      "all"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains": {
+                    "field": "ImagePath",
+                    "value": "AnyDesk",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)",
+        "date": "2022-08-11",
+        "modified": "2025-02-24",
+        "references": [
+          "https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/",
+          "https://thedfirreport.com/2025/02/24/confluence-exploit-leads-to-lockbit-ransomware/"
+        ],
+        "falsepositives": [
+          "Legitimate usage of the anydesk tool"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_anydesk.yml"
+      }
+    },
+    {
+      "id": "26481afe-db26-4228-b264-25a29fe6efc7",
+      "title": "Uncommon Service Installation Image Path",
+      "status": "test",
+      "description": "Detects uncommon service installation commands by looking at suspicious or uncommon image path values containing references to encoded powershell commands, temporary paths, etc.\n",
+      "level": "medium",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "car.2013-09-005",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "suspicious_paths": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "\\\\\\\\.\\\\pipe",
+                  "\\Users\\Public\\",
+                  "\\Windows\\Temp\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "suspicious_encoded_flag": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": " -e",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "suspicious_encoded_keywords": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  " aQBlAHgA",
+                  " aWV4I",
+                  " IAB",
+                  " JAB",
+                  " PAA",
+                  " SQBFAFgA",
+                  " SUVYI"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_thor_remote": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__startswith": {
+                "field": "ImagePath",
+                "value": "C:\\WINDOWS\\TEMP\\thor10-remote\\thor64.exe",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_defender_def_updates": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__startswith": {
+                "field": "ImagePath",
+                "value": "C:\\ProgramData\\Microsoft\\Windows Defender\\Definition Updates\\",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and ( suspicious_paths or all of suspicious_encoded_* ) and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "or",
+          "operands": [
+            "selection and ( suspicious_paths",
+            "all of suspicious_encoded_* ) and not 1 of filter_main_* and not 1 of filter_optional_*"
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-03-18",
+        "modified": "2024-02-09",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_uncommon.yml"
+      }
+    },
+    {
+      "id": "5a105d34-05fc-401e-8553-272b45c1522d",
+      "title": "CobaltStrike Service Installations - System",
+      "status": "test",
+      "description": "Detects known malicious service installs that appear in cases in which a Cobalt Strike beacon elevates privileges or lateral movement",
+      "level": "critical",
+      "tags": [
+        "attack.persistence",
+        "attack.execution",
+        "attack.privilege-escalation",
+        "attack.lateral-movement",
+        "attack.t1021.002",
+        "attack.t1543.003",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_id": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection1": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "ADMIN$",
+                  ".exe"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection2": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "%COMSPEC%",
+                  "start",
+                  "powershell"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection3": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": "powershell -nop -w hidden -encodedcommand",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection4": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__base64offset_contains": {
+                "field": "ImagePath",
+                "value": "IEX (New-Object Net.Webclient).DownloadString('http://127.0.0.1:",
+                "modifiers": [
+                  "base64offset",
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection_id and (selection1 or selection2 or selection3 or selection4)",
+        "condition_parsed": {
+          "op": "or",
+          "operands": [
+            "selection_id and (selection1",
+            "selection2",
+            "selection3",
+            "selection4)"
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1021.002",
+          "T1543.003",
+          "T1569.002"
+        ],
+        "tactics": [
+          "persistence",
+          "execution",
+          "privilege_escalation",
+          "lateral_movement"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Wojciech Lesicki",
+        "date": "2021-05-26",
+        "modified": "2022-11-27",
+        "references": [
+          "https://www.sans.org/webcasts/119395",
+          "https://www.crowdstrike.com/blog/getting-the-bacon-from-cobalt-strike-beacon/",
+          "https://thedfirreport.com/2021/08/29/cobalt-strike-a-defenders-guide/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_cobaltstrike_service_installs.yml"
+      }
+    },
+    {
+      "id": "11b52f18-aaec-4d60-9143-5dd8cc4706b9",
+      "title": "Invoke-Obfuscation RUNDLL LAUNCHER - System",
+      "status": "test",
+      "description": "Detects Obfuscated Powershell via RUNDLL LAUNCHER",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "rundll32.exe",
+                  "shell32.dll",
+                  "shellexec_rundll",
+                  "powershell"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Timur Zinniatullin, oscd.community",
+        "date": "2020-10-18",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_rundll_services.yml"
+      }
+    },
+    {
+      "id": "85cce894-dd8b-4427-a958-5cc47a4dc9b9",
+      "title": "Remote Utilities Host Service Install",
+      "status": "test",
+      "description": "Detects Remote Utilities Host service installation on the target system.",
+      "level": "medium",
+      "tags": [
+        "attack.persistence"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_root": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains_all": {
+                    "field": "ImagePath",
+                    "value": [
+                      "\\rutserv.exe",
+                      "-service"
+                    ],
+                    "modifiers": [
+                      "contains",
+                      "all"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName": {
+                    "field": "ServiceName",
+                    "value": "Remote Utilities - Host",
+                    "modifiers": [],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-10-31",
+        "modified": "",
+        "references": [
+          "https://www.remoteutilities.com/support/kb/host-service-won-t-start/"
+        ],
+        "falsepositives": [
+          "Legitimate use of the tool"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_remote_utilities.yml"
+      }
+    },
+    {
+      "id": "9e36ed87-4986-482e-8e3b-5c23ffff11bf",
+      "title": "RemCom Service Installation",
+      "status": "test",
+      "description": "Detects RemCom service installation and execution events",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName": {
+                    "field": "ServiceName",
+                    "value": "RemComSvc",
+                    "modifiers": [],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__endswith": {
+                    "field": "ImagePath",
+                    "value": "\\RemComSvc.exe",
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1569.002"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-08-07",
+        "modified": "",
+        "references": [
+          "https://github.com/kavika13/RemCom/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_remcom.yml"
+      }
+    },
+    {
+      "id": "5e993621-67d4-488a-b9ae-b420d08b96cb",
+      "title": "Service Installation in Suspicious Folder",
+      "status": "test",
+      "description": "Detects service installation in suspicious folder appdata",
+      "level": "medium",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "car.2013-09-005",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "\\AppData\\",
+                  "\\\\\\\\127.0.0.1",
+                  "\\\\\\\\localhost"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_zoom": {
+            "type": "field_match",
+            "matchers": {
+              "ServiceName": {
+                "field": "ServiceName",
+                "value": "Zoom Sharing Service",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": ":\\Program Files\\Common Files\\Zoom\\Support\\CptService.exe",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "pH-T (Nextron Systems)",
+        "date": "2022-03-18",
+        "modified": "2024-01-18",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_susp_service_installation_folder.yml"
+      }
+    },
+    {
+      "id": "e0d1ad53-c7eb-48ec-a87a-72393cc6cedc",
+      "title": "Mesh Agent Service Installation",
+      "status": "test",
+      "description": "Detects a Mesh Agent service installation. Mesh Agent is used to remotely manage computers",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1219.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_root": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains": {
+                    "field": "ImagePath",
+                    "value": "MeshAgent.exe",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName__contains": {
+                    "field": "ServiceName",
+                    "value": "Mesh Agent",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1219.002"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-11-28",
+        "modified": "",
+        "references": [
+          "https://thedfirreport.com/2022/11/28/emotet-strikes-again-lnk-file-leads-to-domain-wide-ransomware/"
+        ],
+        "falsepositives": [
+          "Legitimate use of the tool"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_mesh_agent.yml"
+      }
+    },
+    {
+      "id": "42c575ea-e41e-41f1-b248-8093c3e82a28",
+      "title": "PsExec Service Installation",
+      "status": "test",
+      "description": "Detects PsExec service installation and execution events",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1569.002",
+        "attack.s0029"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName": {
+                    "field": "ServiceName",
+                    "value": "PSEXESVC",
+                    "modifiers": [],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__endswith": {
+                    "field": "ImagePath",
+                    "value": "\\PSEXESVC.exe",
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1569.002"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Thomas Patzke",
+        "date": "2017-06-12",
+        "modified": "2023-08-04",
+        "references": [
+          "https://www.jpcert.or.jp/english/pub/sr/ir_research.html",
+          "https://jpcertcc.github.io/ToolAnalysisResultSheet"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_sysinternals_psexec.yml"
+      }
+    },
+    {
+      "id": "31c51af6-e7aa-4da7-84d4-8f32cc580af2",
+      "title": "Sliver C2 Default Service Installation",
+      "status": "test",
+      "description": "Detects known malicious service installation that appear in cases in which a Sliver implants execute the PsExec commands",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.execution",
+        "attack.privilege-escalation",
+        "attack.t1543.003",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service_1": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__re": {
+                "field": "ImagePath",
+                "value": "^[a-zA-Z]:\\\\windows\\\\temp\\\\[a-zA-Z0-9]{10}\\.exe",
+                "modifiers": [
+                  "re"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service_2": {
+            "type": "field_match",
+            "matchers": {
+              "ServiceName": {
+                "field": "ServiceName",
+                "value": [
+                  "Sliver",
+                  "Sliver implant"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection_eid and 1 of selection_service_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection_eid"
+            },
+            {
+              "type": "ref",
+              "value": "1 of selection_service_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003",
+          "T1569.002"
+        ],
+        "tactics": [
+          "persistence",
+          "execution",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-08-25",
+        "modified": "",
+        "references": [
+          "https://github.com/BishopFox/sliver/blob/79f2d48fcdfc2bee4713b78d431ea4b27f733f30/client/command/commands.go#L1231",
+          "https://www.microsoft.com/security/blog/2022/08/24/looking-for-the-sliver-lining-hunting-for-emerging-command-and-control-frameworks/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_sliver.yml"
+      }
+    },
+    {
+      "id": "70f00d10-60b2-4f34-b9a0-dc3df3fe762a",
+      "title": "Suspicious Service Installation Script",
+      "status": "test",
+      "description": "Detects suspicious service installation scripts",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "car.2013-09-005",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_cmd_flags": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  " -c ",
+                  " -r ",
+                  " -k "
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_binaries": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "cscript",
+                  "mshta",
+                  "powershell",
+                  "pwsh",
+                  "regsvr32",
+                  "rundll32",
+                  "wscript"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "pH-T (Nextron Systems)",
+        "date": "2022-03-18",
+        "modified": "2024-03-05",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_susp_service_installation_script.yml"
+      }
+    },
+    {
+      "id": "c4ff1eac-84ad-44dd-a6fb-d56a92fc43a9",
+      "title": "ProcessHacker Privilege Elevation",
+      "status": "test",
+      "description": "Detects a ProcessHacker tool that elevated privileges to a very high level",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.execution",
+        "attack.privilege-escalation",
+        "attack.t1543.003",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ServiceName__startswith": {
+                "field": "ServiceName",
+                "value": "ProcessHacker",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "AccountName": {
+                "field": "AccountName",
+                "value": "LocalSystem",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003",
+          "T1569.002"
+        ],
+        "tactics": [
+          "persistence",
+          "execution",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2021-05-27",
+        "modified": "2022-12-25",
+        "references": [
+          "https://twitter.com/1kwpeter/status/1397816101455765504"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_pua_proceshacker.yml"
+      }
+    },
+    {
+      "id": "91c49341-e2ef-40c0-ac45-49ec5c3fe26c",
+      "title": "RTCore Suspicious Service Installation",
+      "status": "test",
+      "description": "Detects the installation of RTCore service. Which could be an indication of Micro-Star MSI Afterburner vulnerable driver abuse",
+      "level": "high",
+      "tags": [
+        "attack.persistence"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ServiceName": {
+                "field": "ServiceName",
+                "value": "RTCore64",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-08-30",
+        "modified": "",
+        "references": [
+          "https://github.com/br-sn/CheekyBlinder/blob/e1764a8a0e7cda8a3716aefa35799f560686e01c/CheekyBlinder/CheekyBlinder.cpp"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_susp_rtcore64_service_install.yml"
+      }
+    },
+    {
+      "id": "175997c5-803c-4b08-8bb0-70b099f47595",
+      "title": "Invoke-Obfuscation COMPRESS OBFUSCATION - System",
+      "status": "test",
+      "description": "Detects Obfuscated Powershell via COMPRESS OBFUSCATION",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "new-object",
+                  "text.encoding]::ascii",
+                  "readtoend"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  ":system.io.compression.deflatestream",
+                  "system.io.streamreader"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Timur Zinniatullin, oscd.community",
+        "date": "2020-10-18",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_compress_services.yml"
+      }
+    },
+    {
+      "id": "843544a7-56e0-4dcc-a44f-5cc266dd97d6",
+      "title": "Meterpreter or Cobalt Strike Getsystem Service Installation - System",
+      "status": "test",
+      "description": "Detects the use of getsystem Meterpreter/Cobalt Strike command by detecting a specific service installation",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.privilege-escalation",
+        "attack.t1134.001",
+        "attack.t1134.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_id": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_cli_cmd": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "/c",
+                  "echo",
+                  "\\pipe\\"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "cmd",
+                  "%COMSPEC%"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_cli_rundll": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "rundll32",
+                  ".dll,a",
+                  "/p:"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_cli_share": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__startswith": {
+                "field": "ImagePath",
+                "value": "\\\\\\\\127.0.0.1\\\\ADMIN$\\",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection_id and 1 of selection_cli_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection_id"
+            },
+            {
+              "type": "ref",
+              "value": "1 of selection_cli_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1134.001",
+          "T1134.002"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Teymur Kheirkhabarov, Ecco, Florian Roth (Nextron Systems)",
+        "date": "2019-10-26",
+        "modified": "2023-11-15",
+        "references": [
+          "https://speakerdeck.com/heirhabarov/hunting-for-privilege-escalation-in-windows-environment",
+          "https://blog.cobaltstrike.com/2014/04/02/what-happens-when-i-type-getsystem/"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_meterpreter_or_cobaltstrike_getsystem_service_installation.yml"
+      }
+    },
+    {
+      "id": "d6b5520d-3934-48b4-928c-2aa3f92d6963",
+      "title": "Important Windows Service Terminated With Error",
+      "status": "test",
+      "description": "Detects important or interesting Windows services that got terminated for whatever reason",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7023,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_name": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "param1__contains": {
+                    "field": "param1",
+                    "value": [
+                      " Antivirus",
+                      " Firewall",
+                      "Application Guard",
+                      "BitLocker Drive Encryption Service",
+                      "Encrypting File System",
+                      "Microsoft Defender",
+                      "Threat Protection",
+                      "Windows Event Log"
+                    ],
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Binary__contains": {
+                    "field": "Binary",
+                    "value": [
+                      "770069006e0064006500660065006e006400",
+                      "4500760065006e0074004c006f006700",
+                      "6d0070007300730076006300",
+                      "530065006e0073006500",
+                      "450046005300",
+                      "420044004500530056004300"
+                    ],
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-04-14",
+        "modified": "",
+        "references": [
+          "https://www.microsoft.com/en-us/security/blog/2023/04/11/guidance-for-investigating-attacks-using-cve-2022-21894-the-blacklotus-campaign/"
+        ],
+        "falsepositives": [
+          "Rare false positives could occur since service termination could happen due to multiple reasons"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_terminated_error_important.yml"
+      }
+    },
+    {
+      "id": "a2e5019d-a658-4c6a-92bf-7197b54e2cae",
+      "title": "PowerShell Scripts Installed as Services",
+      "status": "test",
+      "description": "Detects powershell script installed as a Service",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "powershell",
+                  "pwsh"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1569.002"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "oscd.community, Natalia Shornikova",
+        "date": "2020-10-06",
+        "modified": "2022-12-25",
+        "references": [
+          "https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_powershell_script_installed_as_service.yml"
+      }
+    },
+    {
+      "id": "4976aa50-8f41-45c6-8b15-ab3fc10e79ed",
+      "title": "Credential Dumping Tools Service Execution - System",
+      "status": "test",
+      "description": "Detects well-known credential dumping tools execution via service execution events",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.execution",
+        "attack.t1003.001",
+        "attack.t1003.002",
+        "attack.t1003.004",
+        "attack.t1003.005",
+        "attack.t1003.006",
+        "attack.t1569.002",
+        "attack.s0005"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "cachedump",
+                  "dumpsvc",
+                  "fgexec",
+                  "gsecdump",
+                  "mimidrv",
+                  "pwdump",
+                  "servpw"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001",
+          "T1003.002",
+          "T1003.004",
+          "T1003.005",
+          "T1003.006",
+          "T1569.002"
+        ],
+        "tactics": [
+          "credential_access",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community",
+        "date": "2017-03-05",
+        "modified": "2022-11-29",
+        "references": [
+          "https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment"
+        ],
+        "falsepositives": [
+          "Legitimate Administrator using credential dumping tool for password recovery"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_mal_creddumper.yml"
+      }
+    },
+    {
+      "id": "1b2ae822-6fe1-43ba-aa7c-d1a3b3d1d5f2",
+      "title": "Service Installation with Suspicious Folder Pattern",
+      "status": "test",
+      "description": "Detects service installation with suspicious folder patterns",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "car.2013-09-005",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_img_paths": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "^[Cc]:\\\\[Pp]rogram[Dd]ata\\\\.{1,9}\\.exe",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "^[Cc]:\\\\.{1,9}\\.exe",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "pH-T (Nextron Systems)",
+        "date": "2022-03-18",
+        "modified": "2022-03-24",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_susp_service_installation_folder_pattern.yml"
+      }
+    },
+    {
+      "id": "1d61f71d-59d2-479e-9562-4ff5f4ead16b",
+      "title": "Suspicious Service Installation",
+      "status": "test",
+      "description": "Detects suspicious service installation commands",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "car.2013-09-005",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  " -nop ",
+                  " -sta ",
+                  " -w hidden ",
+                  ":\\Temp\\",
+                  ".downloadfile(",
+                  ".downloadstring(",
+                  "\\ADMIN$\\",
+                  "\\Perflogs\\",
+                  "&&"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "pH-T (Nextron Systems), Florian Roth (Nextron Systems)",
+        "date": "2022-03-18",
+        "modified": "2023-12-04",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_susp.yml"
+      }
+    },
+    {
+      "id": "f7385ee2-0e0c-11eb-adc1-0242ac120002",
+      "title": "Invoke-Obfuscation CLIP+ Launcher - System",
+      "status": "test",
+      "description": "Detects Obfuscated use of Clip.exe to execute PowerShell",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "cmd",
+                  "&&",
+                  "clipboard]::"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Jonathan Cheong, oscd.community",
+        "date": "2020-10-13",
+        "modified": "2023-02-20",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_clip_services.yml"
+      }
+    },
+    {
+      "id": "d26ce60c-2151-403c-9a42-49420d87b5e4",
+      "title": "HackTool Service Registration or Execution",
+      "status": "test",
+      "description": "Detects installation or execution of services",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.t1569.002",
+        "attack.s0029"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  7045,
+                  7036
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_service_name": {
+            "type": "field_match",
+            "matchers": {
+              "ServiceName__contains": {
+                "field": "ServiceName",
+                "value": [
+                  "cachedump",
+                  "DumpSvc",
+                  "gsecdump",
+                  "pwdump",
+                  "UACBypassedService",
+                  "WCE SERVICE",
+                  "WCESERVICE",
+                  "winexesvc"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_service_image": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": "bypass",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection_eid and 1 of selection_service_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection_eid"
+            },
+            {
+              "type": "ref",
+              "value": "1 of selection_service_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1569.002"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-03-21",
+        "modified": "2023-08-07",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_hacktools.yml"
+      }
+    },
+    {
+      "id": "ee9ca27c-9bd7-4cee-9b01-6e906be7cae3",
+      "title": "New PDQDeploy Service - Server Side",
+      "status": "test",
+      "description": "Detects a PDQDeploy service installation which indicates that PDQDeploy was installed on the machines.\nPDQDeploy can be abused by attackers to remotely install packages or execute commands on target machines\n",
+      "level": "medium",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_root": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains": {
+                    "field": "ImagePath",
+                    "value": "PDQDeployService.exe",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName": {
+                    "field": "ServiceName",
+                    "value": [
+                      "PDQDeploy",
+                      "PDQ Deploy"
+                    ],
+                    "modifiers": [],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-07-22",
+        "modified": "",
+        "references": [
+          "https://documentation.pdq.com/PDQDeploy/13.0.3.0/index.html?windows-services.htm"
+        ],
+        "falsepositives": [
+          "Legitimate use of the tool"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_pdqdeploy.yml"
+      }
+    },
+    {
+      "id": "de7ce410-b3fb-4e8a-b38c-3b999e2c3420",
+      "title": "PAExec Service Installation",
+      "status": "test",
+      "description": "Detects PAExec service installation",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_image": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName__startswith": {
+                    "field": "ServiceName",
+                    "value": "PAExec-",
+                    "modifiers": [
+                      "startswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__startswith": {
+                    "field": "ImagePath",
+                    "value": "C:\\WINDOWS\\PAExec-",
+                    "modifiers": [
+                      "startswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1569.002"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-10-26",
+        "modified": "",
+        "references": [
+          "https://www.poweradmin.com/paexec/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_paexec.yml"
+      }
+    },
+    {
+      "id": "25b9c01c-350d-4b95-bed1-836d04a4f324",
+      "title": "Moriya Rootkit - System",
+      "status": "test",
+      "description": "Detects the use of Moriya rootkit as described in the securelist's Operation TunnelSnake report",
+      "level": "critical",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ServiceName": {
+                "field": "ServiceName",
+                "value": "ZzNetSvc",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Bhabesh Raj",
+        "date": "2021-05-06",
+        "modified": "2022-11-29",
+        "references": [
+          "https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_moriya_rootkit.yml"
+      }
+    },
+    {
+      "id": "8e4cf0e5-aa5d-4dc3-beff-dc26917744a9",
+      "title": "Tap Driver Installation",
+      "status": "test",
+      "description": "Well-known TAP software installation. Possible preparation for data exfiltration using tunnelling techniques",
+      "level": "medium",
+      "tags": [
+        "attack.exfiltration",
+        "attack.t1048"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": "tap0901",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1048"
+        ],
+        "tactics": [
+          "exfiltration"
+        ]
+      },
+      "meta": {
+        "author": "Daniil Yugoslavskiy, Ian Davis, oscd.community",
+        "date": "2019-10-24",
+        "modified": "2022-12-25",
+        "references": [
+          "https://community.openvpn.net/openvpn/wiki/ManagingWindowsTAPDrivers"
+        ],
+        "falsepositives": [
+          "Legitimate OpenVPN TAP installation"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_tap_driver.yml"
+      }
+    },
+    {
+      "id": "14bcba49-a428-42d9-b943-e2ce0f0f7ae6",
+      "title": "Invoke-Obfuscation VAR++ LAUNCHER OBFUSCATION - System",
+      "status": "test",
+      "description": "Detects Obfuscated Powershell via VAR++ LAUNCHER",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "&&set",
+                  "cmd",
+                  "/c",
+                  "-f"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "{0}",
+                  "{1}",
+                  "{2}",
+                  "{3}",
+                  "{4}",
+                  "{5}"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Timur Zinniatullin, oscd.community",
+        "date": "2020-10-13",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_var_services.yml"
+      }
+    },
+    {
+      "id": "71c276aa-49cd-43d2-b920-2dcd3e6962d5",
+      "title": "Service Installed By Unusual Client - System",
+      "status": "test",
+      "description": "Detects a service installed by a client which has PID 0 or whose parent has PID 0",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1543"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessId": {
+                "field": "ProcessId",
+                "value": 0,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Tim Rauch (Nextron Systems), Elastic (idea)",
+        "date": "2022-09-15",
+        "modified": "2023-01-04",
+        "references": [
+          "https://www.elastic.co/guide/en/security/current/windows-service-installed-via-an-unusual-client.html"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_sups_unusal_client.yml"
+      }
+    },
+    {
+      "id": "b98a10af-1e1e-44a7-bab2-4cc026917648",
+      "title": "New PDQDeploy Service - Client Side",
+      "status": "test",
+      "description": "Detects PDQDeploy service installation on the target system.\nWhen a package is deployed via PDQDeploy it installs a remote service on the target machine with the name \"PDQDeployRunner-X\" where \"X\" is an integer starting from 1\n",
+      "level": "medium",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1543.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_root": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains": {
+                    "field": "ImagePath",
+                    "value": "PDQDeployRunner-",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName__startswith": {
+                    "field": "ServiceName",
+                    "value": "PDQDeployRunner-",
+                    "modifiers": [
+                      "startswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-07-22",
+        "modified": "",
+        "references": [
+          "https://documentation.pdq.com/PDQDeploy/13.0.3.0/index.html?windows-services.htm"
+        ],
+        "falsepositives": [
+          "Legitimate use of the tool"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_pdqdeploy_runner.yml"
+      }
+    },
+    {
+      "id": "487c7524-f892-4054-b263-8a0ace63fc25",
+      "title": "Invoke-Obfuscation Via Stdin - System",
+      "status": "test",
+      "description": "Detects Obfuscated Powershell via Stdin in Scripts",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "set",
+                  "&&"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "environment",
+                  "invoke",
+                  "input"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nikita Nazarov, oscd.community",
+        "date": "2020-10-12",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_stdin_services.yml"
+      }
+    },
+    {
+      "id": "72862bf2-0eb1-11eb-adc1-0242ac120002",
+      "title": "Invoke-Obfuscation STDIN+ Launcher - System",
+      "status": "test",
+      "description": "Detects Obfuscated use of stdin to execute PowerShell",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_main": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "cmd",
+                  "powershell"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "/c",
+                  "/r"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_other": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains": {
+                    "field": "ImagePath",
+                    "value": "noexit",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains_all": {
+                    "field": "ImagePath",
+                    "value": [
+                      "input",
+                      "$"
+                    ],
+                    "modifiers": [
+                      "contains",
+                      "all"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Jonathan Cheong, oscd.community",
+        "date": "2020-10-15",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_stdin_services.yml"
+      }
+    },
+    {
+      "id": "e97d9903-53b2-41fc-8cb9-889ed4093e80",
+      "title": "KrbRelayUp Service Installation",
+      "status": "test",
+      "description": "Detects service creation from KrbRelayUp tool used for privilege escalation in Windows domain environments where LDAP signing is not enforced (the default settings)",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1543"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ServiceName": {
+                "field": "ServiceName",
+                "value": "KrbSCM",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Sittikorn S, Tim Shelton",
+        "date": "2022-05-11",
+        "modified": "2022-10-05",
+        "references": [
+          "https://github.com/Dec0ne/KrbRelayUp"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_krbrelayup_service_installation.yml"
+      }
+    },
+    {
+      "id": "52a85084-6989-40c3-8f32-091e12e13f09",
+      "title": "smbexec.py Service Installation",
+      "status": "test",
+      "description": "Detects the use of smbexec.py tool by detecting a specific service installation",
+      "level": "high",
+      "tags": [
+        "attack.lateral-movement",
+        "attack.execution",
+        "attack.t1021.002",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service_name": {
+            "type": "field_match",
+            "matchers": {
+              "ServiceName": {
+                "field": "ServiceName",
+                "value": "BTOBTO",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service_image": {
+            "type": "field_match",
+            "matchers": {
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  ".bat & del ",
+                  "__output 2^>^&1 >"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection_eid and 1 of selection_service_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection_eid"
+            },
+            {
+              "type": "ref",
+              "value": "1 of selection_service_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1021.002",
+          "T1569.002"
+        ],
+        "tactics": [
+          "lateral_movement",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Omer Faruk Celik",
+        "date": "2018-03-20",
+        "modified": "2023-11-09",
+        "references": [
+          "https://blog.ropnop.com/using-credentials-to-own-windows-boxes-part-2-psexec-and-services/",
+          "https://github.com/fortra/impacket/blob/33058eb2fde6976ea62e04bc7d6b629d64d44712/examples/smbexec.py#L286-L296",
+          "https://github.com/fortra/impacket/blob/edef71f17bc1240f9f8c957bbda98662951ac3ec/examples/smbexec.py#L60"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_hack_smbexec.yml"
+      }
+    },
+    {
+      "id": "56abae0c-6212-4b97-adc0-0b559bb950c3",
+      "title": "Important Windows Service Terminated Unexpectedly",
+      "status": "test",
+      "description": "Detects important or interesting Windows services that got terminated unexpectedly.",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7034,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_name": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "param1__contains": {
+                    "field": "param1",
+                    "value": "Message Queuing",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Binary__contains": {
+                    "field": "Binary",
+                    "value": [
+                      "4d0053004d005100",
+                      "6d0073006d007100"
+                    ],
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-04-14",
+        "modified": "",
+        "references": [
+          "https://www.randori.com/blog/vulnerability-analysis-queuejumper-cve-2023-21554/"
+        ],
+        "falsepositives": [
+          "Rare false positives could occur since service termination could happen due to multiple reasons"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_terminated_unexpectedly.yml"
+      }
+    },
+    {
+      "id": "51aa9387-1c53-4153-91cc-d73c59ae1ca9",
+      "title": "Invoke-Obfuscation Obfuscated IEX Invocation - System",
+      "status": "test",
+      "description": "Detects all variations of obfuscated powershell IEX invocation code generated by Invoke-Obfuscation framework from the code block linked in the references",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_imagepath": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "\\$PSHome\\[\\s*\\d{1,3}\\s*\\]\\s*\\+\\s*\\$PSHome\\[",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "\\$ShellId\\[\\s*\\d{1,3}\\s*\\]\\s*\\+\\s*\\$ShellId\\[",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "\\$env:Public\\[\\s*\\d{1,3}\\s*\\]\\s*\\+\\s*\\$env:Public\\[",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "\\$env:ComSpec\\[(\\s*\\d{1,3}\\s*,){2}",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "\\\\*mdr\\*\\W\\s*\\)\\.Name",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "\\$VerbosePreference\\.ToString\\(",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__re": {
+                    "field": "ImagePath",
+                    "value": "\\String\\]\\s*\\$VerbosePreference",
+                    "modifiers": [
+                      "re"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Daniel Bohannon (@Mandiant/@FireEye), oscd.community",
+        "date": "2019-11-08",
+        "modified": "2022-11-27",
+        "references": [
+          "https://github.com/danielbohannon/Invoke-Obfuscation/blob/f20e7f843edd0a3a7716736e9eddfa423395dd26/Out-ObfuscatedStringCommand.ps1#L873-L888"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_obfuscated_iex_services.yml"
+      }
+    },
+    {
+      "id": "63e3365d-4824-42d8-8b82-e56810fefa0c",
+      "title": "Invoke-Obfuscation Via Use Clip - System",
+      "status": "test",
+      "description": "Detects Obfuscated Powershell via use Clip.exe in Scripts",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": "(Clipboard|i",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nikita Nazarov, oscd.community",
+        "date": "2020-10-09",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_use_clip_services.yml"
+      }
+    },
+    {
+      "id": "8ca7004b-e620-4ecb-870e-86129b5b8e75",
+      "title": "Invoke-Obfuscation VAR+ Launcher - System",
+      "status": "test",
+      "description": "Detects Obfuscated use of Environment Variables to execute PowerShell",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "cmd",
+                  "\"set",
+                  "-f"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "/c",
+                  "/r"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Jonathan Cheong, oscd.community",
+        "date": "2020-10-15",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_var_services.yml"
+      }
+    },
+    {
+      "id": "4bb79b62-ef12-4861-981d-2aab43fab642",
+      "title": "TacticalRMM Service Installation",
+      "status": "test",
+      "description": "Detects a TacticalRMM service installation. Tactical RMM is a remote monitoring & management tool.",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1219.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_root": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains": {
+                    "field": "ImagePath",
+                    "value": "tacticalrmm.exe",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName__contains": {
+                    "field": "ServiceName",
+                    "value": "TacticalRMM Agent Service",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1219.002"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-11-28",
+        "modified": "",
+        "references": [
+          "https://thedfirreport.com/2022/11/28/emotet-strikes-again-lnk-file-leads-to-domain-wide-ransomware/"
+        ],
+        "falsepositives": [
+          "Legitimate use of the tool"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_tacticalrmm.yml"
+      }
+    },
+    {
+      "id": "641a4bfb-c017-44f7-800c-2aee0184ce9b",
+      "title": "Invoke-Obfuscation Via Use Rundll32 - System",
+      "status": "test",
+      "description": "Detects Obfuscated Powershell via use Rundll32 in Scripts",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1027",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ImagePath__contains_all": {
+                "field": "ImagePath",
+                "value": [
+                  "&&",
+                  "rundll32",
+                  "shell32.dll",
+                  "shellexec_rundll"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "ImagePath__contains": {
+                "field": "ImagePath",
+                "value": [
+                  "value",
+                  "invoke",
+                  "comspec",
+                  "iex"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1027",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nikita Nazarov, oscd.community",
+        "date": "2020-10-09",
+        "modified": "2022-11-29",
+        "references": [
+          "https://github.com/SigmaHQ/sigma/issues/1009"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_use_rundll32_services.yml"
+      }
+    },
+    {
+      "id": "2d510d8d-912b-45c5-b1df-36faa3d8c3f4",
+      "title": "NetSupport Manager Service Install",
+      "status": "test",
+      "description": "Detects NetSupport Manager service installation on the target system.",
+      "level": "medium",
+      "tags": [
+        "attack.persistence"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_root": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__contains": {
+                    "field": "ImagePath",
+                    "value": "\\NetSupport Manager\\client32.exe",
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName": {
+                    "field": "ServiceName",
+                    "value": "Client32",
+                    "modifiers": [],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-10-31",
+        "modified": "",
+        "references": [
+          "http://resources.netsupportsoftware.com/resources/manualpdfs/nsm_manual_uk.pdf"
+        ],
+        "falsepositives": [
+          "Legitimate use of the tool"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_netsupport_manager.yml"
+      }
+    },
+    {
+      "id": "acfa2210-0d71-4eeb-b477-afab494d596c",
+      "title": "Windows Service Terminated With Error",
+      "status": "test",
+      "description": "Detects Windows services that got terminated for whatever reason",
+      "level": "low",
+      "tags": [
+        "attack.defense-evasion"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7023,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-04-14",
+        "modified": "",
+        "references": [
+          "https://www.microsoft.com/en-us/security/blog/2023/04/11/guidance-for-investigating-attacks-using-cve-2022-21894-the-blacklotus-campaign/"
+        ],
+        "falsepositives": [
+          "False positives could occur since service termination could happen due to multiple reasons"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_terminated_error_generic.yml"
+      }
+    },
+    {
+      "id": "1a31b18a-f00c-4061-9900-f735b96c99fc",
+      "title": "Remote Access Tool Services Have Been Installed - System",
+      "status": "test",
+      "description": "Detects service installation of different remote access tools software. These software are often abused by threat actors to perform",
+      "level": "medium",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.persistence",
+        "attack.execution",
+        "attack.t1543.003",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  7045,
+                  7036
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "ServiceName__contains": {
+                "field": "ServiceName",
+                "value": [
+                  "AmmyyAdmin",
+                  "Atera",
+                  "BASupportExpressSrvcUpdater",
+                  "BASupportExpressStandaloneService",
+                  "chromoting",
+                  "GoToAssist",
+                  "GoToMyPC",
+                  "jumpcloud",
+                  "LMIGuardianSvc",
+                  "LogMeIn",
+                  "monblanking",
+                  "Parsec",
+                  "RManService",
+                  "RPCPerformanceService",
+                  "RPCService",
+                  "SplashtopRemoteService",
+                  "SSUService",
+                  "TeamViewer",
+                  "TightVNC",
+                  "vncserver",
+                  "Zoho"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1543.003",
+          "T1569.002"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "persistence",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Connor Martin, Nasreddine Bencherchali",
+        "date": "2022-12-23",
+        "modified": "2023-06-22",
+        "references": [
+          "https://redcanary.com/blog/misbehaving-rats/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_remote_access_software.yml"
+      }
+    },
+    {
+      "id": "a27e5fa9-c35e-4e3d-b7e0-1ce2af66ad12",
+      "title": "CSExec Service Installation",
+      "status": "test",
+      "description": "Detects CSExec service installation and execution events",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Service Control Manager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 7045,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_service": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ServiceName": {
+                    "field": "ServiceName",
+                    "value": "csexecsvc",
+                    "modifiers": [],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "ImagePath__endswith": {
+                    "field": "ImagePath",
+                    "value": "\\csexecsvc.exe",
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1569.002"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-08-07",
+        "modified": "",
+        "references": [
+          "https://github.com/malcomvetter/CSExec"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/service_control_manager/win_system_service_install_csexecsvc.yml"
+      }
+    },
+    {
+      "id": "13cfeb75-9e33-4d04-b0f7-ab8faaa95a59",
+      "title": "Windows Update Error",
+      "status": "stable",
+      "description": "Detects Windows update errors including installation failures and connection issues. Defenders should observe this in case critical update KBs aren't installed.\n",
+      "level": "informational",
+      "tags": [
+        "attack.impact",
+        "attack.resource-development",
+        "attack.t1584"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-WindowsUpdateClient",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  16,
+                  20,
+                  24,
+                  213,
+                  217
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1584"
+        ],
+        "tactics": [
+          "impact",
+          "resource_development"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2021-12-04",
+        "modified": "2023-09-07",
+        "references": [
+          "https://github.com/nasbench/EVTX-ETW-Resources/blob/f1b010ce0ee1b71e3024180de1a3e67f99701fe4/ETWProvidersManifests/Windows10/1903/W10_1903_Pro_20200714_18362.959/WEPExplorer/Microsoft-Windows-WindowsUpdateClient.xml"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_windows_update_client/win_system_susp_system_update_error.yml"
+      }
+    },
+    {
+      "id": "100ef69e-3327-481c-8e5c-6d80d9507556",
+      "title": "Important Windows Eventlog Cleared",
+      "status": "test",
+      "description": "Detects the clearing of one of the Windows Core Eventlogs. e.g. caused by \"wevtutil cl\" command execution",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1070.001",
+        "car.2016-04-002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 104,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-Eventlog",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Channel": {
+                "field": "Channel",
+                "value": [
+                  "Microsoft-Windows-PowerShell/Operational",
+                  "Microsoft-Windows-Sysmon/Operational",
+                  "PowerShellCore/Operational",
+                  "Security",
+                  "System",
+                  "Windows PowerShell"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1070.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Tim Shelton, Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-05-17",
+        "modified": "2023-11-15",
+        "references": [
+          "https://twitter.com/deviouspolack/status/832535435960209408",
+          "https://www.hybrid-analysis.com/sample/027cc450ef5f8c5f653329641ec1fed91f694e0d229928963b30f6b0d7d3a745?environmentId=100"
+        ],
+        "falsepositives": [
+          "Rollout of log collection agents (the setup routine often includes a reset of the local Eventlog)",
+          "System provisioning (system reset before the golden image creation)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_eventlog/win_system_susp_eventlog_cleared.yml"
+      }
+    },
+    {
+      "id": "a62b37e0-45d3-48d9-a517-90c1a1b0186b",
+      "title": "Eventlog Cleared",
+      "status": "test",
+      "description": "One of the Windows Eventlogs has been cleared. e.g. caused by \"wevtutil cl\" command execution",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1070.001",
+        "car.2016-04-002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 104,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-Eventlog",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_covered": {
+            "type": "field_match",
+            "matchers": {
+              "Channel": {
+                "field": "Channel",
+                "value": [
+                  "Microsoft-Windows-PowerShell/Operational",
+                  "Microsoft-Windows-Sysmon/Operational",
+                  "PowerShellCore/Operational",
+                  "Security",
+                  "System",
+                  "Windows PowerShell"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1070.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2017-01-10",
+        "modified": "2023-11-15",
+        "references": [
+          "https://twitter.com/deviouspolack/status/832535435960209408",
+          "https://www.hybrid-analysis.com/sample/027cc450ef5f8c5f653329641ec1fed91f694e0d229928963b30f6b0d7d3a745?environmentId=100"
+        ],
+        "falsepositives": [
+          "Rollout of log collection agents (the setup routine often includes a reset of the local Eventlog)",
+          "System provisioning (system reset before the golden image creation)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_eventlog/win_system_eventlog_cleared.yml"
+      }
+    },
+    {
+      "id": "d22df9cd-2aee-4089-93c7-9dc4eae77f2c",
+      "title": "ISATAP Router Address Was Set",
+      "status": "experimental",
+      "description": "Detects the configuration of a new ISATAP router on a Windows host. While ISATAP is a legitimate Microsoft technology for IPv6 transition, unexpected or unauthorized ISATAP router configurations could indicate a potential IPv6 DNS Takeover attack using tools like mitm6.\nIn such attacks, adversaries advertise themselves as DHCPv6 servers and set malicious ISATAP routers to intercept traffic.\nThis detection should be correlated with network baselines and known legitimate ISATAP deployments in your environment.\n",
+      "level": "medium",
+      "tags": [
+        "attack.impact",
+        "attack.credential-access",
+        "attack.collection",
+        "attack.initial-access",
+        "attack.privilege-escalation",
+        "attack.execution",
+        "attack.t1557",
+        "attack.t1565.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 4100,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-Iphlpsvc",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_localhost": {
+            "type": "field_match",
+            "matchers": {
+              "IsatapRouter": {
+                "field": "IsatapRouter",
+                "value": [
+                  "127.0.0.1",
+                  "::1"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_null": {
+            "type": "field_match",
+            "matchers": {
+              "IsatapRouter": {
+                "field": "IsatapRouter",
+                "value": null,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1557",
+          "T1565.002"
+        ],
+        "tactics": [
+          "impact",
+          "credential_access",
+          "collection",
+          "initial_access",
+          "privilege_escalation",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "hamid",
+        "date": "2025-10-19",
+        "modified": "",
+        "references": [
+          "https://www.blackhillsinfosec.com/mitm6-strikes-again-the-dark-side-of-ipv6/",
+          "https://redfoxsec.com/blog/ipv6-dns-takeover/",
+          "https://www.securityhq.com/blog/malicious-isatap-tunneling-unearthed-on-windows-server/",
+          "https://medium.com/@ninnesoturan/detecting-ipv6-dns-takeover-a54a6a88be1f"
+        ],
+        "falsepositives": [
+          "Legitimate ISATAP router configuration in enterprise environments",
+          "IPv6 transition projects and network infrastructure changes",
+          "Network administrators configuring dual-stack networking",
+          "Automatic ISATAP configuration in some Windows deployments"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_Iphlpsvc/win_system_isatap_router_address_set.yml"
+      }
+    },
+    {
+      "id": "f512acbf-e662-4903-843e-97ce4652b740",
+      "title": "Volume Shadow Copy Mount",
+      "status": "test",
+      "description": "Detects volume shadow copy mount via Windows event log",
+      "level": "low",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-Ntfs",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 98,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "DeviceName__contains": {
+                "field": "DeviceName",
+                "value": "HarddiskVolumeShadowCopy",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.002"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Roberto Rodriguez @Cyb3rWard0g, Open Threat Research (OTR)",
+        "date": "2020-10-20",
+        "modified": "2022-12-25",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1003.002/T1003.002.md#atomic-test-3---esentutlexe-sam-copy"
+        ],
+        "falsepositives": [
+          "Legitimate use of volume shadow copy mounts (backups maybe)."
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_ntfs/win_system_volume_shadow_copy_mount.yml"
+      }
+    },
+    {
+      "id": "18f37338-b9bd-4117-a039-280c81f7a596",
+      "title": "Zerologon Exploitation Using Well-known Tools",
+      "status": "stable",
+      "description": "This rule is designed to detect attempts to exploit Zerologon (CVE-2020-1472) vulnerability using mimikatz zerologon module or other exploits from machine with \"kali\" hostname.",
+      "level": "critical",
+      "tags": [
+        "attack.t1210",
+        "attack.lateral-movement"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  5805,
+                  5723
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "keywords": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "kali"
+              },
+              {
+                "type": "literal",
+                "value": "mimikatz"
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "selection and keywords",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "ref",
+              "value": "keywords"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1210"
+        ],
+        "tactics": [
+          "lateral_movement"
+        ]
+      },
+      "meta": {
+        "author": "Demyan Sokolin @_drd0c, Teymur Kheirkhabarov @HeirhabarovT, oscd.community",
+        "date": "2020-10-13",
+        "modified": "2021-05-30",
+        "references": [
+          "https://www.secura.com/blog/zero-logon",
+          "https://bi-zone.medium.com/hunting-for-zerologon-f65c61586382"
+        ],
+        "falsepositives": [],
+        "source_file": "sigma_rules/windows/builtin/system/netlogon/win_system_possible_zerologon_exploitation_using_wellknown_tools.yml"
+      }
+    },
+    {
+      "id": "a0cb7110-edf0-47a4-9177-541a4083128a",
+      "title": "Vulnerable Netlogon Secure Channel Connection Allowed",
+      "status": "test",
+      "description": "Detects that a vulnerable Netlogon secure channel connection was allowed, which could be an indicator of CVE-2020-1472.",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.privilege-escalation",
+        "attack.t1548"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "NetLogon",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 5829,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1548"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "NVISO",
+        "date": "2020-09-15",
+        "modified": "2022-12-25",
+        "references": [
+          "https://support.microsoft.com/en-us/help/4557222/how-to-manage-the-changes-in-netlogon-secure-channel-connections-assoc"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/netlogon/win_system_vul_cve_2020_1472.yml"
+      }
+    },
+    {
+      "id": "b1e0b3f5-b62e-41be-886a-daffde446ad4",
+      "title": "No Suitable Encryption Key Found For Generating Kerberos Ticket",
+      "status": "test",
+      "description": "Detects errors when a target server doesn't have suitable keys for generating kerberos tickets.\nThis issue can occur for example when a service uses a user account or a computer account that is configured for only DES encryption on a computer that is running Windows 7 which has DES encryption for Kerberos authentication disabled.\n",
+      "level": "low",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1558.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": [
+                  "Kerberos-Key-Distribution-Center",
+                  "Microsoft-Windows-Kerberos-Key-Distribution-Center"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  16,
+                  27
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1558.003"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "@SerkinValery",
+        "date": "2024-03-07",
+        "modified": "2025-09-22",
+        "references": [
+          "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/dd348773(v=ws.10)",
+          "https://learn.microsoft.com/en-us/troubleshoot/windows-server/windows-security/kdc-event-16-27-des-encryption-disabled"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_kerberos_key_distribution_center/win_system_kdcsvc_tgs_no_suitable_encryption_key_found.yml"
+      }
+    },
+    {
+      "id": "993c2665-e6ef-40e3-a62a-e1a97686af79",
+      "title": "Certificate Use With No Strong Mapping",
+      "status": "test",
+      "description": "Detects a user certificate that was valid but could not be mapped to a user in a strong way (such as via explicit mapping, key trust mapping, or a SID)\nThis could be a sign of exploitation of the elevation of privilege vulnerabilities (CVE-2022-34691, CVE-2022-26931, CVE-2022-26923) that can occur when the KDC allows certificate spoofing by not requiring a strong mapping.\nEvents where the AccountName and CN of the Subject do not match, or where the CN ends in a dollar sign indicating a machine, may indicate certificate spoofing.\n",
+      "level": "medium",
+      "tags": [
+        "attack.privilege-escalation"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": [
+                  "Kerberos-Key-Distribution-Center",
+                  "Microsoft-Windows-Kerberos-Key-Distribution-Center"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  39,
+                  41
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "@br4dy5",
+        "date": "2023-10-09",
+        "modified": "2025-09-22",
+        "references": [
+          "https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16"
+        ],
+        "falsepositives": [
+          "If prevalent in the environment, filter on events where the AccountName and CN of the Subject do not reference the same user",
+          "If prevalent in the environment, filter on CNs that end in a dollar sign indicating it is a machine name"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_kerberos_key_distribution_center/win_system_kdcsvc_cert_use_no_strong_mapping.yml"
+      }
+    },
+    {
+      "id": "bc2e25ed-b92b-4daa-b074-b502bdd1982b",
+      "title": "Local Privilege Escalation Indicator TabTip",
+      "status": "test",
+      "description": "Detects the invocation of TabTip via CLSID as seen when JuicyPotatoNG is used on a system in brute force mode",
+      "level": "high",
+      "tags": [
+        "attack.collection",
+        "attack.execution",
+        "attack.credential-access",
+        "attack.t1557.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-DistributedCOM",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 10001,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "param1": {
+                "field": "param1",
+                "value": "C:\\Program Files\\Common Files\\microsoft shared\\ink\\TabTip.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "param2": {
+                "field": "param2",
+                "value": 2147943140,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "param3": {
+                "field": "param3",
+                "value": "{054AAE20-4BEA-4347-8A35-64A533254A9D}",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1557.001"
+        ],
+        "tactics": [
+          "collection",
+          "execution",
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-10-07",
+        "modified": "2023-04-14",
+        "references": [
+          "https://github.com/antonioCoco/JuicyPotatoNG"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_distributed_com/win_system_lpe_indicators_tabtip.yml"
+      }
+    },
+    {
+      "id": "994bfd6d-0a2e-481e-a861-934069fcf5f5",
+      "title": "Active Directory Certificate Services Denied Certificate Enrollment Request",
+      "status": "test",
+      "description": "Detects denied requests by Active Directory Certificate Services.\nExample of these requests denial include issues with permissions on the certificate template or invalid signatures.\n",
+      "level": "low",
+      "tags": [
+        "attack.credential-access",
+        "attack.defense-evasion",
+        "attack.t1553.004"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-CertificationAuthority",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 53,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1553.004"
+        ],
+        "tactics": [
+          "credential_access",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "@SerkinValery",
+        "date": "2024-03-07",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/dd299871(v=ws.10)",
+          "https://www.gradenegger.eu/en/details-of-the-event-with-id-53-of-the-source-microsoft-windows-certificationauthority/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_certification_authority/win_system_adcs_enrollment_request_denied.yml"
+      }
+    },
+    {
+      "id": "39f919f3-980b-4e6f-a975-8af7e507ef2b",
+      "title": "Critical Hive In Suspicious Location Access Bits Cleared",
+      "status": "test",
+      "description": "Detects events from the Kernel-General ETW indicating that the access bits of a hive with a system like hive name located in the temp directory have been reset.\nThis occurs when an application tries to access a hive and the hive has not be recognized since the last 7 days (by default).\nRegistry hive dumping utilities such as QuarksPwDump were seen emitting this behavior.\n",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 16,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-Kernel-General",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "HiveName__contains": {
+                "field": "HiveName",
+                "value": [
+                  "\\Temp\\SAM",
+                  "\\Temp\\SECURITY"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.002"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2017-05-15",
+        "modified": "2024-01-18",
+        "references": [
+          "https://github.com/nasbench/Misc-Research/blob/b20da2336de0f342d31ef4794959d28c8d3ba5ba/ETW/Microsoft-Windows-Kernel-General.md"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_kernel_general/win_system_susp_critical_hive_location_access_bits_cleared.yml"
+      }
+    },
+    {
+      "id": "e9d4ab66-a532-4ef7-a502-66a9e4a34f5d",
+      "title": "NTLMv1 Logon Between Client and Server",
+      "status": "test",
+      "description": "Detects the reporting of NTLMv1 being used between a client and server. NTLMv1 is insecure as the underlying encryption algorithms can be brute-forced by modern hardware.",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.lateral-movement",
+        "attack.t1550.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "LsaSrv",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  6038,
+                  6039
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1550.002"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "lateral_movement"
+        ]
+      },
+      "meta": {
+        "author": "Tim Shelton, Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-04-26",
+        "modified": "2023-06-06",
+        "references": [
+          "https://github.com/nasbench/EVTX-ETW-Resources/blob/f1b010ce0ee1b71e3024180de1a3e67f99701fe4/ETWProvidersManifests/Windows10/22H2/W10_22H2_Pro_20230321_19045.2728/WEPExplorer/LsaSrv.xml"
+        ],
+        "falsepositives": [
+          "Environments that use NTLMv1"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/lsasrv/win_system_lsasrv_ntlmv1.yml"
+      }
+    },
+    {
+      "id": "75edd3fd-7146-48e5-9848-3013d7f0282c",
+      "title": "DHCP Server Error Failed Loading the CallOut DLL",
+      "status": "test",
+      "description": "This rule detects a DHCP server error in which a specified Callout DLL (in registry) could not be loaded",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.persistence",
+        "attack.defense-evasion",
+        "attack.t1574.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  1031,
+                  1032,
+                  1034
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-DHCP-Server",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1574.001"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "persistence",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Dimitrios Slamaris, @atc_project (fix)",
+        "date": "2017-05-15",
+        "modified": "2022-12-25",
+        "references": [
+          "https://blog.3or.de/mimilib-dhcp-server-callout-dll-injection.html",
+          "https://technet.microsoft.com/en-us/library/cc726884(v=ws.10).aspx",
+          "https://msdn.microsoft.com/de-de/library/windows/desktop/aa363389(v=vs.85).aspx"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_dhcp_server/win_system_susp_dhcp_config_failed.yml"
+      }
+    },
+    {
+      "id": "13fc89a9-971e-4ca6-b9dc-aa53a445bf40",
+      "title": "DHCP Server Loaded the CallOut DLL",
+      "status": "test",
+      "description": "This rule detects a DHCP server in which a specified Callout DLL (in registry) was loaded",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.persistence",
+        "attack.defense-evasion",
+        "attack.t1574.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 1033,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-DHCP-Server",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1574.001"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "persistence",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Dimitrios Slamaris",
+        "date": "2017-05-15",
+        "modified": "2022-12-25",
+        "references": [
+          "https://blog.3or.de/mimilib-dhcp-server-callout-dll-injection.html",
+          "https://technet.microsoft.com/en-us/library/cc726884(v=ws.10).aspx",
+          "https://msdn.microsoft.com/de-de/library/windows/desktop/aa363389(v=vs.85).aspx"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/microsoft_windows_dhcp_server/win_system_susp_dhcp_config.yml"
+      }
+    },
+    {
+      "id": "f14719ce-d3ab-4e25-9ce6-2899092260b0",
+      "title": "NTFS Vulnerability Exploitation",
+      "status": "test",
+      "description": "This the exploitation of a NTFS vulnerability as reported without many details via Twitter",
+      "level": "high",
+      "tags": [
+        "attack.impact",
+        "attack.t1499.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Ntfs",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 55,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Origin": {
+                "field": "Origin",
+                "value": "File System Driver",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Description__contains_all": {
+                "field": "Description",
+                "value": [
+                  "contains a corrupted file record",
+                  "The name of the file is \"\\\""
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1499.001"
+        ],
+        "tactics": [
+          "impact"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2021-01-11",
+        "modified": "2022-12-25",
+        "references": [
+          "https://twitter.com/jonasLyk/status/1347900440000811010",
+          "https://twitter.com/wdormann/status/1347958161609809921",
+          "https://www.bleepingcomputer.com/news/security/windows-10-bug-corrupts-your-hard-drive-on-seeing-this-files-icon/"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/ntfs/win_system_ntfs_vuln_exploit.yml"
+      }
+    },
+    {
+      "id": "4d7f1827-1637-4def-8d8a-fd254f9454df",
+      "title": "Sysmon Application Crashed",
+      "status": "test",
+      "description": "Detects application popup reporting a failure of the Sysmon service",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "system"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Application Popup",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 26,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Caption": {
+                "field": "Caption",
+                "value": [
+                  "sysmon64.exe - Application Error",
+                  "sysmon.exe - Application Error"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Tim Shelton",
+        "date": "2022-04-26",
+        "modified": "2024-01-17",
+        "references": [
+          "https://github.com/nasbench/EVTX-ETW-Resources/blob/f1b010ce0ee1b71e3024180de1a3e67f99701fe4/ETWProvidersManifests/Windows10/1803/W10_1803_Pro_19700101_17134.1/WEPExplorer/Application%20Popup.xml#L36"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/system/application_popup/win_system_application_sysmon_crash.yml"
+      }
+    }
+  ]
+}

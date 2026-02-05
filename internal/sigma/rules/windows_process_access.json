@@ -1,0 +1,2897 @@
+{
+  "metadata": {
+    "logsource": "windows_process_access",
+    "rule_count": 23,
+    "compiled_at": "2026-02-04T12:28:36.416281",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "f8be3e82-46a3-4e4e-ada5-8e538ae8b9c9",
+      "title": "Credential Dumping Activity By Python Based Tool",
+      "status": "stable",
+      "description": "Detects LSASS process access for potential credential dumping by a Python-like tool such as LaZagne or Pypykatz.",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.s0349"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains_all": {
+                "field": "CallTrace",
+                "value": [
+                  "_ctypes.pyd+",
+                  ":\\Windows\\System32\\KERNELBASE.dll+",
+                  ":\\Windows\\SYSTEM32\\ntdll.dll+"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": [
+                  "python27.dll+",
+                  "python3*.dll+"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1FFFFF",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Bhabesh Raj, Jonhnathan Ribeiro",
+        "date": "2023-11-27",
+        "modified": "2023-11-29",
+        "references": [
+          "https://twitter.com/bh4b3sh/status/1303674603819081728",
+          "https://github.com/skelsec/pypykatz"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_python_based_tool.yml"
+      }
+    },
+    {
+      "id": "a49fa4d5-11db-418c-8473-1e014a8dd462",
+      "title": "Lsass Memory Dump via Comsvcs DLL",
+      "status": "test",
+      "description": "Detects adversaries leveraging the MiniDump export function from comsvcs.dll via rundll32 to perform a memory dump from lsass.",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\rundll32.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": "comsvcs.dll",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "date": "2020-10-20",
+        "modified": "2023-11-29",
+        "references": [
+          "https://twitter.com/shantanukhande/status/1229348874298388484",
+          "https://modexp.wordpress.com/2019/08/30/minidumpwritedump-via-com-services-dll/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_dump_comsvcs_dll.yml"
+      }
+    },
+    {
+      "id": "174afcfa-6e40-4ae9-af64-496546389294",
+      "title": "Credential Dumping Attempt Via Svchost",
+      "status": "test",
+      "description": "Detects when a process tries to access the memory of svchost to potentially dump credentials.",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.privilege-escalation",
+        "attack.t1548"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\svchost.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x143a",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_known_processes": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\services.exe",
+                  "\\msiexec.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1548"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Florent Labouyrie",
+        "date": "2021-04-30",
+        "modified": "2022-10-09",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_svchost_credential_dumping.yml"
+      }
+    },
+    {
+      "id": "fb3722e4-1a06-46b6-b772-253e2e7db933",
+      "title": "Function Call From Undocumented COM Interface EditionUpgradeManager",
+      "status": "test",
+      "description": "Detects function calls from the EditionUpgradeManager COM interface. Which is an interface that is not used by standard executables.",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.privilege-escalation",
+        "attack.t1548.002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": "editionupgrademanagerobj.dll",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1548.002"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "oscd.community, Dmitry Uchakin",
+        "date": "2020-10-07",
+        "modified": "2023-11-30",
+        "references": [
+          "https://www.snip2code.com/Snippet/4397378/UAC-bypass-using-EditionUpgradeManager-C/",
+          "https://gist.github.com/hfiref0x/de9c83966623236f5ebf8d9ae2407611"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_uac_bypass_editionupgrademanagerobj.yml"
+      }
+    },
+    {
+      "id": "09706624-b7f6-455d-9d02-adee024cee1d",
+      "title": "HackTool - CobaltStrike BOF Injection Pattern",
+      "status": "test",
+      "description": "Detects a typical pattern of a CobaltStrike BOF which inject into other processes",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.t1106",
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace__re": {
+                "field": "CallTrace",
+                "value": "^C:\\\\Windows\\\\SYSTEM32\\\\ntdll\\.dll\\+[a-z0-9]{4,6}\\|C:\\\\Windows\\\\System32\\\\KERNELBASE\\.dll\\+[a-z0-9]{4,6}\\|UNKNOWN\\([A-Z0-9]{16}\\)$",
+                "modifiers": [
+                  "re"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": [
+                  "0x1028",
+                  "0x1fffff"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1106",
+          "T1562.001"
+        ],
+        "tactics": [
+          "execution",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Christian Burkard (Nextron Systems)",
+        "date": "2021-08-04",
+        "modified": "2023-11-28",
+        "references": [
+          "https://github.com/boku7/injectAmsiBypass",
+          "https://github.com/boku7/spawn"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_hktl_cobaltstrike_bof_injection_pattern.yml"
+      }
+    },
+    {
+      "id": "9f5c1d59-33be-4e60-bcab-85d2f566effd",
+      "title": "Suspicious Process Access to LSASS with Dbgcore/Dbghelp DLLs",
+      "status": "experimental",
+      "description": "Detects suspicious process access to LSASS.exe from processes located in uncommon locations with dbgcore.dll or dbghelp.dll in the call trace.\nThese DLLs contain functions like MiniDumpWriteDump that can be abused for credential dumping purposes. While modern tools like Mimikatz have moved to using ntdll.dll,\ndbgcore.dll and dbghelp.dll are still used by basic credential dumping utilities and legacy tools for LSASS memory access and process suspension techniques.\n",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_lsass_calltrace": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": [
+                  "dbgcore.dll",
+                  "dbghelp.dll"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_susp_location": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": [
+                  ":\\Perflogs\\",
+                  ":\\Temp\\",
+                  ":\\Users\\Public\\",
+                  "\\$Recycle.Bin\\",
+                  "\\AppData\\Roaming\\",
+                  "\\Contacts\\",
+                  "\\Desktop\\",
+                  "\\Documents\\",
+                  "\\Downloads\\",
+                  "\\Favorites\\",
+                  "\\Favourites\\",
+                  "\\inetpub\\wwwroot\\",
+                  "\\Music\\",
+                  "\\Pictures\\",
+                  "\\Start Menu\\Programs\\Startup\\",
+                  "\\Users\\Default\\",
+                  "\\Videos\\",
+                  "\\Windows\\Temp\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001",
+          "T1562.001"
+        ],
+        "tactics": [
+          "credential_access",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+        "date": "2025-11-27",
+        "modified": "",
+        "references": [
+          "https://www.splunk.com/en_us/blog/security/you-bet-your-lsass-hunting-lsass-access.html",
+          "https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/nf-minidumpwritedump"
+        ],
+        "falsepositives": [
+          "Possibly during software installation or update processes"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_susp_dbgcore_dbghelp_load.yml"
+      }
+    },
+    {
+      "id": "7bdde3bf-2a42-4c39-aa31-a92b3e17afac",
+      "title": "HackTool - LittleCorporal Generated Maldoc Injection",
+      "status": "test",
+      "description": "Detects the process injection of a LittleCorporal generated Maldoc.",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.execution",
+        "attack.privilege-escalation",
+        "attack.t1204.002",
+        "attack.t1055.003"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\winword.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains_all": {
+                "field": "CallTrace",
+                "value": [
+                  ":\\Windows\\Microsoft.NET\\Framework64\\v2.",
+                  "UNKNOWN"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1204.002",
+          "T1055.003"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Christian Burkard (Nextron Systems)",
+        "date": "2021-08-09",
+        "modified": "2023-11-28",
+        "references": [
+          "https://github.com/connormcgarr/LittleCorporal"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_hktl_littlecorporal_generated_maldoc.yml"
+      }
+    },
+    {
+      "id": "e5b33f7d-eb93-48b6-9851-09e1e610b6d7",
+      "title": "Credential Dumping Attempt Via WerFault",
+      "status": "test",
+      "description": "Detects process LSASS memory dump using Mimikatz, NanoDump, Invoke-Mimikatz, Procdump or Taskmgr based on the CallTrace pointing to ntdll.dll, dbghelp.dll or dbgcore.dll for win10, server2016 and up.",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.s0002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\WerFault.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1FFFFF",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2012-06-27",
+        "modified": "2023-11-29",
+        "references": [
+          "https://github.com/helpsystems/nanodump/commit/578116faea3d278d53d70ea932e2bbfe42569507"
+        ],
+        "falsepositives": [
+          "Actual failures in lsass.exe that trigger a crash dump (unlikely)",
+          "Unknown cases in which WerFault accesses lsass.exe"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_werfault.yml"
+      }
+    },
+    {
+      "id": "d29ada0f-af45-4f27-8f32-f7b77c3dbc4e",
+      "title": "HackTool - SysmonEnte Execution",
+      "status": "test",
+      "description": "Detects the use of SysmonEnte, a tool to attack the integrity of Sysmon",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_sysmon": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": [
+                  ":\\Windows\\Sysmon.exe",
+                  ":\\Windows\\Sysmon64.exe"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1400",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_calltrace": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace": {
+                "field": "CallTrace",
+                "value": "Ente",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_generic": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": [
+                  ":\\Program Files (x86)\\",
+                  ":\\Program Files\\",
+                  ":\\Windows\\System32\\",
+                  ":\\Windows\\SysWOW64\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_msdefender": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": ":\\ProgramData\\Microsoft\\Windows Defender\\Platform\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\MsMpEng.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "( selection_sysmon and not 1 of filter_main_* ) or selection_calltrace",
+        "condition_parsed": {
+          "op": "or",
+          "operands": [
+            "( selection_sysmon and not 1 of filter_main_* )",
+            "selection_calltrace"
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.002"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-09-07",
+        "modified": "2023-11-28",
+        "references": [
+          "https://codewhitesec.blogspot.com/2022/09/attacks-on-sysmon-revisited-sysmonente.html",
+          "https://github.com/codewhitesec/SysmonEnte/",
+          "https://github.com/codewhitesec/SysmonEnte/blob/fe267690fcc799fbda15398243615a30451d9099/screens/1.png"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_hktl_sysmonente.yml"
+      }
+    },
+    {
+      "id": "3b4b232a-af90-427c-a22f-30b0c0837b95",
+      "title": "CMSTP Execution Process Access",
+      "status": "stable",
+      "description": "Detects various indicators of Microsoft Connection Manager Profile Installer execution",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1218.003",
+        "attack.execution",
+        "attack.t1559.001",
+        "attack.g0069",
+        "attack.g0080",
+        "car.2019-04-001"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": "cmlua.dll",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1218.003",
+          "T1559.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nik Seetharaman",
+        "date": "2018-07-16",
+        "modified": "2021-06-27",
+        "references": [
+          "https://web.archive.org/web/20190720093911/http://www.endurant.io/cmstp/detecting-cmstp-enabled-code-execution-and-uac-bypass-with-sysmon/"
+        ],
+        "falsepositives": [
+          "Legitimate CMSTP use (unlikely in modern enterprise environments)"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_cmstp_execution_by_access.yml"
+      }
+    },
+    {
+      "id": "b1bd3a59-c1fd-4860-9f40-4dd161a7d1f5",
+      "title": "HackTool - HandleKatz Duplicating LSASS Handle",
+      "status": "test",
+      "description": "Detects HandleKatz opening LSASS to duplicate its handle to later dump the memory without opening any new handles",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.t1106",
+        "attack.defense-evasion",
+        "attack.t1003.001",
+        "attack.credential-access"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1440",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__startswith": {
+                "field": "CallTrace",
+                "value": "C:\\Windows\\System32\\ntdll.dll+",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": "|UNKNOWN(",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__endswith": {
+                "field": "CallTrace",
+                "value": ")",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1106",
+          "T1003.001"
+        ],
+        "tactics": [
+          "execution",
+          "defense_evasion",
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Bhabesh Raj (rule), @thefLinkk",
+        "date": "2022-06-27",
+        "modified": "2023-11-28",
+        "references": [
+          "https://github.com/codewhitesec/HandleKatz"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_hktl_handlekatz_lsass_access.yml"
+      }
+    },
+    {
+      "id": "472159c5-31b9-4f56-b794-b766faa8b0a7",
+      "title": "Suspicious LSASS Access Via MalSecLogon",
+      "status": "test",
+      "description": "Detects suspicious access to LSASS handle via a call trace to \"seclogon.dll\" with a suspicious access right.",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\svchost.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x14c0",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": "seclogon.dll",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Samir Bousseaden (original elastic rule), Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-06-29",
+        "modified": "",
+        "references": [
+          "https://twitter.com/SBousseaden/status/1541920424635912196",
+          "https://github.com/elastic/detection-rules/blob/2bc1795f3d7bcc3946452eb4f07ae799a756d94e/rules/windows/credential_access_lsass_handle_via_malseclogon.toml",
+          "https://splintercod3.blogspot.com/p/the-hidden-side-of-seclogon-part-3.html"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_seclogon_access.yml"
+      }
+    },
+    {
+      "id": "d0d2f720-d14f-448d-8242-51ff396a334e",
+      "title": "HackTool - Generic Process Access",
+      "status": "test",
+      "description": "Detects process access requests from hacktool processes based on their default image name",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.s0002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "SourceImage__endswith": {
+                    "field": "SourceImage",
+                    "value": [
+                      "\\Akagi.exe",
+                      "\\Akagi64.exe",
+                      "\\atexec_windows.exe",
+                      "\\Certify.exe",
+                      "\\Certipy.exe",
+                      "\\CoercedPotato.exe",
+                      "\\crackmapexec.exe",
+                      "\\CreateMiniDump.exe",
+                      "\\dcomexec_windows.exe",
+                      "\\dpapi_windows.exe",
+                      "\\findDelegation_windows.exe",
+                      "\\GetADUsers_windows.exe",
+                      "\\GetNPUsers_windows.exe",
+                      "\\getPac_windows.exe",
+                      "\\getST_windows.exe",
+                      "\\getTGT_windows.exe",
+                      "\\GetUserSPNs_windows.exe",
+                      "\\gmer.exe",
+                      "\\hashcat.exe",
+                      "\\htran.exe",
+                      "\\ifmap_windows.exe",
+                      "\\impersonate.exe",
+                      "\\Inveigh.exe",
+                      "\\LocalPotato.exe",
+                      "\\mimikatz_windows.exe",
+                      "\\mimikatz.exe",
+                      "\\netview_windows.exe",
+                      "\\nmapAnswerMachine_windows.exe",
+                      "\\opdump_windows.exe",
+                      "\\PasswordDump.exe",
+                      "\\Potato.exe",
+                      "\\PowerTool.exe",
+                      "\\PowerTool64.exe",
+                      "\\psexec_windows.exe",
+                      "\\PurpleSharp.exe",
+                      "\\pypykatz.exe",
+                      "\\QuarksPwDump.exe",
+                      "\\rdp_check_windows.exe",
+                      "\\Rubeus.exe",
+                      "\\SafetyKatz.exe",
+                      "\\sambaPipe_windows.exe",
+                      "\\SelectMyParent.exe",
+                      "\\SharpChisel.exe",
+                      "\\SharPersist.exe",
+                      "\\SharpEvtMute.exe",
+                      "\\SharpImpersonation.exe",
+                      "\\SharpLDAPmonitor.exe",
+                      "\\SharpLdapWhoami.exe",
+                      "\\SharpUp.exe",
+                      "\\SharpView.exe",
+                      "\\smbclient_windows.exe",
+                      "\\smbserver_windows.exe",
+                      "\\sniff_windows.exe",
+                      "\\sniffer_windows.exe",
+                      "\\split_windows.exe",
+                      "\\SpoolSample.exe",
+                      "\\Stracciatella.exe",
+                      "\\SysmonEOP.exe",
+                      "\\temp\\rot.exe",
+                      "\\ticketer_windows.exe",
+                      "\\TruffleSnout.exe",
+                      "\\winPEASany_ofs.exe",
+                      "\\winPEASany.exe",
+                      "\\winPEASx64_ofs.exe",
+                      "\\winPEASx64.exe",
+                      "\\winPEASx86_ofs.exe",
+                      "\\winPEASx86.exe",
+                      "\\xordump.exe"
+                    ],
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "SourceImage__contains": {
+                    "field": "SourceImage",
+                    "value": [
+                      "\\goldenPac",
+                      "\\just_dce_",
+                      "\\karmaSMB",
+                      "\\kintercept",
+                      "\\LocalPotato",
+                      "\\ntlmrelayx",
+                      "\\rpcdump",
+                      "\\samrdump",
+                      "\\secretsdump",
+                      "\\smbexec",
+                      "\\smbrelayx",
+                      "\\wmiexec",
+                      "\\wmipersist",
+                      "HotPotato",
+                      "Juicy Potato",
+                      "JuicyPotato",
+                      "PetitPotam",
+                      "RottenPotato"
+                    ],
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel",
+        "date": "2023-11-27",
+        "modified": "",
+        "references": [
+          "https://jsecurity101.medium.com/bypassing-access-mask-auditing-strategies-480fb641c158",
+          "https://www.splunk.com/en_us/blog/security/you-bet-your-lsass-hunting-lsass-access.html"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_hktl_generic_access.yml"
+      }
+    },
+    {
+      "id": "4f6c43e2-f989-4ea5-bcd8-843b49a0317c",
+      "title": "UAC Bypass Using WOW64 Logger DLL Hijack",
+      "status": "test",
+      "description": "Detects the pattern of UAC Bypass using a WoW64 logger DLL hijack (UACMe 30)",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.privilege-escalation",
+        "attack.t1548.002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": ":\\Windows\\SysWOW64\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1fffff",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__startswith": {
+                "field": "CallTrace",
+                "value": "UNKNOWN(0000000000000000)|UNKNOWN(0000000000000000)|",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1548.002"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Christian Burkard (Nextron Systems)",
+        "date": "2021-08-23",
+        "modified": "2022-10-09",
+        "references": [
+          "https://github.com/hfiref0x/UACME"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_uac_bypass_wow64_logger.yml"
+      }
+    },
+    {
+      "id": "9bd012ee-0dff-44d7-84a0-aa698cfd87a3",
+      "title": "LSASS Memory Access by Tool With Dump Keyword In Name",
+      "status": "test",
+      "description": "Detects LSASS process access requests from a source process with the \"dump\" keyword in its image name.",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.s0002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": "dump",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess__endswith": {
+                "field": "GrantedAccess",
+                "value": [
+                  "10",
+                  "30",
+                  "50",
+                  "70",
+                  "90",
+                  "B0",
+                  "D0",
+                  "F0",
+                  "18",
+                  "38",
+                  "58",
+                  "78",
+                  "98",
+                  "B8",
+                  "D8",
+                  "F8",
+                  "1A",
+                  "3A",
+                  "5A",
+                  "7A",
+                  "9A",
+                  "BA",
+                  "DA",
+                  "FA",
+                  "0x14C2",
+                  "FF"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-02-10",
+        "modified": "2023-11-29",
+        "references": [
+          "https://twitter.com/_xpn_/status/1491557187168178176",
+          "https://www.ired.team/offensive-security/credential-access-and-credential-dumping/dump-credentials-from-lsass-process-without-mimikatz"
+        ],
+        "falsepositives": [
+          "Rare programs that contain the word dump in their name and access lsass"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_dump_keyword_image.yml"
+      }
+    },
+    {
+      "id": "5ef9853e-4d0e-4a70-846f-a9ca37d876da",
+      "title": "Potential Credential Dumping Activity Via LSASS",
+      "status": "test",
+      "description": "Detects process access requests to the LSASS process with specific call trace calls and access masks.\nThis behaviour is expressed by many credential dumping tools such as Mimikatz, NanoDump, Invoke-Mimikatz, Procdump and even the Taskmgr dumping feature.\n",
+      "level": "medium",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.s0002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess__contains": {
+                "field": "GrantedAccess",
+                "value": [
+                  "0x1038",
+                  "0x1438",
+                  "0x143a",
+                  "0x1fffff"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": [
+                  "dbgcore.dll",
+                  "dbghelp.dll",
+                  "kernel32.dll",
+                  "kernelbase.dll",
+                  "ntdll.dll"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_system_user": {
+            "type": "field_match",
+            "matchers": {
+              "SourceUser__contains": {
+                "field": "SourceUser",
+                "value": [
+                  "AUTHORI",
+                  "AUTORI"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_thor": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace__contains_all": {
+                "field": "CallTrace",
+                "value": [
+                  ":\\Windows\\Temp\\asgard2-agent\\",
+                  "\\thor\\thor64.exe+",
+                  "|UNKNOWN("
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x103800",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_sysmon": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": ":\\Windows\\Sysmon64.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Samir Bousseaden, Michael Haag",
+        "date": "2019-04-03",
+        "modified": "2024-03-02",
+        "references": [
+          "https://web.archive.org/web/20230329170326/https://blog.menasec.net/2019/02/threat-hunting-21-procdump-or-taskmgr.html",
+          "https://web.archive.org/web/20230208123920/https://cyberwardog.blogspot.com/2017/03/chronicles-of-threat-hunter-hunting-for_22.html",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1003.001/T1003.001.md",
+          "https://research.splunk.com/endpoint/windows_possible_credential_dumping/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_memdump.yml"
+      }
+    },
+    {
+      "id": "a18dd26b-6450-46de-8c91-9659150cf088",
+      "title": "Potentially Suspicious GrantedAccess Flags On LSASS",
+      "status": "test",
+      "description": "Detects process access requests to LSASS process with potentially suspicious access flags",
+      "level": "medium",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.s0002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_target": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_access": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "GrantedAccess__endswith": {
+                    "field": "GrantedAccess",
+                    "value": [
+                      "30",
+                      "50",
+                      "70",
+                      "90",
+                      "B0",
+                      "D0",
+                      "F0",
+                      "18",
+                      "38",
+                      "58",
+                      "78",
+                      "98",
+                      "B8",
+                      "D8",
+                      "F8",
+                      "1A",
+                      "3A",
+                      "5A",
+                      "7A",
+                      "9A",
+                      "BA",
+                      "DA",
+                      "FA",
+                      "0x14C2"
+                    ],
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "GrantedAccess__startswith": {
+                    "field": "GrantedAccess",
+                    "value": [
+                      "0x100000",
+                      "0x1418",
+                      "0x1438",
+                      "0x143a",
+                      "0x1f0fff",
+                      "0x1f1fff",
+                      "0x1f2fff",
+                      "0x1f3fff",
+                      "0x40"
+                    ],
+                    "modifiers": [
+                      "startswith"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {
+          "filter_main_generic": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": [
+                  ":\\Program Files (x86)\\",
+                  ":\\Program Files\\",
+                  ":\\Windows\\System32\\",
+                  ":\\Windows\\SysWOW64\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_malwarebytes": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": ":\\ProgramData\\MALWAREBYTES\\MBAMSERVICE\\ctlrupdate\\mbupdatr.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vscode": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_windefend_1": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": ":\\ProgramData\\Microsoft\\Windows Defender\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\MsMpEng.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_windefend_2": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace__contains_all": {
+                "field": "CallTrace",
+                "value": [
+                  "|?:\\ProgramData\\Microsoft\\Windows Defender\\Definition Updates\\{",
+                  "}\\mpengine.dll+"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1418",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_windefend_3": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": [
+                  "|c:\\program files\\windows defender\\mprtp.dll",
+                  "|c:\\program files\\windows defender\\MpClient.dll"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vmwaretools": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": ":\\ProgramData\\VMware\\VMware Tools\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\vmtoolsd.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_sysinternals_process_explorer": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\PROCEXP64.EXE",
+                  "\\PROCEXP.EXE"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x40",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_mbami": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\MBAMInstallerService.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x40",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_nextron": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\aurora-agent-64.exe",
+                  "\\aurora-agent.exe",
+                  "\\thor.exe",
+                  "\\thor64.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x40",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_explorer": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\explorer.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x401",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_sysinternals_handle": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\handle.exe",
+                  "\\handle64.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x40",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_webex": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\AppData\\Local\\WebEx\\WebexHost.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x401",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_steam_apps": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": "\\SteamLibrary\\steamapps\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "all of selection_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth, Roberto Rodriguez, Dimitrios Slamaris, Mark Russinovich, Thomas Patzke, Teymur Kheirkhabarov, Sherif Eldeeb, James Dickenson, Aleksey Potapov, oscd.community",
+        "date": "2021-11-22",
+        "modified": "2023-11-29",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights",
+          "https://onedrive.live.com/view.aspx?resid=D026B4699190F1E6!2843&ithint=file%2cpptx&app=PowerPoint&authkey=!AMvCRTKB_V1J5ow",
+          "https://web.archive.org/web/20230208123920/https://cyberwardog.blogspot.com/2017/03/chronicles-of-threat-hunter-hunting-for_22.html",
+          "https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment",
+          "https://web.archive.org/web/20230420013146/http://security-research.dyndns.org/pub/slides/FIRST2017/FIRST-2017_Tom-Ueltschi_Sysmon_FINAL_notes.pdf"
+        ],
+        "falsepositives": [
+          "Legitimate software such as AV and EDR"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_susp_access_flag.yml"
+      }
+    },
+    {
+      "id": "a24e5861-c6ca-4fde-a93c-ba9256feddf0",
+      "title": "Uncommon Process Access Rights For Target Image",
+      "status": "test",
+      "description": "Detects process access request to uncommon target images with a \"PROCESS_ALL_ACCESS\" access mask.\n",
+      "level": "low",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.privilege-escalation",
+        "attack.t1055.011"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": [
+                  "\\calc.exe",
+                  "\\calculator.exe",
+                  "\\mspaint.exe",
+                  "\\notepad.exe",
+                  "\\ping.exe",
+                  "\\wordpad.exe",
+                  "\\write.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1FFFFF",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1055.011"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems), frack113",
+        "date": "2024-05-27",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_susp_all_access_uncommon_target.yml"
+      }
+    },
+    {
+      "id": "3f3f3506-1895-401b-9cc3-e86b16e630d0",
+      "title": "Potential Direct Syscall of NtOpenProcess",
+      "status": "test",
+      "description": "Detects potential calls to NtOpenProcess directly from NTDLL.",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1106"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "CallTrace__startswith": {
+                "field": "CallTrace",
+                "value": "UNKNOWN",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_vcredist": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "vcredist_x64.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "vcredist_x64.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_generic": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": [
+                  ":\\Program Files (x86)\\",
+                  ":\\Program Files\\",
+                  ":\\Windows\\System32\\",
+                  ":\\Windows\\SysWOW64\\",
+                  ":\\Windows\\WinSxS\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": [
+                  ":\\Program Files (x86)\\",
+                  ":\\Program Files\\",
+                  ":\\Windows\\System32\\",
+                  ":\\Windows\\SysWOW64\\",
+                  ":\\Windows\\WinSxS\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_kerneltrace_edge": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-Kernel-Audit-API-Calls",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vmware": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": ":\\Windows\\system32\\systeminfo.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "setup64.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_cylance": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": ":\\Windows\\Explorer.EXE",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": ":\\Program Files\\Cylance\\Desktop\\CylanceUI.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_amazon": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "AmazonSSMAgentSetup.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "AmazonSSMAgentSetup.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vscode": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_teams": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\AppData\\Local\\Microsoft\\Teams\\current\\Teams.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\AppData\\Local\\Microsoft\\Teams\\current\\Teams.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_discord": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": "\\AppData\\Local\\Discord\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\Discord.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_yammer": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": "\\AppData\\Local\\yammerdesktop\\app-",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\Yammer.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": "\\AppData\\Local\\yammerdesktop\\app-",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\Yammer.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1000",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_evernote": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\Evernote\\Evernote.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_adobe_acrobat": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": ":\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\AcroCEF.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": ":\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\AcroCEF.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1106"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Christian Burkard (Nextron Systems), Tim Shelton (FP)",
+        "date": "2021-07-28",
+        "modified": "2023-12-13",
+        "references": [
+          "https://medium.com/falconforce/falconfriday-direct-system-calls-and-cobalt-strike-bofs-0xff14-741fa8e1bdd6"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_susp_direct_ntopenprocess_call.yml"
+      }
+    },
+    {
+      "id": "aa35a627-33fb-4d04-a165-d33b4afca3e8",
+      "title": "Remote LSASS Process Access Through Windows Remote Management",
+      "status": "stable",
+      "description": "Detects remote access to the LSASS process via WinRM. This could be a sign of credential dumping from tools like mimikatz.",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.execution",
+        "attack.t1003.001",
+        "attack.t1059.001",
+        "attack.lateral-movement",
+        "attack.t1021.006",
+        "attack.s0002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": ":\\Windows\\system32\\wsmprovhost.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_access": {
+            "type": "field_match",
+            "matchers": {
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x80000000",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001",
+          "T1059.001",
+          "T1021.006"
+        ],
+        "tactics": [
+          "credential_access",
+          "execution",
+          "lateral_movement"
+        ]
+      },
+      "meta": {
+        "author": "Patryk Prauze - ING Tech",
+        "date": "2019-05-20",
+        "modified": "2023-11-29",
+        "references": [
+          "https://pentestlab.blog/2018/05/15/lateral-movement-winrm/"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_remote_access_trough_winrm.yml"
+      }
+    },
+    {
+      "id": "387df17d-3b04-448f-8669-9e7fd5e5fd8c",
+      "title": "Suspicious Process Access of MsMpEng by WerFaultSecure - EDR-Freeze",
+      "status": "experimental",
+      "description": "Detects process access events where WerFaultSecure accesses MsMpEng.exe with dbgcore.dll or dbghelp.dll in the call trace, indicating potential EDR freeze techniques.\nThis technique leverages WerFaultSecure.exe running as a Protected Process Light (PPL) with WinTCB protection level to call MiniDumpWriteDump and suspend EDR/AV processes, allowing malicious activity to execute undetected during the suspension period.\n",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\WerFaultSecure.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\MsMpEng.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": [
+                  "\\dbgcore.dll",
+                  "\\dbghelp.dll"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+        "date": "2025-11-27",
+        "modified": "",
+        "references": [
+          "https://blog.axelarator.net/hunting-for-edr-freeze/"
+        ],
+        "falsepositives": [
+          "Legitimate Windows Error Reporting operations"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_werfaultsecure_msmpeng_access.yml"
+      }
+    },
+    {
+      "id": "166e9c50-8cd9-44af-815d-d1f0c0e90dde",
+      "title": "Suspicious Svchost Process Access",
+      "status": "test",
+      "description": "Detects suspicious access to the \"svchost\" process such as that used by Invoke-Phantom to kill the thread of the Windows event logging service.",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": ":\\Windows\\System32\\svchost.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "GrantedAccess": {
+                "field": "GrantedAccess",
+                "value": "0x1F3FFF",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": "UNKNOWN",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_msbuild": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": ":\\Program Files\\Microsoft Visual Studio\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\MSBuild\\Current\\Bin\\MSBuild.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "CallTrace__contains": {
+                "field": "CallTrace",
+                "value": [
+                  "Microsoft.Build.ni.dll",
+                  "System.ni.dll"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.002"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Tim Burrell",
+        "date": "2020-01-02",
+        "modified": "2023-01-30",
+        "references": [
+          "https://github.com/hlldz/Invoke-Phant0m",
+          "https://twitter.com/timbmsft/status/900724491076214784"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_svchost_susp_access_request.yml"
+      }
+    },
+    {
+      "id": "4be8b654-0c01-4c9d-a10c-6b28467fc651",
+      "title": "LSASS Access From Potentially White-Listed Processes",
+      "status": "test",
+      "description": "Detects a possible process memory dump that uses a white-listed filename like TrolleyExpress.exe as a way to dump the LSASS process memory without Microsoft Defender interference\n",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001",
+        "attack.s0002"
+      ],
+      "logsource": {
+        "category": "process_access",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\TrolleyExpress.exe",
+                  "\\ProcessDump.exe",
+                  "\\dump64.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "GrantedAccess__endswith": {
+                "field": "GrantedAccess",
+                "value": [
+                  "10",
+                  "30",
+                  "50",
+                  "70",
+                  "90",
+                  "B0",
+                  "D0",
+                  "F0",
+                  "18",
+                  "38",
+                  "58",
+                  "78",
+                  "98",
+                  "B8",
+                  "D8",
+                  "F8",
+                  "1A",
+                  "3A",
+                  "5A",
+                  "7A",
+                  "9A",
+                  "BA",
+                  "DA",
+                  "FA",
+                  "0x14C2",
+                  "FF"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-02-10",
+        "modified": "2023-11-29",
+        "references": [
+          "https://twitter.com/_xpn_/status/1491557187168178176",
+          "https://www.ired.team/offensive-security/credential-access-and-credential-dumping/dump-credentials-from-lsass-process-without-mimikatz",
+          "https://twitter.com/mrd0x/status/1460597833917251595"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/process_access/proc_access_win_lsass_whitelisted_process_names.yml"
+      }
+    }
+  ]
+}

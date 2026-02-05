@@ -6,7 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/digggggmori-pixel/agent-lite/internal/logger"
 	"github.com/digggggmori-pixel/agent-lite/pkg/types"
+)
+
+// Compiled regex patterns for domain analysis
+var (
+	dgaPatternCompiled      = regexp.MustCompile(`^[a-z0-9]{20,}\.[a-z]{2,4}$`)
+	punycodePatternCompiled = regexp.MustCompile(`^xn--`)
+	ipPatternCompiled       = regexp.MustCompile(`\d{1,3}[-_]\d{1,3}[-_]\d{1,3}`)
 )
 
 // Detector is the main detection engine
@@ -32,6 +40,8 @@ func New() *Detector {
 
 // DetectLOLBins detects LOLBin execution
 func (d *Detector) DetectLOLBins(processes []types.ProcessInfo) []types.Detection {
+	logger.SubSection("LOLBin Detection")
+	logger.Debug("Scanning %d processes for LOLBin patterns", len(processes))
 	var detections []types.Detection
 
 	for i := range processes {
@@ -66,10 +76,12 @@ func (d *Detector) DetectLOLBins(processes []types.ProcessInfo) []types.Detectio
 				detection.Severity = types.SeverityHigh
 			}
 
+			logger.DetectionInfo(types.DetectionTypeLOLBin, detection.Severity, detection.Description)
 			detections = append(detections, detection)
 		}
 	}
 
+	logger.Debug("LOLBin detection complete: %d detections", len(detections))
 	return detections
 }
 
@@ -764,4 +776,436 @@ func isSuspiciousPath(path string) bool {
 	}
 
 	return !hasLegitimatePrefix
+}
+
+// DetectServiceVendorTyposquatting detects typosquatted vendor names in service display names
+func (d *Detector) DetectServiceVendorTyposquatting(services []types.ServiceInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, svc := range services {
+		displayLower := strings.ToLower(svc.DisplayName)
+
+		for _, vendor := range TrustedVendors {
+			vendorLower := strings.ToLower(vendor)
+
+			// Check if display name contains something similar but not exact
+			// First, check if the vendor name appears in display name
+			words := strings.Fields(displayLower)
+			for _, word := range words {
+				// Skip if it's the exact match
+				if word == vendorLower {
+					continue
+				}
+
+				// Check Levenshtein distance
+				distance := levenshteinDistance(word, vendorLower)
+
+				// For short vendor names (4-5 chars), only flag distance 1
+				// For longer names, flag distance 1-2
+				maxDistance := 2
+				if len(vendorLower) <= 5 {
+					maxDistance = 1
+				}
+
+				if distance > 0 && distance <= maxDistance && len(word) >= len(vendorLower)-1 {
+					detection := types.Detection{
+						ID:          fmt.Sprintf("svc-vendor-%s-%d", svc.Name, time.Now().UnixNano()),
+						Type:        types.DetectionTypeServiceVendor,
+						Severity:    types.SeverityHigh,
+						Confidence:  0.85,
+						Timestamp:   time.Now(),
+						Description: fmt.Sprintf("Service vendor typosquatting: '%s' similar to '%s' in service '%s'", word, vendor, svc.DisplayName),
+						MITRE: &types.MITREMapping{
+							Tactics:    []string{"Defense Evasion", "Persistence"},
+							Techniques: []string{"T1036.005", "T1543.003"},
+						},
+						Details: map[string]interface{}{
+							"service_name":    svc.Name,
+							"display_name":    svc.DisplayName,
+							"typosquat_word":  word,
+							"legitimate_name": vendor,
+							"distance":        distance,
+						},
+					}
+					detections = append(detections, detection)
+					break // Only one detection per service
+				}
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectServiceNameTyposquatting detects typosquatted system service names
+func (d *Detector) DetectServiceNameTyposquatting(services []types.ServiceInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, svc := range services {
+		nameLower := strings.ToLower(svc.Name)
+
+		for _, systemSvc := range SystemServices {
+			// Skip exact match
+			if nameLower == systemSvc {
+				continue
+			}
+
+			distance := levenshteinDistance(nameLower, systemSvc)
+
+			// Flag distance 1-2
+			if distance > 0 && distance <= 2 {
+				detection := types.Detection{
+					ID:          fmt.Sprintf("svc-name-%s-%d", svc.Name, time.Now().UnixNano()),
+					Type:        types.DetectionTypeServiceName,
+					Severity:    types.SeverityHigh,
+					Confidence:  0.9,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Service name typosquatting: '%s' similar to system service '%s'", svc.Name, systemSvc),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Defense Evasion", "Persistence"},
+						Techniques: []string{"T1036.005", "T1543.003"},
+					},
+					Details: map[string]interface{}{
+						"service_name":    svc.Name,
+						"display_name":    svc.DisplayName,
+						"system_service":  systemSvc,
+						"distance":        distance,
+						"binary_path":     svc.BinaryPath,
+					},
+				}
+				detections = append(detections, detection)
+				break
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectServicePathAnomalies detects services running from suspicious paths
+func (d *Detector) DetectServicePathAnomalies(services []types.ServiceInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, svc := range services {
+		if svc.BinaryPath == "" {
+			continue
+		}
+
+		pathLower := strings.ToLower(svc.BinaryPath)
+
+		// Check for dangerous paths
+		for _, dangerPath := range DangerousPaths {
+			if strings.Contains(pathLower, dangerPath) {
+				detection := types.Detection{
+					ID:          fmt.Sprintf("svc-path-%s-%d", svc.Name, time.Now().UnixNano()),
+					Type:        types.DetectionTypeServicePath,
+					Severity:    types.SeverityHigh,
+					Confidence:  0.85,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Service running from suspicious path: %s", svc.BinaryPath),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Persistence", "Defense Evasion"},
+						Techniques: []string{"T1543.003", "T1036"},
+					},
+					Details: map[string]interface{}{
+						"service_name":   svc.Name,
+						"display_name":   svc.DisplayName,
+						"binary_path":    svc.BinaryPath,
+						"dangerous_path": dangerPath,
+					},
+				}
+				detections = append(detections, detection)
+				break
+			}
+		}
+
+		// Check if service runs cmd.exe or powershell.exe directly
+		shellBinaries := []string{"cmd.exe", "powershell.exe", "pwsh.exe", "wscript.exe", "cscript.exe"}
+		for _, shell := range shellBinaries {
+			if strings.Contains(pathLower, shell) {
+				detection := types.Detection{
+					ID:          fmt.Sprintf("svc-shell-%s-%d", svc.Name, time.Now().UnixNano()),
+					Type:        types.DetectionTypeServicePath,
+					Severity:    types.SeverityCritical,
+					Confidence:  0.9,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Service executes shell binary: %s", shell),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Persistence", "Execution"},
+						Techniques: []string{"T1543.003", "T1059"},
+					},
+					Details: map[string]interface{}{
+						"service_name": svc.Name,
+						"display_name": svc.DisplayName,
+						"binary_path":  svc.BinaryPath,
+						"shell":        shell,
+					},
+				}
+				detections = append(detections, detection)
+				break
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectUnsignedCriticalProcesses detects critical system processes running from unexpected paths
+func (d *Detector) DetectUnsignedCriticalProcesses(processes []types.ProcessInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, proc := range processes {
+		nameLower := strings.ToLower(proc.Name)
+		pathLower := strings.ToLower(proc.Path)
+
+		// Check if this is a critical process
+		expectedPath, isCritical := CriticalProcesses[nameLower]
+		if !isCritical {
+			continue
+		}
+
+		// Skip if path is empty (we can't verify without path)
+		if proc.Path == "" {
+			continue
+		}
+
+		// Check if running from expected path
+		if pathLower != expectedPath {
+			// Allow SysWOW64 for 32-bit processes
+			if strings.Contains(pathLower, `\windows\syswow64\`) && strings.Contains(expectedPath, `\windows\system32\`) {
+				continue
+			}
+
+			detection := types.Detection{
+				ID:          fmt.Sprintf("unsigned-%d-%d", proc.PID, time.Now().UnixNano()),
+				Type:        types.DetectionTypeUnsignedProcess,
+				Severity:    types.SeverityCritical,
+				Confidence:  0.95,
+				Timestamp:   proc.CreateTime,
+				Description: fmt.Sprintf("Critical process %s running from unexpected path", proc.Name),
+				Process:     &proc,
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Defense Evasion"},
+					Techniques: []string{"T1036.005"},
+				},
+				Details: map[string]interface{}{
+					"expected_path": expectedPath,
+					"actual_path":   proc.Path,
+				},
+			}
+			detections = append(detections, detection)
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousDomains detects connections to suspicious domains
+func (d *Detector) DetectSuspiciousDomains(connections []types.NetworkConnection) []types.Detection {
+	var detections []types.Detection
+
+	for _, conn := range connections {
+		if conn.RemoteAddr == "" || conn.State != "ESTABLISHED" {
+			continue
+		}
+
+		// Skip local/private IPs
+		if isPrivateIP(conn.RemoteAddr) {
+			continue
+		}
+
+		domain := conn.RemoteAddr
+		domainLower := strings.ToLower(domain)
+
+		var reason string
+		var severity string = types.SeverityMedium
+
+		// Check high-risk TLDs
+		for _, tld := range HighRiskTLDs {
+			if strings.HasSuffix(domainLower, "."+tld) {
+				reason = fmt.Sprintf("High-risk TLD: .%s", tld)
+				severity = types.SeverityHigh
+				break
+			}
+		}
+
+		// Check DGA pattern
+		if reason == "" && dgaPatternCompiled.MatchString(domainLower) {
+			reason = "DGA-like domain pattern"
+			severity = types.SeverityCritical
+		}
+
+		// Check Punycode
+		if reason == "" && punycodePatternCompiled.MatchString(domainLower) {
+			reason = "Punycode IDN domain (potential homograph attack)"
+			severity = types.SeverityHigh
+		}
+
+		// Check IP pattern in domain
+		if reason == "" && ipPatternCompiled.MatchString(domainLower) {
+			reason = "IP-like pattern in domain"
+			severity = types.SeverityMedium
+		}
+
+		// Check for malicious keywords
+		if reason == "" {
+			for _, keyword := range MaliciousKeywords {
+				if strings.Contains(domainLower, keyword) {
+					reason = fmt.Sprintf("Malicious keyword: %s", keyword)
+					severity = types.SeverityHigh
+					break
+				}
+			}
+		}
+
+		// Check .onion domain
+		if reason == "" && strings.HasSuffix(domainLower, ".onion") {
+			reason = "Tor .onion domain"
+			severity = types.SeverityCritical
+		}
+
+		if reason != "" {
+			connCopy := conn
+			detection := types.Detection{
+				ID:          fmt.Sprintf("domain-%d-%d", conn.OwningPID, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousDomain,
+				Severity:    severity,
+				Confidence:  0.8,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Suspicious domain: %s (%s)", domain, reason),
+				Network:     &connCopy,
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Command and Control"},
+					Techniques: []string{"T1071", "T1568"},
+				},
+				Details: map[string]interface{}{
+					"domain":       domain,
+					"reason":       reason,
+					"remote_port":  conn.RemotePort,
+					"process_name": conn.ProcessName,
+				},
+			}
+			detections = append(detections, detection)
+		}
+	}
+
+	return detections
+}
+
+// DetectEncodedCommands detects encoded/obfuscated command lines
+func (d *Detector) DetectEncodedCommands(processes []types.ProcessInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, proc := range processes {
+		if proc.CommandLine == "" {
+			continue
+		}
+
+		cmdLower := strings.ToLower(proc.CommandLine)
+
+		for _, pattern := range EncodedCommandPatterns {
+			if strings.Contains(cmdLower, pattern) {
+				procCopy := proc
+				detection := types.Detection{
+					ID:          fmt.Sprintf("encoded-%d-%d", proc.PID, time.Now().UnixNano()),
+					Type:        types.DetectionTypeEncodedCommand,
+					Severity:    types.SeverityHigh,
+					Confidence:  0.85,
+					Timestamp:   proc.CreateTime,
+					Description: fmt.Sprintf("Encoded/obfuscated command detected: %s", pattern),
+					Process:     &procCopy,
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Defense Evasion", "Execution"},
+						Techniques: []string{"T1027", "T1059.001"},
+					},
+					Details: map[string]interface{}{
+						"pattern":      pattern,
+						"command_line": truncateString(proc.CommandLine, 500),
+					},
+				}
+				detections = append(detections, detection)
+				break // Only one detection per process
+			}
+		}
+	}
+
+	return detections
+}
+
+// ExtractIOCs extracts Indicators of Compromise from scan results
+func (d *Detector) ExtractIOCs(result *types.ScanResult) types.IOCCollection {
+	iocs := types.IOCCollection{
+		IPs:   make([]types.IOCEntry, 0),
+		URLs:  make([]types.IOCEntry, 0),
+		Files: make([]types.IOCEntry, 0),
+	}
+
+	seenIPs := make(map[string]bool)
+	seenFiles := make(map[string]bool)
+
+	for _, detection := range result.Detections {
+		// Extract IPs from network detections
+		if detection.Network != nil {
+			ip := detection.Network.RemoteAddr
+			if ip != "" && !seenIPs[ip] && !isPrivateIP(ip) {
+				seenIPs[ip] = true
+				iocs.IPs = append(iocs.IPs, types.IOCEntry{
+					Value:   ip,
+					Context: fmt.Sprintf("Port:%d Process:%s", detection.Network.RemotePort, detection.Network.ProcessName),
+				})
+			}
+		}
+
+		// Extract file paths from process detections
+		if detection.Process != nil {
+			path := detection.Process.Path
+			if path != "" && !seenFiles[path] {
+				seenFiles[path] = true
+				iocs.Files = append(iocs.Files, types.IOCEntry{
+					Value:   path,
+					Context: fmt.Sprintf("Detection:%s", detection.Type),
+				})
+			}
+		}
+
+		// Extract from Details map
+		if details, ok := detection.Details["binary_path"]; ok {
+			if path, ok := details.(string); ok && path != "" && !seenFiles[path] {
+				seenFiles[path] = true
+				iocs.Files = append(iocs.Files, types.IOCEntry{
+					Value:   path,
+					Context: fmt.Sprintf("Service:%s", detection.Type),
+				})
+			}
+		}
+	}
+
+	return iocs
+}
+
+// Helper functions
+
+func isPrivateIP(ip string) bool {
+	// Simple check for private/local IPs
+	privatePatterns := []string{
+		"10.", "172.16.", "172.17.", "172.18.", "172.19.",
+		"172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+		"172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+		"172.30.", "172.31.", "192.168.", "127.", "0.0.0.0",
+		"::1", "fe80:", "fc00:", "fd00:",
+	}
+
+	for _, prefix := range privatePatterns {
+		if strings.HasPrefix(ip, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

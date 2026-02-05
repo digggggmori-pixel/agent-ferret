@@ -1,0 +1,2920 @@
+{
+  "metadata": {
+    "logsource": "windows_dns_query",
+    "rule_count": 21,
+    "compiled_at": "2026-02-04T12:28:36.366027",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "b3e6418f-7c7a-4fad-993a-93b65027a9f1",
+      "title": "DNS Query To Visual Studio Code Tunnels Domain",
+      "status": "test",
+      "description": "Detects DNS query requests to Visual Studio Code tunnel domains. Attackers can abuse that feature to establish a reverse shell or persistence on a machine.\n",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1071.001"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": ".tunnels.api.visualstudio.com",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.001"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "citron_ninja",
+        "date": "2023-10-25",
+        "modified": "2023-11-20",
+        "references": [
+          "https://ipfyx.fr/post/visual-studio-code-tunnel/",
+          "https://badoption.eu/blog/2023/01/31/code_c2.html",
+          "https://cydefops.com/vscode-data-exfiltration"
+        ],
+        "falsepositives": [
+          "Legitimate use of Visual Studio Code tunnel will also trigger this."
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_vscode_tunnel_communication.yml"
+      }
+    },
+    {
+      "id": "778ba9a8-45e4-4b80-8e3e-34a419f0b85e",
+      "title": "TeamViewer Domain Query By Non-TeamViewer Application",
+      "status": "test",
+      "description": "Detects DNS queries to a TeamViewer domain only resolved by a TeamViewer client by an image that isn't named TeamViewer (sometimes used by threat actors for obfuscation)",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1219.002"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName": {
+                "field": "QueryName",
+                "value": [
+                  "taf.teamviewer.com",
+                  "udp.ping.teamviewer.com"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_teamviewer": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "TeamViewer",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1219.002"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-01-30",
+        "modified": "2023-09-18",
+        "references": [
+          "https://www.teamviewer.com/en-us/"
+        ],
+        "falsepositives": [
+          "Unknown binary names of TeamViewer",
+          "Depending on the environment the rule might require some initial tuning before usage to avoid FP with third party applications"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_teamviewer_domain_query_by_uncommon_app.yml"
+      }
+    },
+    {
+      "id": "e043f529-8514-4205-8ab0-7f7d2927b400",
+      "title": "DNS Query To AzureWebsites.NET By Non-Browser Process",
+      "status": "test",
+      "description": "Detects a DNS query by a non browser process on the system to \"azurewebsites.net\". The latter was often used by threat actors as a malware hosting and exfiltration site.\n",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1219.002"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": "azurewebsites.net",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_chrome": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_firefox": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+                  "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_ie": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Internet Explorer\\iexplore.exe",
+                  "C:\\Program Files\\Internet Explorer\\iexplore.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_edge_1": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image__startswith": {
+                    "field": "Image",
+                    "value": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\",
+                    "modifiers": [
+                      "startswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image__endswith": {
+                    "field": "Image",
+                    "value": "\\WindowsApps\\MicrosoftEdge.exe",
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image": {
+                    "field": "Image",
+                    "value": [
+                      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+                      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+                    ],
+                    "modifiers": [],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          },
+          "filter_optional_edge_2": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\",
+                  "C:\\Program Files\\Microsoft\\EdgeCore\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": [
+                  "\\msedge.exe",
+                  "\\msedgewebview2.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_safari": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\safari.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_defender": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": [
+                  "\\MsMpEng.exe",
+                  "\\MsSense.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_brave": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\brave.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__startswith": {
+                "field": "Image",
+                "value": "C:\\Program Files\\BraveSoftware\\",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_maxthon": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Maxthon\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\maxthon.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_opera": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Programs\\Opera\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\opera.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_seamonkey": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\SeaMonkey\\",
+                  "C:\\Program Files (x86)\\SeaMonkey\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\seamonkey.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vivaldi": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Vivaldi\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\vivaldi.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_whale": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Naver\\Naver Whale\\",
+                  "C:\\Program Files (x86)\\Naver\\Naver Whale\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\whale.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_tor": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\Tor Browser\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_whaterfox": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Waterfox\\",
+                  "C:\\Program Files (x86)\\Waterfox\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Waterfox.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_midori": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Programs\\midori-ng\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Midori Next Generation.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_slimbrowser": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\SlimBrowser\\",
+                  "C:\\Program Files (x86)\\SlimBrowser\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\slimbrowser.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_flock": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Flock\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Flock.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_phoebe": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Phoebe\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Phoebe.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_falkon": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Falkon\\",
+                  "C:\\Program Files (x86)\\Falkon\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\falkon.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_avant": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Avant Browser\\",
+                  "C:\\Program Files\\Avant Browser\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\avant.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1219.002"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2024-06-24",
+        "modified": "",
+        "references": [
+          "https://www.sentinelone.com/labs/wip26-espionage-threat-actors-abuse-cloud-infrastructure-in-targeted-telco-attacks/",
+          "https://symantec-enterprise-blogs.security.com/threat-intelligence/harvester-new-apt-attacks-asia",
+          "https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/higaisa-or-winnti-apt-41-backdoors-old-and-new/",
+          "https://intezer.com/blog/research/how-we-escaped-docker-in-azure-functions/"
+        ],
+        "falsepositives": [
+          "Likely with other browser software. Apply additional filters for any other browsers you might use."
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_domain_azurewebsites.yml"
+      }
+    },
+    {
+      "id": "df68f791-ad95-447f-a271-640a0dab9cf8",
+      "title": "DNS Query Request To OneLaunch Update Service",
+      "status": "test",
+      "description": "Detects DNS query requests to \"update.onelaunch.com\". This domain is associated with the OneLaunch adware application.\nWhen the OneLaunch application is installed it will attempt to get updates from this domain.\n",
+      "level": "low",
+      "tags": [
+        "attack.credential-access",
+        "attack.collection",
+        "attack.t1056"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName": {
+                "field": "QueryName",
+                "value": "update.onelaunch.com",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\OneLaunch.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1056"
+        ],
+        "tactics": [
+          "credential_access",
+          "collection"
+        ]
+      },
+      "meta": {
+        "author": "Josh Nickels",
+        "date": "2024-02-26",
+        "modified": "",
+        "references": [
+          "https://www.malwarebytes.com/blog/detections/pup-optional-onelaunch-silentcf",
+          "https://www.myantispyware.com/2020/12/14/how-to-uninstall-onelaunch-browser-removal-guide/",
+          "https://malware.guide/browser-hijacker/remove-onelaunch-virus/"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_onelaunch_update_service.yml"
+      }
+    },
+    {
+      "id": "f8c1e80b-c73a-476a-ae24-6c72528b1521",
+      "title": "DNS Query To Common Malware Hosting and Shortener Services",
+      "status": "experimental",
+      "description": "Detects DNS queries to domains commonly used by threat actors to host malware payloads or redirect through URL shorteners.\nThese include platforms like Cloudflare Workers, TryCloudflare, InfinityFree, and URL shorteners such as tinyurl and lihi.cc.\nSuch DNS activity can indicate potential delivery or command-and-control communication attempts.\n",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1071.004"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": [
+                  "msapp.workers.dev",
+                  "trycloudflare.com",
+                  "infinityfreeapp.com",
+                  "my5353.com",
+                  "reurl.cc",
+                  "lihi.cc",
+                  "tinyurl.com"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.004"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Ahmed Nosir (@egycondor)",
+        "date": "2025-06-02",
+        "modified": "",
+        "references": [
+          "https://cloud.google.com/blog/topics/threat-intelligence/apt41-innovative-tactics"
+        ],
+        "falsepositives": [
+          "Legitimate use of these services is possible but rare in enterprise environments"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_common_malware_hosting_services.yml"
+      }
+    },
+    {
+      "id": "1cb0c6ce-3d00-44fc-ab9c-6d6d577bf20b",
+      "title": "DNS Query To Devtunnels Domain",
+      "status": "test",
+      "description": "Detects DNS query requests to Devtunnels domains. Attackers can abuse that feature to establish a reverse shell or persistence on a machine.\n",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1071.001",
+        "attack.t1572"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": ".devtunnels.ms",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.001",
+          "T1572"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "citron_ninja",
+        "date": "2023-10-25",
+        "modified": "2023-11-20",
+        "references": [
+          "https://blueteamops.medium.com/detecting-dev-tunnels-16f0994dc3e2",
+          "https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/security",
+          "https://cydefops.com/devtunnels-unleashed"
+        ],
+        "falsepositives": [
+          "Legitimate use of Devtunnels will also trigger this."
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_devtunnels_communication.yml"
+      }
+    },
+    {
+      "id": "a1d9eec5-33b2-4177-8d24-27fe754d0812",
+      "title": "Cloudflared Tunnels Related DNS Requests",
+      "status": "test",
+      "description": "Detects DNS requests to Cloudflared tunnels domains.\nAttackers can abuse that feature to establish a reverse shell or persistence on a machine.\n",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1071.001",
+        "attack.t1572"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": [
+                  ".v2.argotunnel.com",
+                  "protocol-v2.argotunnel.com",
+                  "trycloudflare.com",
+                  "update.argotunnel.com"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.001",
+          "T1572"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-12-20",
+        "modified": "",
+        "references": [
+          "https://www.guidepointsecurity.com/blog/tunnel-vision-cloudflared-abused-in-the-wild/",
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Legitimate use of cloudflare tunnels will also trigger this."
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_cloudflared_communication.yml"
+      }
+    },
+    {
+      "id": "7bd3902d-8b8b-4dd4-838a-c6862d40150d",
+      "title": "DNS HybridConnectionManager Service Bus",
+      "status": "test",
+      "description": "Detects Azure Hybrid Connection Manager services querying the Azure service bus service",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.t1554"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": "servicebus.windows.net",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__contains": {
+                "field": "Image",
+                "value": "HybridConnectionManager",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1554"
+        ],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "date": "2021-04-12",
+        "modified": "2023-01-16",
+        "references": [
+          "https://twitter.com/Cyb3rWard0g/status/1381642789369286662"
+        ],
+        "falsepositives": [
+          "Legitimate use of Azure Hybrid Connection Manager and the Azure Service Bus service"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_hybridconnectionmgr_servicebus.yml"
+      }
+    },
+    {
+      "id": "36e037c4-c228-4866-b6a3-48eb292b9955",
+      "title": "DNS Query Request By Regsvr32.EXE",
+      "status": "test",
+      "description": "Detects DNS queries initiated by \"Regsvr32.exe\"",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1559.001",
+        "attack.defense-evasion",
+        "attack.t1218.010"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\regsvr32.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1559.001",
+          "T1218.010"
+        ],
+        "tactics": [
+          "execution",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Dmitriy Lifanov, oscd.community",
+        "date": "2019-10-25",
+        "modified": "2023-09-18",
+        "references": [
+          "https://pentestlab.blog/2017/05/11/applocker-bypass-regsvr32/",
+          "https://oddvar.moe/2017/12/13/applocker-case-study-how-insecure-is-it-really-part-1/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_regsvr32_dns_query.yml"
+      }
+    },
+    {
+      "id": "e7a21b5f-d8c4-4ae5-b8d9-93c5d3f28e1c",
+      "title": "Suspicious DNS Query Indicating Kerberos Coercion via DNS Object SPN Spoofing",
+      "status": "experimental",
+      "description": "Detects DNS queries containing patterns associated with Kerberos coercion attacks via DNS object spoofing.\nThe pattern \"1UWhRCAAAAA..BAAAA\" is a base64-encoded signature that corresponds to a marshaled CREDENTIAL_TARGET_INFORMATION structure.\nAttackers can use this technique to coerce authentication from victim systems to attacker-controlled hosts.\nIt is one of the strong indicators of a Kerberos coercion attack, where adversaries manipulate DNS records\nto spoof Service Principal Names (SPNs) and redirect authentication requests like CVE-2025-33073.\n",
+      "level": "high",
+      "tags": [
+        "attack.collection",
+        "attack.credential-access",
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1557.001",
+        "attack.t1187"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains_all": {
+                "field": "QueryName",
+                "value": [
+                  "UWhRCA",
+                  "BAAAA"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1557.001",
+          "T1187"
+        ],
+        "tactics": [
+          "collection",
+          "credential_access",
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+        "date": "2025-06-20",
+        "modified": "",
+        "references": [
+          "https://www.synacktiv.com/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025",
+          "https://googleprojectzero.blogspot.com/2021/10/using-kerberos-for-authentication-relay.html"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_kerberos_coercion_via_dns_object_spoofing.yml"
+      }
+    },
+    {
+      "id": "882e858a-3233-4ba8-855e-2f3d3575803d",
+      "title": "DNS Query Request By QuickAssist.EXE",
+      "status": "experimental",
+      "description": "Detects DNS queries initiated by \"QuickAssist.exe\" to Microsoft Quick Assist primary endpoint that is used to establish a session.\n",
+      "level": "low",
+      "tags": [
+        "attack.command-and-control",
+        "attack.initial-access",
+        "attack.lateral-movement",
+        "attack.t1071.001",
+        "attack.t1210"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\QuickAssist.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": "remoteassistance.support.services.microsoft.com",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.001",
+          "T1210"
+        ],
+        "tactics": [
+          "command_and_control",
+          "initial_access",
+          "lateral_movement"
+        ]
+      },
+      "meta": {
+        "author": "Muhammad Faisal (@faisalusuf)",
+        "date": "2024-12-19",
+        "modified": "",
+        "references": [
+          "https://www.microsoft.com/en-us/security/blog/2024/05/15/threat-actors-misusing-quick-assist-in-social-engineering-attacks-leading-to-ransomware/",
+          "https://www.linkedin.com/posts/kevin-beaumont-security_ive-been-assisting-a-few-orgs-hit-with-successful-activity-7268055739116445701-xxjZ/",
+          "https://x.com/cyb3rops/status/1862406110365245506",
+          "https://learn.microsoft.com/en-us/windows/client-management/client-tools/quick-assist"
+        ],
+        "falsepositives": [
+          "Legitimate use of Quick Assist in the environment."
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_quickassist.yml"
+      }
+    },
+    {
+      "id": "a21bcd7e-38ec-49ad-b69a-9ea17e69509e",
+      "title": "DNS Server Discovery Via LDAP Query",
+      "status": "test",
+      "description": "Detects DNS server discovery via LDAP query requests from uncommon applications",
+      "level": "low",
+      "tags": [
+        "attack.discovery",
+        "attack.t1482"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__startswith": {
+                "field": "QueryName",
+                "value": "_ldap.",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_generic": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": [
+                  ":\\Program Files\\",
+                  ":\\Program Files (x86)\\",
+                  ":\\Windows\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_defender": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": ":\\ProgramData\\Microsoft\\Windows Defender\\Platform\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\MsMpEng.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_unknown": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": "<unknown process>",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_azure": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": "C:\\WindowsAzure\\GuestAgent",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_null": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": null,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_browsers": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": [
+                  "\\chrome.exe",
+                  "\\firefox.exe",
+                  "\\opera.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1482"
+        ],
+        "tactics": [
+          "discovery"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2022-08-20",
+        "modified": "2023-09-18",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/980f3f83fd81f37c1ca9c02dccfd1c3d9f9d0841/atomics/T1016/T1016.md#atomic-test-9---dns-server-discovery-using-nslookup",
+          "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/7fcdce70-5205-44d6-9c3a-260e616a2f04"
+        ],
+        "falsepositives": [
+          "Likely"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_dns_server_discovery_via_ldap_query.yml"
+      }
+    },
+    {
+      "id": "065cceea-77ec-4030-9052-fc0affea7110",
+      "title": "DNS Query for Anonfiles.com Domain - Sysmon",
+      "status": "test",
+      "description": "Detects DNS queries for \"anonfiles.com\", which is an anonymous file upload platform often used for malicious purposes",
+      "level": "high",
+      "tags": [
+        "attack.exfiltration",
+        "attack.t1567.002"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": ".anonfiles.com",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1567.002"
+        ],
+        "tactics": [
+          "exfiltration"
+        ]
+      },
+      "meta": {
+        "author": "pH-T (Nextron Systems)",
+        "date": "2022-07-15",
+        "modified": "2023-01-16",
+        "references": [
+          "https://www.trendmicro.com/vinfo/us/security/news/ransomware-spotlight/ransomware-spotlight-blackbyte"
+        ],
+        "falsepositives": [
+          "Rare legitimate access to anonfiles.com"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_anonymfiles_com.yml"
+      }
+    },
+    {
+      "id": "1cbbeaaf-3c8c-4e4c-9d72-49485b6a176b",
+      "title": "DNS Query To Ufile.io",
+      "status": "test",
+      "description": "Detects DNS queries to \"ufile.io\", which was seen abused by malware and threat actors as a method for data exfiltration",
+      "level": "low",
+      "tags": [
+        "attack.exfiltration",
+        "attack.t1567.002"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": "ufile.io",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1567.002"
+        ],
+        "tactics": [
+          "exfiltration"
+        ]
+      },
+      "meta": {
+        "author": "yatinwad, TheDFIRReport",
+        "date": "2022-06-23",
+        "modified": "2023-09-18",
+        "references": [
+          "https://thedfirreport.com/2021/12/13/diavol-ransomware/"
+        ],
+        "falsepositives": [
+          "DNS queries for \"ufile\" are not malicious by nature necessarily. Investigate the source to determine the necessary actions to take"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_ufile_io_query.yml"
+      }
+    },
+    {
+      "id": "ec82e2a5-81ea-4211-a1f8-37a0286df2c2",
+      "title": "Suspicious DNS Query for IP Lookup Service APIs",
+      "status": "test",
+      "description": "Detects DNS queries for IP lookup services such as \"api.ipify.org\" originating from a non browser process.",
+      "level": "medium",
+      "tags": [
+        "attack.reconnaissance",
+        "attack.t1590"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "QueryName": {
+                    "field": "QueryName",
+                    "value": [
+                      "www.ip.cn",
+                      "l2.io"
+                    ],
+                    "modifiers": [],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "QueryName__contains": {
+                    "field": "QueryName",
+                    "value": [
+                      "api.2ip.ua",
+                      "api.bigdatacloud.net",
+                      "api.ipify.org",
+                      "bot.whatismyipaddress.com",
+                      "canireachthe.net",
+                      "checkip.amazonaws.com",
+                      "checkip.dyndns.org",
+                      "curlmyip.com",
+                      "db-ip.com",
+                      "edns.ip-api.com",
+                      "eth0.me",
+                      "freegeoip.app",
+                      "geoipy.com",
+                      "getip.pro",
+                      "icanhazip.com",
+                      "ident.me",
+                      "ifconfig.io",
+                      "ifconfig.me",
+                      "ip-api.com",
+                      "ip.360.cn",
+                      "ip.anysrc.net",
+                      "ip.taobao.com",
+                      "ip.tyk.nu",
+                      "ipaddressworld.com",
+                      "ipapi.co",
+                      "ipconfig.io",
+                      "ipecho.net",
+                      "ipinfo.io",
+                      "ipip.net",
+                      "ipof.in",
+                      "ipv4.icanhazip.com",
+                      "ipv4bot.whatismyipaddress.com",
+                      "ipv6-test.com",
+                      "ipwho.is",
+                      "jsonip.com",
+                      "myexternalip.com",
+                      "seeip.org",
+                      "wgetip.com",
+                      "whatismyip.akamai.com",
+                      "whois.pconline.com.cn",
+                      "wtfismyip.com"
+                    ],
+                    "modifiers": [
+                      "contains"
+                    ],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "filters": {
+          "filter_optional_brave": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\brave.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_chrome": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_firefox": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+                  "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_ie": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Internet Explorer\\iexplore.exe",
+                  "C:\\Program Files\\Internet Explorer\\iexplore.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_maxthon": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\maxthon.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_edge_1": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image__startswith": {
+                    "field": "Image",
+                    "value": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\",
+                    "modifiers": [
+                      "startswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image__endswith": {
+                    "field": "Image",
+                    "value": "\\WindowsApps\\MicrosoftEdge.exe",
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image": {
+                    "field": "Image",
+                    "value": [
+                      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+                      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+                    ],
+                    "modifiers": [],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          },
+          "filter_optional_edge_2": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\",
+                  "C:\\Program Files\\Microsoft\\EdgeCore\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": [
+                  "\\msedge.exe",
+                  "\\msedgewebview2.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_opera": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\opera.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_safari": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\safari.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_seamonkey": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\seamonkey.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vivaldi": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\vivaldi.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_whale": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\whale.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1590"
+        ],
+        "tactics": [
+          "reconnaissance"
+        ]
+      },
+      "meta": {
+        "author": "Brandon George (blog post), Thomas Patzke",
+        "date": "2021-07-08",
+        "modified": "2024-03-22",
+        "references": [
+          "https://www.binarydefense.com/analysis-of-hancitor-when-boring-begets-beacon",
+          "https://twitter.com/neonprimetime/status/1436376497980428318",
+          "https://www.trendmicro.com/en_us/research/23/e/managed-xdr-investigation-of-ducktail-in-trend-micro-vision-one.html"
+        ],
+        "falsepositives": [
+          "Legitimate usage of IP lookup services such as ipify API"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_susp_external_ip_lookup.yml"
+      }
+    },
+    {
+      "id": "b55ca2a3-7cff-4dda-8bdd-c7bfa63bf544",
+      "title": "DNS Query Tor .Onion Address - Sysmon",
+      "status": "test",
+      "description": "Detects DNS queries to an \".onion\" address related to Tor routing networks",
+      "level": "high",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1090.003"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": [
+                  ".hiddenservice.net",
+                  ".onion.ca",
+                  ".onion.cab",
+                  ".onion.casa",
+                  ".onion.city",
+                  ".onion.direct",
+                  ".onion.dog",
+                  ".onion.glass",
+                  ".onion.gq",
+                  ".onion.ink",
+                  ".onion.it",
+                  ".onion.link",
+                  ".onion.lt",
+                  ".onion.lu",
+                  ".onion.nu",
+                  ".onion.pet",
+                  ".onion.plus",
+                  ".onion.rip",
+                  ".onion.sh",
+                  ".onion.to",
+                  ".onion.top",
+                  ".onion",
+                  ".s1.tor-gateways.de",
+                  ".s2.tor-gateways.de",
+                  ".s3.tor-gateways.de",
+                  ".s4.tor-gateways.de",
+                  ".s5.tor-gateways.de",
+                  ".t2w.pw",
+                  ".tor2web.ae.org",
+                  ".tor2web.blutmagie.de",
+                  ".tor2web.com",
+                  ".tor2web.fi",
+                  ".tor2web.io",
+                  ".tor2web.org",
+                  ".tor2web.xyz",
+                  ".torlink.co"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1090.003"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2022-02-20",
+        "modified": "2025-09-12",
+        "references": [
+          "https://www.logpoint.com/en/blog/detecting-tor-use-with-logpoint/",
+          "https://github.com/Azure/Azure-Sentinel/blob/f99542b94afe0ad2f19a82cc08262e7ac8e1428e/Detections/ASimDNS/imDNS_TorProxies.yaml"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_tor_onion_domain_query.yml"
+      }
+    },
+    {
+      "id": "7cff77e1-9663-46a3-8260-17f2e1aa9d0a",
+      "title": "AppX Package Installation Attempts Via AppInstaller.EXE",
+      "status": "test",
+      "description": "Detects DNS queries made by \"AppInstaller.EXE\". The AppInstaller is the default handler for the \"ms-appinstaller\" URI. It attempts to load/install a package from the referenced URL\n",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1105"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": "C:\\Program Files\\WindowsApps\\Microsoft.DesktopAppInstaller_",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\AppInstaller.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1105"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2021-11-24",
+        "modified": "2023-11-09",
+        "references": [
+          "https://twitter.com/notwhickey/status/1333900137232523264",
+          "https://lolbas-project.github.io/lolbas/Binaries/AppInstaller/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_appinstaller.yml"
+      }
+    },
+    {
+      "id": "613c03ba-0779-4a53-8a1f-47f914a4ded3",
+      "title": "DNS Query To MEGA Hosting Website",
+      "status": "test",
+      "description": "Detects DNS queries for subdomains related to MEGA sharing website",
+      "level": "medium",
+      "tags": [
+        "attack.exfiltration",
+        "attack.t1567.002"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": "userstorage.mega.co.nz",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1567.002"
+        ],
+        "tactics": [
+          "exfiltration"
+        ]
+      },
+      "meta": {
+        "author": "Aaron Greetham (@beardofbinary) - NCC Group",
+        "date": "2021-05-26",
+        "modified": "2023-09-18",
+        "references": [
+          "https://research.nccgroup.com/2021/05/27/detecting-rclone-an-effective-tool-for-exfiltration/"
+        ],
+        "falsepositives": [
+          "Legitimate DNS queries and usage of Mega"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_mega_nz.yml"
+      }
+    },
+    {
+      "id": "4d07b1f4-cb00-4470-b9f8-b0191d48ff52",
+      "title": "DNS Query To Remote Access Software Domain From Non-Browser App",
+      "status": "test",
+      "description": "An adversary may use legitimate desktop support and remote access software, such as Team Viewer, Go2Assist, LogMein, AmmyyAdmin, etc, to establish an interactive command and control channel to target systems within networks.\nThese services are commonly used as legitimate technical support software, and may be allowed by application control within a target environment.\nRemote access tools like VNC, Ammyy, and Teamviewer are used frequently when compared with other legitimate software commonly used by adversaries. (Citation: Symantec Living off the Land)\n",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1219.002"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_generic": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": [
+                  "agent.jumpcloud.com",
+                  "agentreporting.atera.com",
+                  "ammyy.com",
+                  "api.parsec.app",
+                  "api.playanext.com",
+                  "api.splashtop.com",
+                  "app.atera.com",
+                  "assist.zoho.com",
+                  "authentication.logmeininc.com",
+                  "beyondtrustcloud.com",
+                  "cdn.kaseya.net",
+                  "client.teamviewer.com",
+                  "comserver.corporate.beanywhere.com",
+                  "control.connectwise.com",
+                  "downloads.zohocdn.com",
+                  "dwservice.net",
+                  "express.gotoassist.com",
+                  "getgo.com",
+                  "getscreen.me",
+                  "integratedchat.teamviewer.com",
+                  "join.zoho.com",
+                  "kickstart.jumpcloud.com",
+                  "license.bomgar.com",
+                  "logmein-gateway.com",
+                  "logmein.com",
+                  "logmeincdn.http.internapcdn.net",
+                  "n-able.com",
+                  "net.anydesk.com",
+                  "netsupportsoftware.com",
+                  "parsecusercontent.com",
+                  "pubsub.atera.com",
+                  "relay.kaseya.net",
+                  "relay.screenconnect.com",
+                  "relay.splashtop.com",
+                  "remoteassistance.support.services.microsoft.com",
+                  "remotedesktop-pa.googleapis.com",
+                  "remoteutilities.com",
+                  "secure.logmeinrescue.com",
+                  "services.vnc.com",
+                  "static.remotepc.com",
+                  "swi-rc.com",
+                  "swi-tc.com",
+                  "tailscale.com",
+                  "telemetry.servers.qetqo.com",
+                  "tmate.io",
+                  "twingate.com",
+                  "zohoassist.com"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_rustdesk": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": ".rustdesk.com",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "QueryName__startswith": {
+                "field": "QueryName",
+                "value": "rs-",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_chrome": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_firefox": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+                  "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_ie": {
+            "type": "field_match",
+            "matchers": {
+              "Image": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Internet Explorer\\iexplore.exe",
+                  "C:\\Program Files\\Internet Explorer\\iexplore.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_edge_1": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image__startswith": {
+                    "field": "Image",
+                    "value": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\",
+                    "modifiers": [
+                      "startswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image__endswith": {
+                    "field": "Image",
+                    "value": "\\WindowsApps\\MicrosoftEdge.exe",
+                    "modifiers": [
+                      "endswith"
+                    ],
+                    "is_list": false,
+                    "negated": false
+                  }
+                }
+              },
+              {
+                "type": "field_match",
+                "matchers": {
+                  "Image": {
+                    "field": "Image",
+                    "value": [
+                      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+                      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+                    ],
+                    "modifiers": [],
+                    "is_list": true,
+                    "negated": false
+                  }
+                }
+              }
+            ]
+          },
+          "filter_optional_edge_2": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Microsoft\\EdgeCore\\",
+                  "C:\\Program Files\\Microsoft\\EdgeCore\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": [
+                  "\\msedge.exe",
+                  "\\msedgewebview2.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_safari": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\safari.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_defender": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": [
+                  "\\MsMpEng.exe",
+                  "\\MsSense.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_brave": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\brave.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__startswith": {
+                "field": "Image",
+                "value": "C:\\Program Files\\BraveSoftware\\",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_maxthon": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Maxthon\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\maxthon.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_opera": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Programs\\Opera\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\opera.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_seamonkey": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\SeaMonkey\\",
+                  "C:\\Program Files (x86)\\SeaMonkey\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\seamonkey.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vivaldi": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Vivaldi\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\vivaldi.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_whale": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Naver\\Naver Whale\\",
+                  "C:\\Program Files (x86)\\Naver\\Naver Whale\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\whale.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_tor": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\Tor Browser\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_whaterfox": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Waterfox\\",
+                  "C:\\Program Files (x86)\\Waterfox\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Waterfox.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_midori": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Programs\\midori-ng\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Midori Next Generation.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_slimbrowser": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\SlimBrowser\\",
+                  "C:\\Program Files (x86)\\SlimBrowser\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\slimbrowser.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_flock": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Flock\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Flock.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_phoebe": {
+            "type": "field_match",
+            "matchers": {
+              "Image__contains": {
+                "field": "Image",
+                "value": "\\AppData\\Local\\Phoebe\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\Phoebe.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_falkon": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files\\Falkon\\",
+                  "C:\\Program Files (x86)\\Falkon\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\falkon.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_avant": {
+            "type": "field_match",
+            "matchers": {
+              "Image__startswith": {
+                "field": "Image",
+                "value": [
+                  "C:\\Program Files (x86)\\Avant Browser\\",
+                  "C:\\Program Files\\Avant Browser\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\avant.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "1 of selection_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "1 of selection_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1219.002"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "frack113, Connor Martin",
+        "date": "2022-07-11",
+        "modified": "2024-12-17",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1219/T1219.md#atomic-test-4---gotoassist-files-detected-test-on-windows",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1219/T1219.md#atomic-test-3---logmein-files-detected-test-on-windows",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1219/T1219.md#atomic-test-6---ammyy-admin-software-execution",
+          "https://redcanary.com/blog/misbehaving-rats/",
+          "https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/hunting-for-omi-vulnerability-exploitation-with-azure-sentinel/ba-p/2764093",
+          "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-320a",
+          "https://blog.sekoia.io/scattered-spider-laying-new-eggs/",
+          "https://learn.microsoft.com/en-us/windows/client-management/client-tools/quick-assist#disable-quick-assist-within-your-organization"
+        ],
+        "falsepositives": [
+          "Likely with other browser software. Apply additional filters for any other browsers you might use."
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_remote_access_software_domains_non_browsers.yml"
+      }
+    },
+    {
+      "id": "c082c2b0-525b-4dbc-9a26-a57dc4692074",
+      "title": "DNS Query by Finger Utility",
+      "status": "experimental",
+      "description": "Detects DNS queries made by the finger utility, which can be abused by threat actors to retrieve remote commands for execution on Windows devices.\nIn one ClickFix malware campaign, adversaries leveraged the finger protocol to fetch commands from a remote server.\nSince the finger utility is not commonly used in modern Windows environments, its presence already raises suspicion.\nInvestigating such DNS queries can also help identify potential malicious infrastructure used by threat actors for command and control (C2) communication.\n",
+      "level": "high",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1071.004",
+        "attack.execution",
+        "attack.t1059.003"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Image__endswith": {
+                "field": "Image",
+                "value": "\\finger.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.004",
+          "T1059.003"
+        ],
+        "tactics": [
+          "command_and_control",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+        "date": "2025-11-19",
+        "modified": "",
+        "references": [
+          "https://www.bleepingcomputer.com/news/security/decades-old-finger-protocol-abused-in-clickfix-malware-attacks/"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_finger.yml"
+      }
+    },
+    {
+      "id": "f356a9c4-effd-4608-bbf8-408afd5cd006",
+      "title": "Suspicious Cobalt Strike DNS Beaconing - Sysmon",
+      "status": "test",
+      "description": "Detects a program that invoked suspicious DNS queries known from Cobalt Strike beacons",
+      "level": "critical",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1071.004"
+      ],
+      "logsource": {
+        "category": "dns_query",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection1": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__startswith": {
+                "field": "QueryName",
+                "value": [
+                  "aaa.stage.",
+                  "post.1"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection2": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": ".stage.123456.",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "1 of selection*",
+        "condition_parsed": {
+          "op": "n_of",
+          "count": 1,
+          "pattern": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.004"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2021-11-09",
+        "modified": "2023-01-16",
+        "references": [
+          "https://www.icebrg.io/blog/footprints-of-fin7-tracking-actor-patterns",
+          "https://www.sekoia.io/en/hunting-and-detecting-cobalt-strike/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/dns_query/dns_query_win_mal_cobaltstrike.yml"
+      }
+    }
+  ]
+}

@@ -138,11 +138,17 @@ const (
 
 // Detection type constants
 const (
-	DetectionTypeLOLBin      = "lolbin_execution"
-	DetectionTypeChain       = "suspicious_chain"
-	DetectionTypePort        = "suspicious_port"
-	DetectionTypePath        = "path_anomaly"
-	DetectionTypeTyposquat   = "typosquatting"
-	DetectionTypeSigma       = "sigma_match"
-	DetectionTypePersistence = "persistence"
+	DetectionTypeLOLBin          = "lolbin_execution"
+	DetectionTypeChain           = "suspicious_chain"
+	DetectionTypePort            = "suspicious_port"
+	DetectionTypePath            = "path_anomaly"
+	DetectionTypeTyposquat       = "typosquatting"
+	DetectionTypeSigma           = "sigma_match"
+	DetectionTypePersistence     = "persistence"
+	DetectionTypeServiceVendor   = "service_vendor_typosquat"
+	DetectionTypeServiceName     = "service_name_typosquat"
+	DetectionTypeServicePath     = "service_path_anomaly"
+	DetectionTypeUnsignedProcess = "unsigned_critical_process"
+	DetectionTypeSuspiciousDomain = "suspicious_domain"
+	DetectionTypeEncodedCommand  = "encoded_command"
 )

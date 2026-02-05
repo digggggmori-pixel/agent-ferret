@@ -1,0 +1,257 @@
+{
+  "metadata": {
+    "compiled_at": "2026-01-19T11:00:41.059214",
+    "total_rules": 2363,
+    "source_dir": "/Users/byeongjaekim/Desktop/Project/Agent_Hunter/sigma_rules/windows"
+  },
+  "files": {
+    "windows_application": {
+      "path": "windows_application.json",
+      "rule_count": 23
+    },
+    "windows_applocker": {
+      "path": "windows_applocker.json",
+      "rule_count": 1
+    },
+    "windows_appmodel_runtime": {
+      "path": "windows_appmodel_runtime.json",
+      "rule_count": 1
+    },
+    "windows_appxdeployment_server": {
+      "path": "windows_appxdeployment_server.json",
+      "rule_count": 7
+    },
+    "windows_appxpackaging_om": {
+      "path": "windows_appxpackaging_om.json",
+      "rule_count": 1
+    },
+    "windows_bits_client": {
+      "path": "windows_bits_client.json",
+      "rule_count": 7
+    },
+    "windows_capi2": {
+      "path": "windows_capi2.json",
+      "rule_count": 1
+    },
+    "windows_certificateservicesclient_lifecycle_system": {
+      "path": "windows_certificateservicesclient_lifecycle_system.json",
+      "rule_count": 1
+    },
+    "windows_codeintegrity_operational": {
+      "path": "windows_codeintegrity_operational.json",
+      "rule_count": 10
+    },
+    "windows_create_remote_thread": {
+      "path": "windows_create_remote_thread.json",
+      "rule_count": 11
+    },
+    "windows_create_stream_hash": {
+      "path": "windows_create_stream_hash.json",
+      "rule_count": 9
+    },
+    "windows_diagnosis_scripted": {
+      "path": "windows_diagnosis_scripted.json",
+      "rule_count": 1
+    },
+    "windows_dns_client": {
+      "path": "windows_dns_client.json",
+      "rule_count": 6
+    },
+    "windows_dns_query": {
+      "path": "windows_dns_query.json",
+      "rule_count": 21
+    },
+    "windows_dns_server": {
+      "path": "windows_dns_server.json",
+      "rule_count": 2
+    },
+    "windows_driver_framework": {
+      "path": "windows_driver_framework.json",
+      "rule_count": 1
+    },
+    "windows_driver_load": {
+      "path": "windows_driver_load.json",
+      "rule_count": 10
+    },
+    "windows_file_access": {
+      "path": "windows_file_access.json",
+      "rule_count": 7
+    },
+    "windows_file_change": {
+      "path": "windows_file_change.json",
+      "rule_count": 2
+    },
+    "windows_file_delete": {
+      "path": "windows_file_delete.json",
+      "rule_count": 12
+    },
+    "windows_file_event": {
+      "path": "windows_file_event.json",
+      "rule_count": 162
+    },
+    "windows_file_executable_detected": {
+      "path": "windows_file_executable_detected.json",
+      "rule_count": 1
+    },
+    "windows_file_rename": {
+      "path": "windows_file_rename.json",
+      "rule_count": 1
+    },
+    "windows_firewall_as": {
+      "path": "windows_firewall_as.json",
+      "rule_count": 8
+    },
+    "windows_general": {
+      "path": "windows_general.json",
+      "rule_count": 1
+    },
+    "windows_iis_configuration": {
+      "path": "windows_iis_configuration.json",
+      "rule_count": 4
+    },
+    "windows_image_load": {
+      "path": "windows_image_load.json",
+      "rule_count": 99
+    },
+    "windows_ldap": {
+      "path": "windows_ldap.json",
+      "rule_count": 1
+    },
+    "windows_lsa_server": {
+      "path": "windows_lsa_server.json",
+      "rule_count": 1
+    },
+    "windows_microsoft_servicebus_client": {
+      "path": "windows_microsoft_servicebus_client.json",
+      "rule_count": 1
+    },
+    "windows_msexchange_management": {
+      "path": "windows_msexchange_management.json",
+      "rule_count": 7
+    },
+    "windows_network_connection": {
+      "path": "windows_network_connection.json",
+      "rule_count": 51
+    },
+    "windows_ntlm": {
+      "path": "windows_ntlm.json",
+      "rule_count": 3
+    },
+    "windows_openssh": {
+      "path": "windows_openssh.json",
+      "rule_count": 1
+    },
+    "windows_pipe_created": {
+      "path": "windows_pipe_created.json",
+      "rule_count": 17
+    },
+    "windows_powershell_classic": {
+      "path": "windows_powershell_classic.json",
+      "rule_count": 3
+    },
+    "windows_process_access": {
+      "path": "windows_process_access.json",
+      "rule_count": 23
+    },
+    "windows_process_creation": {
+      "path": "windows_process_creation.json",
+      "rule_count": 1156
+    },
+    "windows_process_tampering": {
+      "path": "windows_process_tampering.json",
+      "rule_count": 1
+    },
+    "windows_ps_classic_provider_start": {
+      "path": "windows_ps_classic_provider_start.json",
+      "rule_count": 1
+    },
+    "windows_ps_classic_start": {
+      "path": "windows_ps_classic_start.json",
+      "rule_count": 9
+    },
+    "windows_ps_module": {
+      "path": "windows_ps_module.json",
+      "rule_count": 33
+    },
+    "windows_ps_script": {
+      "path": "windows_ps_script.json",
+      "rule_count": 161
+    },
+    "windows_raw_access_thread": {
+      "path": "windows_raw_access_thread.json",
+      "rule_count": 1
+    },
+    "windows_registry_add": {
+      "path": "windows_registry_add.json",
+      "rule_count": 1
+    },
+    "windows_registry_delete": {
+      "path": "windows_registry_delete.json",
+      "rule_count": 9
+    },
+    "windows_registry_event": {
+      "path": "windows_registry_event.json",
+      "rule_count": 32
+    },
+    "windows_registry_set": {
+      "path": "windows_registry_set.json",
+      "rule_count": 199
+    },
+    "windows_security": {
+      "path": "windows_security.json",
+      "rule_count": 144
+    },
+    "windows_security_mitigations": {
+      "path": "windows_security_mitigations.json",
+      "rule_count": 2
+    },
+    "windows_shell_core": {
+      "path": "windows_shell_core.json",
+      "rule_count": 1
+    },
+    "windows_smbclient_security": {
+      "path": "windows_smbclient_security.json",
+      "rule_count": 1
+    },
+    "windows_smbserver_connectivity": {
+      "path": "windows_smbserver_connectivity.json",
+      "rule_count": 1
+    },
+    "windows_sysmon": {
+      "path": "windows_sysmon.json",
+      "rule_count": 4
+    },
+    "windows_sysmon_error": {
+      "path": "windows_sysmon_error.json",
+      "rule_count": 1
+    },
+    "windows_sysmon_status": {
+      "path": "windows_sysmon_status.json",
+      "rule_count": 1
+    },
+    "windows_system": {
+      "path": "windows_system.json",
+      "rule_count": 63
+    },
+    "windows_taskscheduler": {
+      "path": "windows_taskscheduler.json",
+      "rule_count": 3
+    },
+    "windows_terminalservices_localsessionmanager": {
+      "path": "windows_terminalservices_localsessionmanager.json",
+      "rule_count": 1
+    },
+    "windows_windefend": {
+      "path": "windows_windefend.json",
+      "rule_count": 16
+    },
+    "windows_wmi": {
+      "path": "windows_wmi.json",
+      "rule_count": 1
+    },
+    "windows_wmi_event": {
+      "path": "windows_wmi_event.json",
+      "rule_count": 3
+    }
+  }
+}

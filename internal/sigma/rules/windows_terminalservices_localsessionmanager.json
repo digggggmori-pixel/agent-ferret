@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "logsource": "windows_terminalservices_localsessionmanager",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.568223",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "64d51a51-32a6-49f0-9f3d-17e34d640272",
+      "title": "Ngrok Usage with Remote Desktop Service",
+      "status": "test",
+      "description": "Detects cases in which ngrok, a reverse proxy tool, forwards events to the local RDP port, which could be a sign of malicious behaviour",
+      "level": "high",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1090"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "terminalservices-localsessionmanager"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 21,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Address__contains": {
+                "field": "Address",
+                "value": "16777216",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1090"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-04-29",
+        "modified": "",
+        "references": [
+          "https://twitter.com/tekdefense/status/1519711183162556416?s=12&t=OTsHCBkQOTNs1k3USz65Zg",
+          "https://ngrok.com/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/terminalservices/win_terminalservices_rdp_ngrok.yml"
+      }
+    }
+  ]
+}

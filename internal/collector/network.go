@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+	"time"
 	"unsafe"
 
+	"github.com/digggggmori-pixel/agent-lite/internal/logger"
 	"github.com/digggggmori-pixel/agent-lite/pkg/types"
 )
 
@@ -75,21 +77,48 @@ func (c *NetworkCollector) SetProcessNames(names map[uint32]string) {
 
 // Collect gathers all TCP and UDP connections
 func (c *NetworkCollector) Collect() ([]types.NetworkConnection, error) {
+	logger.Section("Network Collection")
+	startTime := time.Now()
+
 	var connections []types.NetworkConnection
 
 	// Collect TCP connections
+	logger.Debug("Collecting TCP connections...")
+	logger.APICall("GetExtendedTcpTable", "TCP_TABLE_OWNER_PID_ALL")
 	tcpConns, err := c.collectTCP()
 	if err != nil {
+		logger.Error("Failed to collect TCP connections: %v", err)
 		return nil, fmt.Errorf("failed to collect TCP connections: %w", err)
 	}
+	logger.Info("TCP connections collected: %d", len(tcpConns))
 	connections = append(connections, tcpConns...)
 
 	// Collect UDP connections
+	logger.Debug("Collecting UDP connections...")
+	logger.APICall("GetExtendedUdpTable", "UDP_TABLE_OWNER_PID")
 	udpConns, err := c.collectUDP()
 	if err != nil {
+		logger.Error("Failed to collect UDP connections: %v", err)
 		return nil, fmt.Errorf("failed to collect UDP connections: %w", err)
 	}
+	logger.Info("UDP connections collected: %d", len(udpConns))
 	connections = append(connections, udpConns...)
+
+	logger.Timing("NetworkCollector.Collect", startTime)
+	logger.Info("Network collection complete: %d total connections", len(connections))
+
+	// Log established connections for debugging
+	established := GetEstablishedConnections(connections)
+	if len(established) > 0 {
+		logger.SubSection("Established Connections (sample)")
+		for i, conn := range established {
+			if i >= 10 {
+				logger.Debug("... and %d more established connections", len(established)-10)
+				break
+			}
+			logger.NetworkInfo(conn.Protocol, conn.LocalAddr, conn.LocalPort, conn.RemoteAddr, conn.RemotePort, conn.State, conn.OwningPID)
+		}
+	}
 
 	return connections, nil
 }
@@ -111,6 +140,10 @@ func (c *NetworkCollector) collectTCP() ([]types.NetworkConnection, error) {
 		return nil, fmt.Errorf("GetExtendedTcpTable size query failed: %d", ret)
 	}
 
+	if size == 0 {
+		return nil, nil // No TCP connections
+	}
+
 	buf := make([]byte, size)
 	ret, _, _ = procGetExtendedTcpTable.Call(
 		uintptr(unsafe.Pointer(&buf[0])),
@@ -126,13 +159,16 @@ func (c *NetworkCollector) collectTCP() ([]types.NetworkConnection, error) {
 	}
 
 	// Parse the table
+	if len(buf) < 4 {
+		return nil, fmt.Errorf("TCP table buffer too small: %d bytes", len(buf))
+	}
 	numEntries := binary.LittleEndian.Uint32(buf[0:4])
 	var connections []types.NetworkConnection
 
-	rowSize := uint32(unsafe.Sizeof(MIB_TCPROW_OWNER_PID{}))
-	for i := uint32(0); i < numEntries; i++ {
+	rowSize := int(unsafe.Sizeof(MIB_TCPROW_OWNER_PID{}))
+	for i := 0; i < int(numEntries); i++ {
 		offset := 4 + i*rowSize
-		if offset+rowSize > uint32(len(buf)) {
+		if offset+rowSize > len(buf) {
 			break
 		}
 
@@ -171,6 +207,10 @@ func (c *NetworkCollector) collectUDP() ([]types.NetworkConnection, error) {
 		return nil, fmt.Errorf("GetExtendedUdpTable size query failed: %d", ret)
 	}
 
+	if size == 0 {
+		return nil, nil // No UDP connections
+	}
+
 	buf := make([]byte, size)
 	ret, _, _ = procGetExtendedUdpTable.Call(
 		uintptr(unsafe.Pointer(&buf[0])),
@@ -186,13 +226,16 @@ func (c *NetworkCollector) collectUDP() ([]types.NetworkConnection, error) {
 	}
 
 	// Parse the table
+	if len(buf) < 4 {
+		return nil, fmt.Errorf("UDP table buffer too small: %d bytes", len(buf))
+	}
 	numEntries := binary.LittleEndian.Uint32(buf[0:4])
 	var connections []types.NetworkConnection
 
-	rowSize := uint32(unsafe.Sizeof(MIB_UDPROW_OWNER_PID{}))
-	for i := uint32(0); i < numEntries; i++ {
+	rowSize := int(unsafe.Sizeof(MIB_UDPROW_OWNER_PID{}))
+	for i := 0; i < int(numEntries); i++ {
 		offset := 4 + i*rowSize
-		if offset+rowSize > uint32(len(buf)) {
+		if offset+rowSize > len(buf) {
 			break
 		}
 

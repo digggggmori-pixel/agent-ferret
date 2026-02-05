@@ -1,0 +1,85 @@
+{
+  "metadata": {
+    "logsource": "windows_applocker",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.357576",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "401e5d00-b944-11ea-8f9a-00163ecd60ae",
+      "title": "AppLocker Prevented Application or Script from Running",
+      "status": "test",
+      "description": "Detects when AppLocker prevents the execution of an Application, DLL, Script, MSI, or Packaged-App from running.\n",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1204.002",
+        "attack.t1059.001",
+        "attack.t1059.003",
+        "attack.t1059.005",
+        "attack.t1059.006",
+        "attack.t1059.007"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "applocker"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  8004,
+                  8007,
+                  8022,
+                  8025
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1204.002",
+          "T1059.001",
+          "T1059.003",
+          "T1059.005",
+          "T1059.006",
+          "T1059.007"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Pushkarev Dmitry",
+        "date": "2020-06-28",
+        "modified": "2025-12-03",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/what-is-applocker",
+          "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/using-event-viewer-with-applocker",
+          "https://nxlog.co/documentation/nxlog-user-guide/applocker.html"
+        ],
+        "falsepositives": [
+          "Unlikely, since this event notifies about blocked application execution. Tune your applocker rules to avoid blocking legitimate applications."
+        ],
+        "source_file": "sigma_rules/windows/builtin/applocker/win_applocker_application_was_prevented_from_running.yml"
+      }
+    }
+  ]
+}

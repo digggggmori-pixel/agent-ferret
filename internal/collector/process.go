@@ -7,6 +7,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/digggggmori-pixel/agent-lite/internal/logger"
 	"github.com/digggggmori-pixel/agent-lite/pkg/types"
 	"golang.org/x/sys/windows"
 )
@@ -30,12 +31,19 @@ func (c *ProcessCollector) IsAdmin() bool {
 
 // Collect gathers all running processes
 func (c *ProcessCollector) Collect() ([]types.ProcessInfo, error) {
+	logger.Section("Process Collection")
+	logger.Info("Starting process collection (Admin: %v)", c.isAdmin)
+	startTime := time.Now()
+
 	// Create a snapshot of all processes
+	logger.APICall("CreateToolhelp32Snapshot", "TH32CS_SNAPPROCESS", 0)
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
+		logger.Error("CreateToolhelp32Snapshot failed: %v", err)
 		return nil, fmt.Errorf("CreateToolhelp32Snapshot failed: %w", err)
 	}
 	defer windows.CloseHandle(snapshot)
+	logger.Debug("Snapshot handle obtained: 0x%x", snapshot)
 
 	var processes []types.ProcessInfo
 	processMap := make(map[uint32]*types.ProcessInfo)
@@ -77,10 +85,25 @@ func (c *ProcessCollector) Collect() ([]types.ProcessInfo, error) {
 	}
 
 	// Second pass: fill in parent info
+	logger.Debug("Building parent-child relationships...")
 	for i := range processes {
 		if parent, exists := processMap[processes[i].PPID]; exists {
 			processes[i].ParentName = parent.Name
 			processes[i].ParentPath = parent.Path
+		}
+	}
+
+	logger.Timing("ProcessCollector.Collect", startTime)
+	logger.Info("Process collection complete: %d processes found", len(processes))
+
+	// Log sample of processes for debugging
+	if len(processes) > 0 {
+		logger.SubSection("Sample Processes (first 10)")
+		for i, p := range processes {
+			if i >= 10 {
+				break
+			}
+			logger.ProcessInfo(p.PID, p.Name, p.Path, p.CommandLine)
 		}
 	}
 

@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "logsource": "windows_smbclient_security",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.561976",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "71886b70-d7b4-4dbf-acce-87d2ca135262",
+      "title": "Suspicious Rejected SMB Guest Logon From IP",
+      "status": "test",
+      "description": "Detect Attempt PrintNightmare (CVE-2021-1675) Remote code execution in Windows Spooler Service",
+      "level": "medium",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1110.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "smbclient-security"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 31017,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "UserName": {
+                "field": "UserName",
+                "value": "",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ServerName__startswith": {
+                "field": "ServerName",
+                "value": "\\1",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1110.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), KevTheHermit, fuzzyf10w",
+        "date": "2021-06-30",
+        "modified": "2023-01-02",
+        "references": [
+          "https://twitter.com/KevTheHermit/status/1410203844064301056",
+          "https://web.archive.org/web/20210629055600/https://github.com/hhlxf/PrintNightmare/",
+          "https://web.archive.org/web/20210701042336/https://github.com/afwu/PrintNightmare"
+        ],
+        "falsepositives": [
+          "Account fallback reasons (after failed login with specific account)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/smbclient/security/win_smbclient_security_susp_failed_guest_logon.yml"
+      }
+    }
+  ]
+}

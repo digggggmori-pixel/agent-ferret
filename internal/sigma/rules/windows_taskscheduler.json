@@ -1,0 +1,261 @@
+{
+  "metadata": {
+    "logsource": "windows_taskscheduler",
+    "rule_count": 3,
+    "compiled_at": "2026-02-04T12:28:36.567836",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "f0767f15-0fb3-44b9-851e-e8d9a6d0005d",
+      "title": "Scheduled Task Executed Uncommon LOLBIN",
+      "status": "test",
+      "description": "Detects the execution of Scheduled Tasks where the program being run is located in a suspicious location or where it is an unusual program to be run from a Scheduled Task",
+      "level": "medium",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.execution",
+        "attack.persistence",
+        "attack.t1053.005"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "taskscheduler"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 129,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Path__endswith": {
+                "field": "Path",
+                "value": [
+                  "\\calc.exe",
+                  "\\cscript.exe",
+                  "\\mshta.exe",
+                  "\\mspaint.exe",
+                  "\\notepad.exe",
+                  "\\regsvr32.exe",
+                  "\\wscript.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1053.005"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "execution",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-12-05",
+        "modified": "2023-02-07",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "False positives may occur with some of the selected binaries if you have tasks using them (which could be very common in your environment). Exclude all the specific trusted tasks before using this rule"
+        ],
+        "source_file": "sigma_rules/windows/builtin/taskscheduler/win_taskscheduler_lolbin_execution_via_task_scheduler.yml"
+      }
+    },
+    {
+      "id": "424273ea-7cf8-43a6-b712-375f925e481f",
+      "title": "Scheduled Task Executed From A Suspicious Location",
+      "status": "test",
+      "description": "Detects the execution of Scheduled Tasks where the Program being run is located in a suspicious location or it's an unusale program to be run from a Scheduled Task",
+      "level": "medium",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.execution",
+        "attack.persistence",
+        "attack.t1053.005"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "taskscheduler"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 129,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Path__contains": {
+                "field": "Path",
+                "value": [
+                  "C:\\Windows\\Temp\\",
+                  "\\AppData\\Local\\Temp\\",
+                  "\\Desktop\\",
+                  "\\Downloads\\",
+                  "\\Users\\Public\\",
+                  "C:\\Temp\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1053.005"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "execution",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-12-05",
+        "modified": "2023-02-07",
+        "references": [
+          "Internal Research"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/taskscheduler/win_taskscheduler_execution_from_susp_locations.yml"
+      }
+    },
+    {
+      "id": "9e3cb244-bdb8-4632-8c90-6079c8f4f16d",
+      "title": "Important Scheduled Task Deleted",
+      "status": "test",
+      "description": "Detects when adversaries try to stop system services or processes by deleting their respective scheduled tasks in order to conduct data destructive activities\n",
+      "level": "high",
+      "tags": [
+        "attack.impact",
+        "attack.t1489"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "taskscheduler"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 141,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TaskName__contains": {
+                "field": "TaskName",
+                "value": [
+                  "\\Windows\\SystemRestore\\SR",
+                  "\\Windows\\Windows Defender\\",
+                  "\\Windows\\BitLocker",
+                  "\\Windows\\WindowsBackup\\",
+                  "\\Windows\\WindowsUpdate\\",
+                  "\\Windows\\UpdateOrchestrator\\",
+                  "\\Windows\\ExploitGuard"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter": {
+            "type": "field_match",
+            "matchers": {
+              "UserName__contains": {
+                "field": "UserName",
+                "value": [
+                  "AUTHORI",
+                  "AUTORI"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not filter",
+        "condition_parsed": {
+          "op": "and_not",
+          "include": "selection",
+          "exclude": "filter"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1489"
+        ],
+        "tactics": [
+          "impact"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2023-01-13",
+        "modified": "2023-02-07",
+        "references": [
+          "https://www.socinvestigation.com/most-common-windows-event-ids-to-hunt-mind-map/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/taskscheduler/win_taskscheduler_susp_schtasks_delete.yml"
+      }
+    }
+  ]
+}

@@ -10,7 +10,10 @@ import (
 
 	"github.com/digggggmori-pixel/agent-lite/internal/collector"
 	"github.com/digggggmori-pixel/agent-lite/internal/detector"
+	"github.com/digggggmori-pixel/agent-lite/internal/logger"
 	"github.com/digggggmori-pixel/agent-lite/internal/output"
+	"github.com/digggggmori-pixel/agent-lite/internal/sigma"
+	"github.com/digggggmori-pixel/agent-lite/internal/sigma/rules"
 	"github.com/digggggmori-pixel/agent-lite/pkg/types"
 	"github.com/google/uuid"
 )
@@ -24,6 +27,7 @@ var (
 	jsonOutput bool
 	quiet      bool
 	verbose    bool
+	debugLog   bool
 	outputDir  string
 	showHelp   bool
 	showVer    bool
@@ -36,6 +40,7 @@ func init() {
 	flag.BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	flag.BoolVar(&quiet, "quiet", false, "Suppress progress, show results only")
 	flag.BoolVar(&verbose, "verbose", false, "Show detailed debug output")
+	flag.BoolVar(&debugLog, "debug", false, "Generate debug log file")
 	flag.StringVar(&outputDir, "output", "", "Specify output directory")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.BoolVar(&showVer, "version", false, "Show version")
@@ -90,6 +95,7 @@ Scan Options:
   --json        Output in JSON format
   --quiet       Suppress progress, show results only
   --verbose     Show detailed debug output
+  --debug       Generate debug log file (for troubleshooting)
   --output DIR  Specify output directory
   --force       Skip admin check (run with limited results)
 
@@ -98,11 +104,31 @@ Examples:
   agent-lite scan --force            # Run without admin (limited)
   agent-lite scan --quick            # Quick scan (24h)
   agent-lite scan --no-upload        # Local scan only
-  agent-lite scan --json --quiet     # JSON output (for piping)`)
+  agent-lite scan --json --quiet     # JSON output (for piping)
+  agent-lite scan --debug            # Generate debug log file`)
 }
 
 func runScan() {
 	startTime := time.Now()
+
+	// Determine output directory
+	saveDir := outputDir
+	if saveDir == "" {
+		saveDir = "."
+	}
+
+	// Initialize debug logger if --debug flag is set
+	if debugLog {
+		if err := logger.Init(saveDir, true); err != nil {
+			fmt.Printf("Warning: Failed to initialize debug logger: %v\n", err)
+		} else {
+			defer logger.Close()
+			logger.Info("Agent Lite v%s starting", Version)
+			logger.Info("Debug logging enabled, output dir: %s", saveDir)
+			logger.Info("CLI flags: quick=%v, noUpload=%v, json=%v, quiet=%v, verbose=%v, force=%v",
+				quickScan, noUpload, jsonOutput, quiet, verbose, forceRun)
+		}
+	}
 
 	// Initialize output handler
 	out := output.New(output.Options{
@@ -144,28 +170,42 @@ func runScan() {
 	out.PrintHeader(Version)
 
 	// Get host info
+	logger.Section("Host Information")
 	hostInfo := collector.GetHostInfo()
+	logger.Info("Hostname: %s", hostInfo.Hostname)
+	logger.Info("Domain: %s", hostInfo.Domain)
+	logger.Info("OS: %s (%s)", hostInfo.OSVersion, hostInfo.Arch)
+	logger.Info("IPs: %v", hostInfo.IPAddresses)
 
 	// Initialize result
+	scanID := uuid.New().String()
+	logger.Info("Scan ID: %s", scanID)
 	result := &types.ScanResult{
 		AgentVersion: Version,
-		ScanID:       uuid.New().String(),
+		ScanID:       scanID,
 		ScanTime:     startTime,
 		Host:         hostInfo,
 		Detections:   make([]types.Detection, 0),
 	}
 
 	// Initialize collectors
+	logger.Section("Initializing Components")
+	logger.Debug("Creating ProcessCollector")
 	processCollector := collector.NewProcessCollector()
+	logger.Debug("Creating NetworkCollector")
 	networkCollector := collector.NewNetworkCollector()
+	logger.Debug("Creating ServiceCollector")
 	serviceCollector := collector.NewServiceCollector()
+	logger.Debug("Creating RegistryCollector")
 	registryCollector := collector.NewRegistryCollector()
 
 	// Initialize detectors
+	logger.Debug("Creating Detector")
 	det := detector.New()
+	logger.Info("All collectors and detectors initialized")
 
 	// Step 1: Collect processes
-	out.PrintStep(1, 7, "Collecting processes...")
+	out.PrintStep(1, 8, "Collecting processes...")
 	out.PrintDetail("Calling NtQuerySystemInformation")
 	processes, err := processCollector.Collect()
 	if err != nil {
@@ -183,7 +223,7 @@ func runScan() {
 	stepStart := time.Now()
 
 	// Step 2: Collect network connections
-	out.PrintStep(2, 7, "Collecting network connections...")
+	out.PrintStep(2, 8, "Collecting network connections...")
 	out.PrintDetail("Calling GetExtendedTcpTable")
 	connections, err := networkCollector.Collect()
 	if err != nil {
@@ -199,7 +239,7 @@ func runScan() {
 	stepStart = time.Now()
 
 	// Step 3: Collect services
-	out.PrintStep(3, 7, "Collecting services...")
+	out.PrintStep(3, 8, "Collecting services...")
 	out.PrintDetail("Calling EnumServicesStatusEx")
 	services, err := serviceCollector.Collect()
 	if err != nil {
@@ -214,7 +254,7 @@ func runScan() {
 	stepStart = time.Now()
 
 	// Step 4: Scan registry
-	out.PrintStep(4, 7, "Scanning registry...")
+	out.PrintStep(4, 8, "Scanning registry...")
 	out.PrintDetail("Checking 19 persistence keys")
 	registryEntries, err := registryCollector.Collect()
 	if err != nil {
@@ -228,7 +268,8 @@ func runScan() {
 	stepStart = time.Now()
 
 	// Step 5: Run detection engine
-	out.PrintStep(5, 7, "Running detection engine...")
+	logger.Section("Detection Engine")
+	out.PrintStep(5, 8, "Running detection engine...")
 
 	// LOLBin detection
 	lolbinDetections := det.DetectLOLBins(processes)
@@ -255,21 +296,122 @@ func runScan() {
 	out.PrintDetectorResult("Typosquatting (24 targets)", len(typosquatDetections))
 	result.Detections = append(result.Detections, typosquatDetections...)
 
+	// Service vendor typosquatting detection
+	serviceVendorDetections := det.DetectServiceVendorTyposquatting(services)
+	out.PrintDetectorResult("Service vendor typosquatting (31 vendors)", len(serviceVendorDetections))
+	result.Detections = append(result.Detections, serviceVendorDetections...)
+
+	// Service name typosquatting detection
+	serviceNameDetections := det.DetectServiceNameTyposquatting(services)
+	out.PrintDetectorResult("Service name typosquatting (25 services)", len(serviceNameDetections))
+	result.Detections = append(result.Detections, serviceNameDetections...)
+
+	// Service path anomaly detection
+	servicePathDetections := det.DetectServicePathAnomalies(services)
+	out.PrintDetectorResult("Service path anomalies", len(servicePathDetections))
+	result.Detections = append(result.Detections, servicePathDetections...)
+
+	// Unsigned critical process detection
+	unsignedDetections := det.DetectUnsignedCriticalProcesses(processes)
+	out.PrintDetectorResult("Unsigned critical processes (10 targets)", len(unsignedDetections))
+	result.Detections = append(result.Detections, unsignedDetections...)
+
+	// Suspicious domain detection
+	domainDetections := det.DetectSuspiciousDomains(connections)
+	out.PrintDetectorResult("Suspicious domains (28 TLDs)", len(domainDetections))
+	result.Detections = append(result.Detections, domainDetections...)
+
+	// Encoded command detection
+	encodedCmdDetections := det.DetectEncodedCommands(processes)
+	out.PrintDetectorResult("Encoded commands", len(encodedCmdDetections))
+	result.Detections = append(result.Detections, encodedCmdDetections...)
+
 	out.PrintDone(time.Since(stepStart))
 
 	stepStart = time.Now()
 
-	// Step 6: Scan event logs (placeholder for Sigma integration)
-	out.PrintStep(6, 7, "Scanning event logs (2,363 Sigma rules)...")
-	out.PrintDetail("Event log scanning not yet implemented")
+	// Step 6: Live data Sigma matching (works without Sysmon)
+	logger.Section("Live Sigma Matching")
+	out.PrintStep(6, 8, "Scanning live data (Sigma rules)...")
+
+	// Initialize Sigma engine with embedded rules
+	logger.Debug("Loading Sigma rules from embedded filesystem")
+	sigmaEngine, err := sigma.NewEngineWithRules(rules.EmbeddedRules)
+	if err != nil {
+		logger.Error("Failed to initialize Sigma engine: %v", err)
+		out.PrintError("Failed to initialize Sigma engine: %v", err)
+	} else {
+		logger.Info("Sigma engine initialized: %d rules loaded", sigmaEngine.TotalRules())
+		out.PrintDetail("Loaded %d Sigma rules", sigmaEngine.TotalRules())
+
+		// Live process Sigma matching
+		liveProcessMatches := sigma.ScanLiveProcesses(sigmaEngine, processes)
+		for _, match := range liveProcessMatches {
+			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_process"))
+		}
+		out.PrintDetectorResult("Live Process Sigma (process_creation rules)", len(liveProcessMatches))
+
+		// Live network Sigma matching
+		processMap := sigma.BuildProcessMap(processes)
+		liveNetworkMatches := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
+		for _, match := range liveNetworkMatches {
+			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_network"))
+		}
+		out.PrintDetectorResult("Live Network Sigma (network_connection rules)", len(liveNetworkMatches))
+	}
+
 	out.PrintDone(time.Since(stepStart))
 
 	stepStart = time.Now()
 
-	// Step 7: Aggregate results
-	out.PrintStep(7, 7, "Aggregating results...")
+	// Step 7: Scan event logs with Sigma rules
+	out.PrintStep(7, 8, "Scanning event logs (Sigma rules)...")
+
+	if sigmaEngine != nil {
+		// Create progress callback
+		progressCB := func(progress sigma.ScanProgress) {
+			if !quiet {
+				out.PrintDetail("[%s] Scanned %d events, %d matches",
+					progress.Channel, progress.Current, progress.Matches)
+			}
+		}
+
+		// Initialize event log collector
+		eventCollector := collector.NewEventLogCollector(
+			collector.WithQuickMode(quickScan),
+			collector.WithProgress(progressCB),
+		)
+
+		// Check accessible channels
+		accessibleChannels := collector.GetAccessibleChannels()
+		if len(accessibleChannels) == 0 {
+			out.PrintDetail("No accessible event log channels (admin required)")
+		} else {
+			out.PrintDetail("Accessible channels: %d", len(accessibleChannels))
+
+			// Scan event logs
+			sigmaDetections, err := eventCollector.Scan(sigmaEngine)
+			if err != nil {
+				out.PrintError("Event log scan error: %v", err)
+			} else {
+				out.PrintDetail("Event log scan complete: %d events, %d Sigma matches",
+					eventCollector.TotalScanned(), len(sigmaDetections))
+				result.Detections = append(result.Detections, sigmaDetections...)
+				result.Summary.TotalEvents = int(eventCollector.TotalScanned())
+			}
+		}
+	}
+
+	out.PrintDone(time.Since(stepStart))
+
+	stepStart = time.Now()
+
+	// Step 8: Aggregate results
+	logger.Section("Result Aggregation")
+	out.PrintStep(8, 8, "Aggregating results...")
 
 	// Count detections by severity
+	logger.Debug("Counting detections by severity...")
 	for _, d := range result.Detections {
 		switch d.Severity {
 		case types.SeverityCritical:
@@ -282,14 +424,24 @@ func runScan() {
 			result.Summary.Detections.Low++
 		}
 	}
+	logger.Info("Detection counts - Critical: %d, High: %d, Medium: %d, Low: %d",
+		result.Summary.Detections.Critical, result.Summary.Detections.High,
+		result.Summary.Detections.Medium, result.Summary.Detections.Low)
 
 	// Deduplicate
 	originalCount := len(result.Detections)
 	result.Detections = deduplicateDetections(result.Detections)
+	logger.Info("Deduplication: %d → %d (removed %d duplicates)", originalCount, len(result.Detections), originalCount-len(result.Detections))
 	out.PrintDetail("Deduplication: %d → %d", originalCount, len(result.Detections))
+
+	// Extract IOCs
+	result.IOCs = det.ExtractIOCs(result)
+	logger.Info("IOCs extracted: %d IPs, %d files", len(result.IOCs.IPs), len(result.IOCs.Files))
+	out.PrintDetail("IOCs extracted: %d IPs, %d files", len(result.IOCs.IPs), len(result.IOCs.Files))
 
 	// Calculate duration
 	result.ScanDurationMs = time.Since(startTime).Milliseconds()
+	logger.Info("Total scan duration: %d ms", result.ScanDurationMs)
 
 	out.PrintDone(time.Since(stepStart))
 
@@ -301,16 +453,23 @@ func runScan() {
 
 	// Upload to server
 	if !noUpload {
+		logger.Info("Uploading results to server...")
 		out.PrintUploadStatus("https://api.agenthunter.io/v1/scan", true)
 	}
 
-	// Save results - default to current directory
-	saveDir := outputDir
-	if saveDir == "" {
-		saveDir = "."
-	}
+	// Save results
+	logger.Section("Saving Results")
+	logger.Info("Output directory: %s", saveDir)
 	out.SaveResults(result, saveDir)
 	out.SaveDetailedReport(result, saveDir)
+
+	// Log debug file location
+	if debugLog {
+		logPath := logger.GetLogPath()
+		if logPath != "" {
+			fmt.Printf("\nDebug log: %s\n", logPath)
+		}
+	}
 }
 
 func showStatus() {

@@ -1,0 +1,703 @@
+{
+  "metadata": {
+    "logsource": "windows_ps_classic_start",
+    "rule_count": 9,
+    "compiled_at": "2026-02-04T12:28:36.517704",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "999bff6d-dc15-44c9-9f5c-e1051bfc86e1",
+      "title": "Nslookup PowerShell Download Cradle",
+      "status": "test",
+      "description": "Detects a powershell download cradle using nslookup. This cradle uses nslookup to extract payloads from DNS records.",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "powershell",
+                  "nslookup",
+                  "[1]"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "-q=txt http",
+                  "-querytype=txt http",
+                  "-type=txt http"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.001"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Sai Prashanth Pulisetti @pulisettis, Aishwarya Singam",
+        "date": "2022-12-10",
+        "modified": "2025-02-25",
+        "references": [
+          "https://twitter.com/Alh4zr3d/status/1566489367232651264"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_abuse_nslookup_with_dns_records.yml"
+      }
+    },
+    {
+      "id": "87df9ee1-5416-453a-8a08-e8d4a51e9ce1",
+      "title": "Delete Volume Shadow Copies Via WMI With PowerShell",
+      "status": "stable",
+      "description": "Shadow Copies deletion using operating systems utilities via PowerShell",
+      "level": "high",
+      "tags": [
+        "attack.impact",
+        "attack.t1490"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "Get-WmiObject",
+                  "Win32_ShadowCopy"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "Delete()",
+                  "Remove-WmiObject"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1490"
+        ],
+        "tactics": [
+          "impact"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2021-06-03",
+        "modified": "2023-10-27",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1490/T1490.md",
+          "https://www.fortinet.com/blog/threat-research/stomping-shadow-copies-a-second-look-into-deletion-methods"
+        ],
+        "falsepositives": [
+          "Legitimate Administrator deletes Shadow Copies using operating systems utilities for legitimate reason"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_delete_volume_shadow_copies.yml"
+      }
+    },
+    {
+      "id": "6331d09b-4785-4c13-980f-f96661356249",
+      "title": "PowerShell Downgrade Attack - PowerShell",
+      "status": "test",
+      "description": "Detects PowerShell downgrade attack by comparing the host versions with the actually used engine version 2.0",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "EngineVersion=2.",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "HostVersion=2.",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not filter_main",
+        "condition_parsed": {
+          "op": "and_not",
+          "include": "selection",
+          "exclude": "filter_main"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Lee Holmes (idea), Harish Segar (improvements)",
+        "date": "2017-03-22",
+        "modified": "2023-10-27",
+        "references": [
+          "http://www.leeholmes.com/blog/2017/03/17/detecting-and-preventing-powershell-downgrade-attacks/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_downgrade_attack.yml"
+      }
+    },
+    {
+      "id": "b366adb4-d63d-422d-8a2c-186463b5ded0",
+      "title": "Use Get-NetTCPConnection",
+      "status": "test",
+      "description": "Adversaries may attempt to get a listing of network connections to or from the compromised system they are currently accessing or from remote systems by querying for information over the network.",
+      "level": "low",
+      "tags": [
+        "attack.discovery",
+        "attack.t1049"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "Get-NetTCPConnection",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1049"
+        ],
+        "tactics": [
+          "discovery"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2021-12-10",
+        "modified": "2023-10-27",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1049/T1049.md#atomic-test-2---system-network-connections-discovery-with-powershell"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_susp_get_nettcpconnection.yml"
+      }
+    },
+    {
+      "id": "c70e019b-1479-4b65-b0cc-cd0c6093a599",
+      "title": "PowerShell Called from an Executable Version Mismatch",
+      "status": "test",
+      "description": "Detects PowerShell called from an executable by the version mismatch method",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_engine": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "EngineVersion=2.",
+                  "EngineVersion=4.",
+                  "EngineVersion=5."
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_host": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "HostVersion=3.",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Sean Metcalf (source), Florian Roth (Nextron Systems)",
+        "date": "2017-03-05",
+        "modified": "2023-10-27",
+        "references": [
+          "https://adsecurity.org/?p=2921"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_exe_calling_ps.yml"
+      }
+    },
+    {
+      "id": "3236fcd0-b7e3-4433-b4f8-86ad61a9af2d",
+      "title": "Suspicious PowerShell Download",
+      "status": "test",
+      "description": "Detects suspicious PowerShell download command",
+      "level": "medium",
+      "tags": [
+        "attack.execution",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_webclient": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "Net.WebClient",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_download": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  ".DownloadFile(",
+                  ".DownloadString("
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.001"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2017-03-05",
+        "modified": "2023-10-27",
+        "references": [
+          "https://www.trendmicro.com/en_us/research/22/j/lv-ransomware-exploits-proxyshell-in-attack.html"
+        ],
+        "falsepositives": [
+          "PowerShell scripts that download content from the Internet"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_susp_download.yml"
+      }
+    },
+    {
+      "id": "60167e5c-84b2-4c95-a7ac-86281f27c445",
+      "title": "Remote PowerShell Session (PS Classic)",
+      "status": "test",
+      "description": "Detects remote PowerShell sessions",
+      "level": "low",
+      "tags": [
+        "attack.execution",
+        "attack.t1059.001",
+        "attack.lateral-movement",
+        "attack.t1021.006"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "HostName=ServerRemoteHost",
+                  "wsmprovhost.exe"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.001",
+          "T1021.006"
+        ],
+        "tactics": [
+          "execution",
+          "lateral_movement"
+        ]
+      },
+      "meta": {
+        "author": "Roberto Rodriguez @Cyb3rWard0g",
+        "date": "2019-08-10",
+        "modified": "2024-01-03",
+        "references": [
+          "https://threathunterplaybook.com/hunts/windows/190511-RemotePwshExecution/notebook.html"
+        ],
+        "falsepositives": [
+          "Legitimate use remote PowerShell sessions"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_remote_powershell_session.yml"
+      }
+    },
+    {
+      "id": "30a8cb77-8eb3-4cfb-8e79-ad457c5a4592",
+      "title": "Renamed Powershell Under Powershell Channel",
+      "status": "test",
+      "description": "Detects a renamed Powershell execution, which is a common technique used to circumvent security controls and bypass detection logic that's dependent on process names and process paths.\n",
+      "level": "low",
+      "tags": [
+        "attack.execution",
+        "attack.defense-evasion",
+        "attack.t1059.001",
+        "attack.t1036.003"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "HostName=ConsoleHost",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_ps": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "HostApplication=powershell",
+                  "HostApplication=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell",
+                  "HostApplication=C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell",
+                  "HostApplication=C:/Windows/System32/WindowsPowerShell/v1.0/powershell",
+                  "HostApplication=C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell",
+                  "HostApplication=C:\\\\\\\\WINDOWS\\\\\\\\system32\\\\\\\\WindowsPowerShell\\\\\\\\v1.0\\\\\\\\powershell.exe",
+                  "HostApplication=C:\\\\\\\\WINDOWS\\\\\\\\SysWOW64\\\\\\\\WindowsPowerShell\\\\\\\\v1.0\\\\\\\\powershell.exe"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_host_application_null": {
+            "type": "field_match",
+            "matchers": {
+              "Data__re": {
+                "field": "Data",
+                "value": "HostId=[a-zA-Z0-9-]{36}\\s+EngineVersion=",
+                "modifiers": [
+                  "re"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.001",
+          "T1036.003"
+        ],
+        "tactics": [
+          "execution",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Harish Segar, frack113",
+        "date": "2020-06-29",
+        "modified": "2025-01-20",
+        "references": [
+          "https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_renamed_powershell.yml"
+      }
+    },
+    {
+      "id": "c5b20776-639a-49bf-94c7-84f912b91c15",
+      "title": "Netcat The Powershell Version",
+      "status": "test",
+      "description": "Adversaries may use a non-application layer protocol for communication between host and C2 server or among infected hosts within a network",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1095"
+      ],
+      "logsource": {
+        "category": "ps_classic_start",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "powercat ",
+                  "powercat.ps1"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1095"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2021-07-21",
+        "modified": "2023-10-27",
+        "references": [
+          "https://nmap.org/ncat/",
+          "https://github.com/besimorhino/powercat",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1095/T1095.md"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/powershell/powershell_classic/posh_pc_powercat.yml"
+      }
+    }
+  ]
+}

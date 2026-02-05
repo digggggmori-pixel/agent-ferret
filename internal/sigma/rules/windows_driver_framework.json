@@ -1,0 +1,73 @@
+{
+  "metadata": {
+    "logsource": "windows_driver_framework",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.369063",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "1a4bd6e3-4c6e-405d-a9a3-53a116e341d4",
+      "title": "USB Device Plugged",
+      "status": "test",
+      "description": "Detects plugged/unplugged USB devices",
+      "level": "low",
+      "tags": [
+        "attack.initial-access",
+        "attack.t1200"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "driver-framework"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  2003,
+                  2100,
+                  2102
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1200"
+        ],
+        "tactics": [
+          "initial_access"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2017-11-09",
+        "modified": "2021-11-30",
+        "references": [
+          "https://df-stream.com/2014/01/the-windows-7-event-log-and-usb-device/",
+          "https://www.techrepublic.com/article/how-to-track-down-usb-flash-drive-usage-in-windows-10s-event-viewer/"
+        ],
+        "falsepositives": [
+          "Legitimate administrative activity"
+        ],
+        "source_file": "sigma_rules/windows/builtin/driverframeworks/win_usb_device_plugged.yml"
+      }
+    }
+  ]
+}

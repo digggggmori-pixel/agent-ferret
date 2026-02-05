@@ -1,0 +1,106 @@
+{
+  "metadata": {
+    "logsource": "windows_shell_core",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.561783",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "83c161b6-ca67-4f33-8ad0-644a0737cf07",
+      "title": "Suspicious Application Installed",
+      "status": "test",
+      "description": "Detects suspicious application installed by looking at the added shortcut to the app resolver cache",
+      "level": "medium",
+      "tags": [
+        "attack.execution"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "shell-core"
+      },
+      "detection": {
+        "selections": {
+          "selection_name": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 28115,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Name__contains": {
+                "field": "Name",
+                "value": [
+                  "Zenmap",
+                  "AnyDesk",
+                  "wireshark",
+                  "openvpn"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_packageid": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 28115,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "AppID__contains": {
+                "field": "AppID",
+                "value": [
+                  "zenmap.exe",
+                  "prokzult ad",
+                  "wireshark",
+                  "openvpn"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "1 of selection_*",
+        "condition_parsed": {
+          "op": "n_of",
+          "count": 1,
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-08-14",
+        "modified": "",
+        "references": [
+          "https://nasbench.medium.com/finding-forensic-goodness-in-obscure-windows-event-logs-60e978ea45a3"
+        ],
+        "falsepositives": [
+          "Packages or applications being legitimately used by users or administrators"
+        ],
+        "source_file": "sigma_rules/windows/builtin/shell_core/win_shell_core_susp_packages_installed.yml"
+      }
+    }
+  ]
+}

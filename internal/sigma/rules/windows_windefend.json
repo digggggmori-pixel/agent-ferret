@@ -1,0 +1,1204 @@
+{
+  "metadata": {
+    "logsource": "windows_windefend",
+    "rule_count": 16,
+    "compiled_at": "2026-02-04T12:28:36.568509",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "a3ab73f1-bd46-4319-8f06-4b20d0617886",
+      "title": "Windows Defender Exploit Guard Tamper",
+      "status": "test",
+      "description": "Detects when someone is adding or removing applications or folders from exploit guard \"ProtectedFolders\" or \"AllowedApplications\"\n",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "allowed_apps_key": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5007,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "NewValue__contains": {
+                "field": "NewValue",
+                "value": "\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access\\AllowedApplications\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "allowed_apps_path": {
+            "type": "field_match",
+            "matchers": {
+              "NewValue__contains": {
+                "field": "NewValue",
+                "value": [
+                  "\\Users\\Public\\",
+                  "\\AppData\\Local\\Temp\\",
+                  "\\Desktop\\",
+                  "\\PerfLogs\\",
+                  "\\Windows\\Temp\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "protected_folders": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5007,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "OldValue__contains": {
+                "field": "OldValue",
+                "value": "\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access\\ProtectedFolders\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "all of allowed_apps* or protected_folders",
+        "condition_parsed": {
+          "op": "or",
+          "operands": [
+            "all of allowed_apps*",
+            "protected_folders"
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-08-05",
+        "modified": "2022-12-06",
+        "references": [
+          "https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/windows-10-controlled-folder-access-event-search/ba-p/2326088"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_config_change_exploit_guard_tamper.yml"
+      }
+    },
+    {
+      "id": "bc92ca75-cd42-4d61-9a37-9d5aa259c88b",
+      "title": "Win Defender Restored Quarantine File",
+      "status": "test",
+      "description": "Detects the restoration of files from the defender quarantine",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 1009,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-12-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide"
+        ],
+        "falsepositives": [
+          "Legitimate administrator activity restoring a file"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_restored_quarantine_file.yml"
+      }
+    },
+    {
+      "id": "97b9ce1e-c5ab-11ea-87d0-0242ac130003",
+      "title": "PSExec and WMI Process Creations Block",
+      "status": "test",
+      "description": "Detects blocking of process creations originating from PSExec and WMI commands",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.lateral-movement",
+        "attack.t1047",
+        "attack.t1569.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 1121,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessName__endswith": {
+                "field": "ProcessName",
+                "value": [
+                  "\\wmiprvse.exe",
+                  "\\psexesvc.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1047",
+          "T1569.002"
+        ],
+        "tactics": [
+          "execution",
+          "lateral_movement"
+        ]
+      },
+      "meta": {
+        "author": "Bhabesh Raj",
+        "date": "2020-07-14",
+        "modified": "2022-12-25",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/attack-surface-reduction-rules-reference?view=o365-worldwide#block-process-creations-originating-from-psexec-and-wmi-commands",
+          "https://twitter.com/duff22b/status/1280166329660497920"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_asr_psexec_wmi.yml"
+      }
+    },
+    {
+      "id": "49e5bc24-8b86-49f1-b743-535f332c2856",
+      "title": "Microsoft Defender Tamper Protection Trigger",
+      "status": "stable",
+      "description": "Detects blocked attempts to change any of Defender's settings such as \"Real Time Monitoring\" and \"Behavior Monitoring\"",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5013,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Value__endswith": {
+                "field": "Value",
+                "value": [
+                  "\\Windows Defender\\DisableAntiSpyware",
+                  "\\Windows Defender\\DisableAntiVirus",
+                  "\\Windows Defender\\Scan\\DisableArchiveScanning",
+                  "\\Windows Defender\\Scan\\DisableScanningNetworkFiles",
+                  "\\Real-Time Protection\\DisableRealtimeMonitoring",
+                  "\\Real-Time Protection\\DisableBehaviorMonitoring",
+                  "\\Real-Time Protection\\DisableIOAVProtection",
+                  "\\Real-Time Protection\\DisableScriptScanning"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Bhabesh Raj, Nasreddine Bencherchali",
+        "date": "2021-07-05",
+        "modified": "2022-12-06",
+        "references": [
+          "https://bhabeshraj.com/post/tampering-with-microsoft-defenders-tamper-protection",
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide"
+        ],
+        "falsepositives": [
+          "Administrator might try to disable defender features during testing (must be investigated)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_tamper_protection_trigger.yml"
+      }
+    },
+    {
+      "id": "360a1340-398a-46b6-8d06-99b905dc69d2",
+      "title": "Windows Defender Grace Period Expired",
+      "status": "stable",
+      "description": "Detects the expiration of the grace period of Windows Defender. This means protection against viruses, spyware, and other potentially unwanted software is disabled.\n",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5101,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Ján Trenčanský, frack113",
+        "date": "2020-07-28",
+        "modified": "2023-11-22",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide#event-id-5101",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md",
+          "https://craigclouditpro.wordpress.com/2020/03/04/hunting-malicious-windows-defender-activity/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_antimalware_platform_expired.yml"
+      }
+    },
+    {
+      "id": "57b649ef-ff42-4fb0-8bf6-62da243a1708",
+      "title": "Windows Defender Threat Detected",
+      "status": "stable",
+      "description": "Detects actions taken by Windows Defender malware detection engines",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.t1059"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  1006,
+                  1015,
+                  1116,
+                  1117
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Ján Trenčanský",
+        "date": "2020-07-28",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_threat.yml"
+      }
+    },
+    {
+      "id": "ea9bf0fa-edec-4fb8-8b78-b119f2528186",
+      "title": "Windows Defender AMSI Trigger Detected",
+      "status": "stable",
+      "description": "Detects triggering of AMSI by Windows Defender.",
+      "level": "high",
+      "tags": [
+        "attack.execution",
+        "attack.t1059"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 1116,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceName": {
+                "field": "SourceName",
+                "value": "AMSI",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Bhabesh Raj",
+        "date": "2020-09-14",
+        "modified": "2022-12-07",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows/win32/amsi/how-amsi-helps"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_malware_detected_amsi_source.yml"
+      }
+    },
+    {
+      "id": "b28e58e4-2a72-4fae-bdee-0fbe904db642",
+      "title": "Windows Defender Real-time Protection Disabled",
+      "status": "stable",
+      "description": "Detects disabling of Windows Defender Real-time Protection. As this event doesn't contain a lot of information on who initiated this action you might want to reduce it to a \"medium\" level if this occurs too many times in your environment\n",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5001,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Ján Trenčanský, frack113",
+        "date": "2020-07-28",
+        "modified": "2023-11-22",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide#event-id-5001",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md",
+          "https://craigclouditpro.wordpress.com/2020/03/04/hunting-malicious-windows-defender-activity/"
+        ],
+        "falsepositives": [
+          "Administrator actions (should be investigated)",
+          "Seen being triggered occasionally during Windows 8 Defender Updates"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_real_time_protection_disabled.yml"
+      }
+    },
+    {
+      "id": "a0a278fe-2c0e-4de2-ac3c-c68b08a9ba98",
+      "title": "LSASS Access Detected via Attack Surface Reduction",
+      "status": "test",
+      "description": "Detects Access to LSASS Process",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 1121,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Path__endswith": {
+                "field": "Path",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_thor": {
+            "type": "field_match",
+            "matchers": {
+              "ProcessName__startswith": {
+                "field": "ProcessName",
+                "value": "C:\\Windows\\Temp\\asgard2-agent\\",
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "ProcessName__endswith": {
+                "field": "ProcessName",
+                "value": [
+                  "\\thor64.exe",
+                  "\\thor.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_exact": {
+            "type": "field_match",
+            "matchers": {
+              "ProcessName": {
+                "field": "ProcessName",
+                "value": [
+                  "C:\\Windows\\System32\\atiesrxx.exe",
+                  "C:\\Windows\\System32\\CompatTelRunner.exe",
+                  "C:\\Windows\\System32\\msiexec.exe",
+                  "C:\\Windows\\System32\\nvwmi64.exe",
+                  "C:\\Windows\\System32\\svchost.exe",
+                  "C:\\Windows\\System32\\Taskmgr.exe",
+                  "C:\\Windows\\System32\\wbem\\WmiPrvSE.exe",
+                  "C:\\Windows\\SysWOW64\\msiexec.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_begins": {
+            "type": "field_match",
+            "matchers": {
+              "ProcessName__startswith": {
+                "field": "ProcessName",
+                "value": [
+                  "C:\\Windows\\System32\\DriverStore\\",
+                  "C:\\WINDOWS\\Installer\\",
+                  "C:\\Program Files\\",
+                  "C:\\Program Files (x86)\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Markus Neis",
+        "date": "2018-08-26",
+        "modified": "2022-08-13",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/attack-surface-reduction"
+        ],
+        "falsepositives": [
+          "Google Chrome GoogleUpdate.exe",
+          "Some Taskmgr.exe related activity"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_asr_lsass_access.yml"
+      }
+    },
+    {
+      "id": "dd80db93-6ec2-4f4c-a017-ad40da6ffe81",
+      "title": "Windows Defender Real-Time Protection Failure/Restart",
+      "status": "stable",
+      "description": "Detects issues with Windows Defender Real-Time Protection features",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  3002,
+                  3007
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_network_inspection": {
+            "type": "field_match",
+            "matchers": {
+              "Feature_Name": {
+                "field": "Feature_Name",
+                "value": "%%886",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Reason": {
+                "field": "Reason",
+                "value": [
+                  "%%892",
+                  "%%858"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems), Christopher Peacock '@securepeacock' (Update)",
+        "date": "2023-03-28",
+        "modified": "2023-05-05",
+        "references": [
+          "Internal Research",
+          "https://www.microsoft.com/en-us/security/blog/2023/04/11/guidance-for-investigating-attacks-using-cve-2022-21894-the-blacklotus-campaign/",
+          "https://gist.github.com/nasbench/33732d6705cbdc712fae356f07666346"
+        ],
+        "falsepositives": [
+          "Some crashes can occur sometimes and the event doesn't provide enough information to tune out these cases. Manual exception is required"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_real_time_protection_errors.yml"
+      }
+    },
+    {
+      "id": "2afe6582-e149-11ea-87d0-0242ac130003",
+      "title": "Windows Defender Malware Detection History Deletion",
+      "status": "test",
+      "description": "Windows Defender logs when the history of detected infections is deleted.",
+      "level": "informational",
+      "tags": [
+        "attack.defense-evasion"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 1013,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Cian Heasley",
+        "date": "2020-08-13",
+        "modified": "2023-11-24",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus",
+          "https://web.archive.org/web/20160727113019/https://answers.microsoft.com/en-us/protect/forum/mse-protect_scanning/microsoft-antimalware-has-removed-history-of/f15af6c9-01a9-4065-8c6c-3f2bdc7de45e"
+        ],
+        "falsepositives": [
+          "Deletion of Defender malware detections history for legitimate reasons"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_history_delete.yml"
+      }
+    },
+    {
+      "id": "91903aba-1088-42ee-b680-d6d94fe002b0",
+      "title": "Windows Defender Submit Sample Feature Disabled",
+      "status": "stable",
+      "description": "Detects disabling of the \"Automatic Sample Submission\" feature of Windows Defender.",
+      "level": "low",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5007,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "NewValue__contains": {
+                "field": "NewValue",
+                "value": "\\Real-Time Protection\\SubmitSamplesConsent = 0x0",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-12-06",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide",
+          "https://bidouillesecurity.com/disable-windows-defender-in-powershell/#DisableAntiSpyware"
+        ],
+        "falsepositives": [
+          "Administrator activity (must be investigated)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_config_change_sample_submission_consent.yml"
+      }
+    },
+    {
+      "id": "801bd44f-ceed-4eb6-887c-11544633c0aa",
+      "title": "Windows Defender Configuration Changes",
+      "status": "stable",
+      "description": "Detects suspicious changes to the Windows Defender configuration",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5007,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "NewValue__contains": {
+                "field": "NewValue",
+                "value": [
+                  "\\Windows Defender\\DisableAntiSpyware ",
+                  "\\Windows Defender\\Scan\\DisableRemovableDriveScanning ",
+                  "\\Windows Defender\\Scan\\DisableScanningMappedNetworkDrivesForFullScan ",
+                  "\\Windows Defender\\SpyNet\\DisableBlockAtFirstSeen ",
+                  "\\Real-Time Protection\\SpyNetReporting "
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-12-06",
+        "modified": "2023-11-24",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide",
+          "https://bidouillesecurity.com/disable-windows-defender-in-powershell/#DisableAntiSpyware"
+        ],
+        "falsepositives": [
+          "Administrator activity (must be investigated)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_suspicious_features_tampering.yml"
+      }
+    },
+    {
+      "id": "686c0b4b-9dd3-4847-9077-d6c1bbe36fcb",
+      "title": "Windows Defender Virus Scanning Feature Disabled",
+      "status": "stable",
+      "description": "Detects disabling of the Windows Defender virus scanning feature",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5012,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Ján Trenčanský, frack113",
+        "date": "2020-07-28",
+        "modified": "2023-11-22",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide#event-id-5012",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md",
+          "https://craigclouditpro.wordpress.com/2020/03/04/hunting-malicious-windows-defender-activity/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_virus_scan_disabled.yml"
+      }
+    },
+    {
+      "id": "1321dc4e-a1fe-481d-a016-52c45f0c8b4f",
+      "title": "Windows Defender Exclusions Added",
+      "status": "stable",
+      "description": "Detects the Setting of Windows Defender Exclusions",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5007,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "NewValue__contains": {
+                "field": "NewValue",
+                "value": "\\Microsoft\\Windows Defender\\Exclusions",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Christian Burkard (Nextron Systems)",
+        "date": "2021-07-06",
+        "modified": "2022-12-06",
+        "references": [
+          "https://twitter.com/_nullbind/status/1204923340810543109"
+        ],
+        "falsepositives": [
+          "Administrator actions"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_config_change_exclusion_added.yml"
+      }
+    },
+    {
+      "id": "bc275be9-0bec-4d77-8c8f-281a2df6710f",
+      "title": "Windows Defender Malware And PUA Scanning Disabled",
+      "status": "stable",
+      "description": "Detects disabling of the Windows Defender feature of scanning for malware and other potentially unwanted software",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "windefend"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5010,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Ján Trenčanský, frack113",
+        "date": "2020-07-28",
+        "modified": "2023-11-22",
+        "references": [
+          "https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide#event-id-5010",
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md",
+          "https://craigclouditpro.wordpress.com/2020/03/04/hunting-malicious-windows-defender-activity/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/windefend/win_defender_malware_and_pua_scan_disabled.yml"
+      }
+    }
+  ]
+}

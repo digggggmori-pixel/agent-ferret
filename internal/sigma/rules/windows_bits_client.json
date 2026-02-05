@@ -1,0 +1,686 @@
+{
+  "metadata": {
+    "logsource": "windows_bits_client",
+    "rule_count": 7,
+    "compiled_at": "2026-02-04T12:28:36.359109",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "b85e5894-9b19-4d86-8c87-a2f3b81f0521",
+      "title": "BITS Transfer Job Downloading File Potential Suspicious Extension",
+      "status": "test",
+      "description": "Detects new BITS transfer job saving local files with potential suspicious extensions",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.persistence",
+        "attack.t1197"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "bits-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 16403,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "LocalName__endswith": {
+                "field": "LocalName",
+                "value": [
+                  ".bat",
+                  ".dll",
+                  ".exe",
+                  ".hta",
+                  ".ps1",
+                  ".psd1",
+                  ".sh",
+                  ".vbe",
+                  ".vbs"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_generic": {
+            "type": "field_match",
+            "matchers": {
+              "LocalName__contains": {
+                "field": "LocalName",
+                "value": "\\AppData\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "RemoteName__contains": {
+                "field": "RemoteName",
+                "value": ".com",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1197"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2022-03-01",
+        "modified": "2023-03-27",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md"
+        ],
+        "falsepositives": [
+          "While the file extensions in question can be suspicious at times. It's best to add filters according to your environment to avoid large amount false positives"
+        ],
+        "source_file": "sigma_rules/windows/builtin/bits_client/win_bits_client_new_transfer_saving_susp_extensions.yml"
+      }
+    },
+    {
+      "id": "f8a56cb7-a363-44ed-a82f-5926bb44cd05",
+      "title": "BITS Transfer Job Download To Potential Suspicious Folder",
+      "status": "test",
+      "description": "Detects new BITS transfer job where the LocalName/Saved file is stored in a potentially suspicious location",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.persistence",
+        "attack.t1197"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "bits-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 16403,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "LocalName__contains": {
+                "field": "LocalName",
+                "value": [
+                  "\\Desktop\\",
+                  "C:\\Users\\Public\\",
+                  "C:\\PerfLogs\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1197"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-06-28",
+        "modified": "2023-03-27",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/bits_client/win_bits_client_new_trasnfer_susp_local_folder.yml"
+      }
+    },
+    {
+      "id": "90f138c1-f578-4ac3-8c49-eecfd847c8b7",
+      "title": "BITS Transfer Job Download From Direct IP",
+      "status": "test",
+      "description": "Detects a BITS transfer job downloading file(s) from a direct IP address.",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.persistence",
+        "attack.t1197"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "bits-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 16403,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "RemoteName__contains": {
+                "field": "RemoteName",
+                "value": [
+                  "http://1",
+                  "http://2",
+                  "http://3",
+                  "http://4",
+                  "http://5",
+                  "http://6",
+                  "http://7",
+                  "http://8",
+                  "http://9",
+                  "https://1",
+                  "https://2",
+                  "https://3",
+                  "https://4",
+                  "https://5",
+                  "https://6",
+                  "https://7",
+                  "https://8",
+                  "https://9"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_optional_local_networks": {
+            "type": "field_match",
+            "matchers": {
+              "RemoteName__contains": {
+                "field": "RemoteName",
+                "value": [
+                  "://10.",
+                  "://192.168.",
+                  "://172.16.",
+                  "://172.17.",
+                  "://172.18.",
+                  "://172.19.",
+                  "://172.20.",
+                  "://172.21.",
+                  "://172.22.",
+                  "://172.23.",
+                  "://172.24.",
+                  "://172.25.",
+                  "://172.26.",
+                  "://172.27.",
+                  "://172.28.",
+                  "://172.29.",
+                  "://172.30.",
+                  "://172.31.",
+                  "://127.",
+                  "://169.254."
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_seven_zip": {
+            "type": "field_match",
+            "matchers": {
+              "RemoteName__contains": {
+                "field": "RemoteName",
+                "value": [
+                  "https://7-",
+                  "http://7-"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1197"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-01-11",
+        "modified": "2023-03-27",
+        "references": [
+          "https://blog.netspi.com/15-ways-to-download-a-file/#bitsadmin",
+          "https://isc.sans.edu/diary/22264",
+          "https://lolbas-project.github.io/lolbas/Binaries/Bitsadmin/",
+          "https://blog.talosintelligence.com/breaking-the-silence-recent-truebot-activity/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/bits_client/win_bits_client_new_transfer_via_ip_address.yml"
+      }
+    },
+    {
+      "id": "1ff315dc-2a3a-4b71-8dde-873818d25d39",
+      "title": "New BITS Job Created Via Bitsadmin",
+      "status": "test",
+      "description": "Detects the creation of a new bits job by Bitsadmin",
+      "level": "low",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.persistence",
+        "attack.t1197"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "bits-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "processPath__endswith": {
+                "field": "processPath",
+                "value": "\\bitsadmin.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1197"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2022-03-01",
+        "modified": "2023-03-27",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md"
+        ],
+        "falsepositives": [
+          "Many legitimate applications or scripts could leverage \"bitsadmin\". This event is best correlated with EID 16403 via the JobID field"
+        ],
+        "source_file": "sigma_rules/windows/builtin/bits_client/win_bits_client_new_job_via_bitsadmin.yml"
+      }
+    },
+    {
+      "id": "fe3a2d49-f255-4d10-935c-bda7391108eb",
+      "title": "New BITS Job Created Via PowerShell",
+      "status": "test",
+      "description": "Detects the creation of a new bits job by PowerShell",
+      "level": "low",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.persistence",
+        "attack.t1197"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "bits-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "processPath__endswith": {
+                "field": "processPath",
+                "value": [
+                  "\\powershell.exe",
+                  "\\pwsh.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1197"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2022-03-01",
+        "modified": "2023-03-27",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md"
+        ],
+        "falsepositives": [
+          "Administrator PowerShell scripts"
+        ],
+        "source_file": "sigma_rules/windows/builtin/bits_client/win_bits_client_new_job_via_powershell.yml"
+      }
+    },
+    {
+      "id": "6d44fb93-e7d2-475c-9d3d-54c9c1e33427",
+      "title": "BITS Transfer Job With Uncommon Or Suspicious Remote TLD",
+      "status": "test",
+      "description": "Detects a suspicious download using the BITS client from a FQDN that is unusual. Adversaries may abuse BITS jobs to persistently execute or clean up after malicious payloads.",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.persistence",
+        "attack.t1197"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "bits-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 16403,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_generic": {
+            "type": "field_match",
+            "matchers": {
+              "RemoteName__contains": {
+                "field": "RemoteName",
+                "value": [
+                  ".azureedge.net/",
+                  ".com/",
+                  ".sfx.ms/",
+                  "download.mozilla.org/",
+                  "cdn.onenote.net/",
+                  "cdn.office.net/"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1197"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-06-10",
+        "modified": "2024-12-25",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md",
+          "https://twitter.com/malmoeb/status/1535142803075960832"
+        ],
+        "falsepositives": [
+          "This rule doesn't exclude other known TLDs such as \".org\" or \".net\". It's recommended to apply additional filters for software and scripts that leverage the BITS service"
+        ],
+        "source_file": "sigma_rules/windows/builtin/bits_client/win_bits_client_new_transfer_via_uncommon_tld.yml"
+      }
+    },
+    {
+      "id": "d635249d-86b5-4dad-a8c7-d7272b788586",
+      "title": "BITS Transfer Job Download From File Sharing Domains",
+      "status": "test",
+      "description": "Detects BITS transfer job downloading files from a file sharing domain.",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.persistence",
+        "attack.t1197"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "bits-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 16403,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "RemoteName__contains": {
+                "field": "RemoteName",
+                "value": [
+                  ".githubusercontent.com",
+                  "anonfiles.com",
+                  "cdn.discordapp.com",
+                  "ddns.net",
+                  "dl.dropboxusercontent.com",
+                  "ghostbin.co",
+                  "github.com",
+                  "glitch.me",
+                  "gofile.io",
+                  "hastebin.com",
+                  "mediafire.com",
+                  "mega.nz",
+                  "onrender.com",
+                  "pages.dev",
+                  "paste.ee",
+                  "pastebin.com",
+                  "pastebin.pl",
+                  "pastetext.net",
+                  "pixeldrain.com",
+                  "privatlab.com",
+                  "privatlab.net",
+                  "send.exploit.in",
+                  "sendspace.com",
+                  "storage.googleapis.com",
+                  "storjshare.io",
+                  "supabase.co",
+                  "temp.sh",
+                  "transfer.sh",
+                  "trycloudflare.com",
+                  "ufile.io",
+                  "w3spaces.com",
+                  "workers.dev"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1197"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-06-28",
+        "modified": "2025-12-10",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md",
+          "https://twitter.com/malmoeb/status/1535142803075960832",
+          "https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/ransomware-hive-conti-avoslocker",
+          "https://www.microsoft.com/en-us/security/blog/2024/01/17/new-ttps-observed-in-mint-sandstorm-campaign-targeting-high-profile-individuals-at-universities-and-research-orgs/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/bits_client/win_bits_client_new_transfer_via_file_sharing_domains.yml"
+      }
+    }
+  ]
+}

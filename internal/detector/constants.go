@@ -318,3 +318,72 @@ func LOLBinCategory(name string) string {
 	}
 	return "Unknown"
 }
+
+// TrustedVendors - Vendor names to check for typosquatting (31)
+var TrustedVendors = []string{
+	"Microsoft", "Windows", "Intel", "AMD", "Nvidia",
+	"Google", "Adobe", "Oracle", "VMware", "Citrix",
+	"Symantec", "McAfee", "Kaspersky", "Avast", "Norton",
+	"Cisco", "Dell", "HP", "Lenovo", "Asus",
+	"Realtek", "Broadcom", "Qualcomm", "Logitech", "Samsung",
+	"LG", "ESET", "Trend Micro", "Sophos", "Webroot", "Malwarebytes",
+}
+
+// SystemServices - Windows system service names to check for typosquatting (25)
+var SystemServices = []string{
+	"windefend", "eventlog", "netlogon", "dnscache", "dhcp",
+	"wuauserv", "bits", "cryptsvc", "lanmanserver", "lanmanworkstation",
+	"schedule", "spooler", "termservice", "winrm", "wmi",
+	"wscsvc", "wersvc", "mpssvc", "bfe", "sharedaccess",
+	"themes", "w32time", "audiosrv", "wlansvc", "netprofm",
+}
+
+// HighRiskTLDs - Top-level domains associated with malicious activity (28)
+var HighRiskTLDs = []string{
+	"ru", "cn", "kp", "ir", "tk", "ml", "ga", "cf", "gq",
+	"top", "xyz", "click", "link", "work", "date", "download",
+	"racing", "stream", "win", "bid", "men", "loan", "party",
+	"review", "science", "trade", "webcam", "cricket",
+}
+
+// DangerousPaths - Paths commonly used by malware (18)
+var DangerousPaths = []string{
+	`\temp\`, `\tmp\`, `\appdata\local\temp\`, `\windows\temp\`,
+	`\appdata\roaming\`, `\downloads\`, `\desktop\`,
+	`\public\`, `\users\public\`, `\programdata\`,
+	`\$recycle.bin\`, `\recycler\`,
+	`\perflogs\`, `\windows\debug\`, `\windows\tasks\`,
+	`\windows\tracing\`, `\windows\fonts\`, `\intel\`,
+}
+
+// CriticalProcesses - System processes that should run from System32 (10)
+var CriticalProcesses = map[string]string{
+	"svchost.exe":   `c:\windows\system32\svchost.exe`,
+	"lsass.exe":     `c:\windows\system32\lsass.exe`,
+	"csrss.exe":     `c:\windows\system32\csrss.exe`,
+	"services.exe":  `c:\windows\system32\services.exe`,
+	"smss.exe":      `c:\windows\system32\smss.exe`,
+	"wininit.exe":   `c:\windows\system32\wininit.exe`,
+	"winlogon.exe":  `c:\windows\system32\winlogon.exe`,
+	"explorer.exe":  `c:\windows\explorer.exe`,
+	"dwm.exe":       `c:\windows\system32\dwm.exe`,
+	"spoolsv.exe":   `c:\windows\system32\spoolsv.exe`,
+}
+
+// EncodedCommandPatterns - Patterns indicating encoded/obfuscated commands
+var EncodedCommandPatterns = []string{
+	"-encodedcommand", "-enc ", "-e ", "-ec ",
+	"frombase64", "tobase64",
+	"[convert]::frombase64", "[system.convert]::frombase64",
+	"-encoded", "iex(", "invoke-expression",
+	"downloadstring", "downloadfile",
+	"hidden", "-windowstyle hidden", "-w hidden",
+	"bypass", "-exec bypass", "-executionpolicy bypass",
+	"noprofile", "-nop",
+}
+
+// MaliciousKeywords - Keywords often found in malicious domains
+var MaliciousKeywords = []string{
+	"c2", "cnc", "beacon", "shell", "mal", "hack", "pwn", "bot",
+	"payload", "exploit", "ransom", "crypt", "stealer", "dropper",
+}

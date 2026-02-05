@@ -3,8 +3,10 @@ package collector
 import (
 	"fmt"
 	"syscall"
+	"time"
 	"unsafe"
 
+	"github.com/digggggmori-pixel/agent-lite/internal/logger"
 	"github.com/digggggmori-pixel/agent-lite/pkg/types"
 	"golang.org/x/sys/windows"
 )
@@ -86,12 +88,18 @@ func NewServiceCollector() *ServiceCollector {
 
 // Collect gathers all Windows services
 func (c *ServiceCollector) Collect() ([]types.ServiceInfo, error) {
+	logger.Section("Service Collection")
+	startTime := time.Now()
+
 	// Open Service Control Manager
+	logger.APICall("OpenSCManager", "SC_MANAGER_ENUMERATE_SERVICE")
 	scm, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_ENUMERATE_SERVICE)
 	if err != nil {
+		logger.Error("OpenSCManager failed: %v", err)
 		return nil, fmt.Errorf("OpenSCManager failed: %w", err)
 	}
 	defer windows.CloseServiceHandle(scm)
+	logger.Debug("Service Control Manager opened successfully")
 
 	var services []types.ServiceInfo
 
@@ -135,9 +143,9 @@ func (c *ServiceCollector) Collect() ([]types.ServiceInfo, error) {
 	}
 
 	// Parse services
-	entrySize := unsafe.Sizeof(ENUM_SERVICE_STATUS_PROCESS{})
-	for i := uint32(0); i < servicesReturned; i++ {
-		offset := uintptr(i) * entrySize
+	entrySize := int(unsafe.Sizeof(ENUM_SERVICE_STATUS_PROCESS{}))
+	for i := 0; i < int(servicesReturned); i++ {
+		offset := i * entrySize
 		entry := (*ENUM_SERVICE_STATUS_PROCESS)(unsafe.Pointer(&buf[offset]))
 
 		svcName := windows.UTF16PtrToString(entry.ServiceName)
@@ -156,6 +164,24 @@ func (c *ServiceCollector) Collect() ([]types.ServiceInfo, error) {
 		}
 
 		services = append(services, svc)
+	}
+
+	logger.Timing("ServiceCollector.Collect", startTime)
+	logger.Info("Service collection complete: %d services found", len(services))
+
+	// Log running services for debugging
+	runningServices := GetRunningServices(services)
+	logger.Debug("Running services: %d", len(runningServices))
+
+	// Log sample services
+	if len(services) > 0 {
+		logger.SubSection("Sample Services (first 10)")
+		for i, svc := range services {
+			if i >= 10 {
+				break
+			}
+			logger.ServiceInfo(svc.Name, svc.DisplayName, svc.Status, svc.StartType, svc.BinaryPath)
+		}
 	}
 
 	return services, nil

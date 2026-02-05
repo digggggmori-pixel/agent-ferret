@@ -1,0 +1,137 @@
+{
+  "metadata": {
+    "logsource": "windows_wmi",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.569530",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "0b7889b4-5577-4521-a60a-3376ee7f9f7b",
+      "title": "WMI Persistence",
+      "status": "test",
+      "description": "Detects suspicious WMI event filter and command line event consumer based on WMI and Security Logs.",
+      "level": "medium",
+      "tags": [
+        "attack.persistence",
+        "attack.privilege-escalation",
+        "attack.t1546.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "wmi"
+      },
+      "detection": {
+        "selections": {
+          "wmi_filter_to_consumer_binding": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5861,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "consumer_keywords": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "ActiveScriptEventConsumer"
+              },
+              {
+                "type": "literal",
+                "value": "CommandLineEventConsumer"
+              },
+              {
+                "type": "literal",
+                "value": "CommandLineTemplate"
+              }
+            ]
+          },
+          "wmi_filter_registration": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 5859,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_scmevent": {
+            "type": "field_match",
+            "matchers": {
+              "Provider": {
+                "field": "Provider",
+                "value": "SCM Event Provider",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Query": {
+                "field": "Query",
+                "value": "select * from MSFT_SCMEventLogEvent",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "User": {
+                "field": "User",
+                "value": "S-1-5-32-544",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "PossibleCause": {
+                "field": "PossibleCause",
+                "value": "Permanent",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "( (wmi_filter_to_consumer_binding and consumer_keywords) or (wmi_filter_registration) ) and not filter_scmevent",
+        "condition_parsed": {
+          "op": "or",
+          "operands": [
+            "( (wmi_filter_to_consumer_binding and consumer_keywords)",
+            "(wmi_filter_registration) ) and not filter_scmevent"
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1546.003"
+        ],
+        "tactics": [
+          "persistence",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Gleb Sukhodolskiy, Timur Zinniatullin oscd.community",
+        "date": "2017-08-22",
+        "modified": "2022-02-10",
+        "references": [
+          "https://twitter.com/mattifestation/status/899646620148539397",
+          "https://www.eideon.com/2018-03-02-THL03-WMIBackdoors/"
+        ],
+        "falsepositives": [
+          "Unknown (data set is too small; further testing needed)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/wmi/win_wmi_persistence.yml"
+      }
+    }
+  ]
+}

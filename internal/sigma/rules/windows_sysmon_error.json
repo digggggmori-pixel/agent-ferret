@@ -1,0 +1,119 @@
+{
+  "metadata": {
+    "logsource": "windows_sysmon_error",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.563011",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "815cd91b-7dbc-4247-841a-d7dd1392b0a8",
+      "title": "Sysmon Configuration Error",
+      "status": "test",
+      "description": "Detects when an adversary is trying to hide it's action from Sysmon logging based on error messages",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1564"
+      ],
+      "logsource": {
+        "category": "sysmon_error",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_error": {
+            "type": "field_match",
+            "matchers": {
+              "Description__contains": {
+                "field": "Description",
+                "value": [
+                  "Failed to open service configuration with error",
+                  "Failed to connect to the driver to update configuration"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_generic_english": {
+            "type": "field_match",
+            "matchers": {
+              "Description__contains_all": {
+                "field": "Description",
+                "value": [
+                  "Failed to open service configuration with error",
+                  "Last error: The media is write protected."
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_by_errorcode": {
+            "type": "field_match",
+            "matchers": {
+              "Description__contains": {
+                "field": "Description",
+                "value": [
+                  "Failed to open service configuration with error 19",
+                  "Failed to open service configuration with error 93"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection_error and not 1 of filter*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection_error"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1564"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2021-06-04",
+        "modified": "2022-07-07",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md",
+          "https://talesfrominfosec.blogspot.com/2017/12/killing-sysmon-silently.html"
+        ],
+        "falsepositives": [
+          "Legitimate administrative action"
+        ],
+        "source_file": "sigma_rules/windows/sysmon/sysmon_config_modification_error.yml"
+      }
+    }
+  ]
+}

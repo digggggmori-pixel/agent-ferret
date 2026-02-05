@@ -3,7 +3,9 @@ package collector
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/digggggmori-pixel/agent-lite/internal/logger"
 	"github.com/digggggmori-pixel/agent-lite/pkg/types"
 	"golang.org/x/sys/windows/registry"
 )
@@ -61,18 +63,55 @@ func NewRegistryCollector() *RegistryCollector {
 
 // Collect gathers registry entries from persistence keys
 func (c *RegistryCollector) Collect() ([]types.RegistryEntry, error) {
+	logger.Section("Registry Collection")
+	startTime := time.Now()
+	logger.Info("Scanning %d persistence keys", len(PersistenceKeys))
+
 	var entries []types.RegistryEntry
+	keysScanned := 0
+	keysFailed := 0
 
 	for _, keyDef := range PersistenceKeys {
+		fullPath := hiveName(keyDef.Hive) + "\\" + keyDef.Path
+		logger.Debug("Scanning registry key: %s", fullPath)
+
 		keyEntries, err := c.collectKey(keyDef)
 		if err != nil {
 			// Key might not exist, skip silently
+			keysFailed++
+			logger.Debug("Key not accessible: %s (%v)", fullPath, err)
 			continue
+		}
+		keysScanned++
+		if len(keyEntries) > 0 {
+			logger.Debug("Found %d entries in %s", len(keyEntries), fullPath)
 		}
 		entries = append(entries, keyEntries...)
 	}
 
+	logger.Timing("RegistryCollector.Collect", startTime)
+	logger.Info("Registry collection complete: %d entries from %d keys (%d inaccessible)",
+		len(entries), keysScanned, keysFailed)
+
+	// Log sample entries
+	if len(entries) > 0 {
+		logger.SubSection("Sample Registry Entries (first 10)")
+		for i, entry := range entries {
+			if i >= 10 {
+				break
+			}
+			logger.Debug("Registry: %s\\%s = %s", entry.Key, entry.ValueName, truncateValue(entry.ValueData, 100))
+		}
+	}
+
 	return entries, nil
+}
+
+func truncateValue(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func (c *RegistryCollector) collectKey(keyDef RegistryKeyDef) ([]types.RegistryEntry, error) {

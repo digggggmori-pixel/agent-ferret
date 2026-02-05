@@ -1,0 +1,546 @@
+{
+  "metadata": {
+    "logsource": "windows_msexchange_management",
+    "rule_count": 7,
+    "compiled_at": "2026-02-04T12:28:36.404939",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "b7bc7038-638b-4ffd-880c-292c692209ef",
+      "title": "Certificate Request Export to Exchange Webserver",
+      "status": "test",
+      "description": "Detects a write of an Exchange CSR to an untypical directory or with aspx name suffix which can be used to place a webshell",
+      "level": "critical",
+      "tags": [
+        "attack.persistence",
+        "attack.t1505.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "msexchange-management"
+      },
+      "detection": {
+        "selections": {
+          "keywords_export_command": {
+            "type": "field_match",
+            "matchers": {
+              "__all": {
+                "field": "",
+                "value": [
+                  "New-ExchangeCertificate",
+                  " -GenerateRequest",
+                  " -BinaryEncoded",
+                  " -RequestFile"
+                ],
+                "modifiers": [
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "keywords_export_params": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "\\\\\\\\localhost\\\\C$"
+              },
+              {
+                "type": "literal",
+                "value": "\\\\\\\\127.0.0.1\\\\C$"
+              },
+              {
+                "type": "literal",
+                "value": "C:\\\\inetpub"
+              },
+              {
+                "type": "literal",
+                "value": ".aspx"
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "keywords_export_command and keywords_export_params",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "keywords_export_command"
+            },
+            {
+              "type": "ref",
+              "value": "keywords_export_params"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1505.003"
+        ],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Max Altgelt (Nextron Systems)",
+        "date": "2021-08-23",
+        "modified": "2023-01-23",
+        "references": [
+          "https://twitter.com/GossiTheDog/status/1429175908905127938"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/msexchange/win_exchange_proxyshell_certificate_generation.yml"
+      }
+    },
+    {
+      "id": "4fe151c2-ecf9-4fae-95ae-b88ec9c2fca6",
+      "title": "MSExchange Transport Agent Installation - Builtin",
+      "status": "test",
+      "description": "Detects the Installation of a Exchange Transport Agent",
+      "level": "medium",
+      "tags": [
+        "attack.persistence",
+        "attack.t1505.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "msexchange-management"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "Install-TransportAgent"
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1505.002"
+        ],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Tobias Michalski (Nextron Systems)",
+        "date": "2021-06-08",
+        "modified": "2022-11-27",
+        "references": [
+          "https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=7"
+        ],
+        "falsepositives": [
+          "Legitimate installations of exchange TransportAgents. AssemblyPath is a good indicator for this."
+        ],
+        "source_file": "sigma_rules/windows/builtin/msexchange/win_exchange_transportagent.yml"
+      }
+    },
+    {
+      "id": "9db37458-4df2-46a5-95ab-307e7f29e675",
+      "title": "Exchange Set OabVirtualDirectory ExternalUrl Property",
+      "status": "test",
+      "description": "Rule to detect an adversary setting OabVirtualDirectory External URL property to a script in Exchange Management log",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.t1505.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "msexchange-management"
+      },
+      "detection": {
+        "selections": {
+          "keywords": {
+            "type": "field_match",
+            "matchers": {
+              "__all": {
+                "field": "",
+                "value": [
+                  "Set-OabVirtualDirectory",
+                  "ExternalUrl",
+                  "Page_Load",
+                  "script"
+                ],
+                "modifiers": [
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "keywords",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "keywords"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1505.003"
+        ],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Jose Rodriguez @Cyb3rPandaH",
+        "date": "2021-03-15",
+        "modified": "2023-01-23",
+        "references": [
+          "https://twitter.com/OTR_Community/status/1371053369071132675"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/msexchange/win_exchange_set_oabvirtualdirectory_externalurl.yml"
+      }
+    },
+    {
+      "id": "c7d16cae-aaf3-42e5-9c1c-fb8553faa6fa",
+      "title": "Failed MSExchange Transport Agent Installation",
+      "status": "test",
+      "description": "Detects a failed installation of a Exchange Transport Agent",
+      "level": "high",
+      "tags": [
+        "attack.persistence",
+        "attack.t1505.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "msexchange-management"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 6,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": "Install-TransportAgent",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1505.002"
+        ],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Tobias Michalski (Nextron Systems)",
+        "date": "2021-06-08",
+        "modified": "2022-07-12",
+        "references": [
+          "https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=8"
+        ],
+        "falsepositives": [
+          "Legitimate installations of exchange TransportAgents. AssemblyPath is a good indicator for this."
+        ],
+        "source_file": "sigma_rules/windows/builtin/msexchange/win_exchange_transportagent_failed.yml"
+      }
+    },
+    {
+      "id": "09570ae5-889e-43ea-aac0-0e1221fb3d95",
+      "title": "Remove Exported Mailbox from Exchange Webserver",
+      "status": "test",
+      "description": "Detects removal of an exported Exchange mailbox which could be to cover tracks from ProxyShell exploit",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1070"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "msexchange-management"
+      },
+      "detection": {
+        "selections": {
+          "keywords": {
+            "type": "field_match",
+            "matchers": {
+              "__all": {
+                "field": "",
+                "value": [
+                  "Remove-MailboxExportRequest",
+                  " -Identity ",
+                  " -Confirm \"False\""
+                ],
+                "modifiers": [
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "keywords",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "keywords"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1070"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Christian Burkard (Nextron Systems)",
+        "date": "2021-08-27",
+        "modified": "2023-01-23",
+        "references": [
+          "https://github.com/rapid7/metasploit-framework/blob/1416b5776d963f21b7b5b45d19f3e961201e0aed/modules/exploits/windows/http/exchange_proxyshell_rce.rb#L430"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/msexchange/win_exchange_proxyshell_remove_mailbox_export.yml"
+      }
+    },
+    {
+      "id": "550d3350-bb8a-4ff3-9533-2ba533f4a1c0",
+      "title": "ProxyLogon MSExchange OabVirtualDirectory",
+      "status": "test",
+      "description": "Detects specific patterns found after a successful ProxyLogon exploitation in relation to a Commandlet invocation of Set-OabVirtualDirectory",
+      "level": "critical",
+      "tags": [
+        "attack.t1587.001",
+        "attack.resource-development"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "msexchange-management"
+      },
+      "detection": {
+        "selections": {
+          "keywords_cmdlet": {
+            "type": "field_match",
+            "matchers": {
+              "__all": {
+                "field": "",
+                "value": [
+                  "OabVirtualDirectory",
+                  " -ExternalUrl "
+                ],
+                "modifiers": [
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "keywords_params": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "eval(request"
+              },
+              {
+                "type": "literal",
+                "value": "http://f/<script"
+              },
+              {
+                "type": "literal",
+                "value": "\"unsafe\"};"
+              },
+              {
+                "type": "literal",
+                "value": "function Page_Load()"
+              }
+            ]
+          }
+        },
+        "filters": {},
+        "condition": "keywords_cmdlet and keywords_params",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "keywords_cmdlet"
+            },
+            {
+              "type": "ref",
+              "value": "keywords_params"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1587.001"
+        ],
+        "tactics": [
+          "resource_development"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2021-08-09",
+        "modified": "2023-01-23",
+        "references": [
+          "https://bi-zone.medium.com/hunting-down-ms-exchange-attacks-part-1-proxylogon-cve-2021-26855-26858-27065-26857-6e885c5f197c"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/msexchange/win_exchange_proxylogon_oabvirtualdir.yml"
+      }
+    },
+    {
+      "id": "516376b4-05cd-4122-bae0-ad7641c38d48",
+      "title": "Mailbox Export to Exchange Webserver",
+      "status": "test",
+      "description": "Detects a successful export of an Exchange mailbox to untypical directory or with aspx name suffix which can be used to place a webshell or the needed role assignment for it",
+      "level": "critical",
+      "tags": [
+        "attack.persistence",
+        "attack.t1505.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "msexchange-management"
+      },
+      "detection": {
+        "selections": {
+          "export_command": {
+            "type": "field_match",
+            "matchers": {
+              "__all": {
+                "field": "",
+                "value": [
+                  "New-MailboxExportRequest",
+                  " -Mailbox "
+                ],
+                "modifiers": [
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "export_params": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "-FilePath \"\\\\\\\\"
+              },
+              {
+                "type": "literal",
+                "value": ".aspx"
+              }
+            ]
+          },
+          "role_assignment": {
+            "type": "field_match",
+            "matchers": {
+              "__all": {
+                "field": "",
+                "value": [
+                  "New-ManagementRoleAssignment",
+                  " -Role \"Mailbox Import Export\"",
+                  " -User "
+                ],
+                "modifiers": [
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "(export_command and export_params) or role_assignment",
+        "condition_parsed": {
+          "op": "or",
+          "operands": [
+            "(export_command and export_params)",
+            "role_assignment"
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1505.003"
+        ],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Rich Warren, Christian Burkard (Nextron Systems)",
+        "date": "2021-08-09",
+        "modified": "2023-04-30",
+        "references": [
+          "https://blog.orange.tw/2021/08/proxylogon-a-new-attack-surface-on-ms-exchange-part-1.html"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/msexchange/win_exchange_proxyshell_mailbox_export.yml"
+      }
+    }
+  ]
+}

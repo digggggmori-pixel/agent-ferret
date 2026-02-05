@@ -1,0 +1,1549 @@
+{
+  "metadata": {
+    "logsource": "windows_create_remote_thread",
+    "rule_count": 11,
+    "compiled_at": "2026-02-04T12:28:36.361996",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "77564cc2-7382-438b-a7f6-395c2ae53b9a",
+      "title": "Remote Thread Created In KeePass.EXE",
+      "status": "test",
+      "description": "Detects remote thread creation in \"KeePass.exe\" which could indicates potential password dumping activity",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1555.005"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\KeePass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1555.005"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Timon Hackenjos",
+        "date": "2022-04-22",
+        "modified": "2023-05-05",
+        "references": [
+          "https://www.cisa.gov/uscert/ncas/alerts/aa20-259a",
+          "https://github.com/denandz/KeeFarce",
+          "https://github.com/GhostPack/KeeThief"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_keepass.yml"
+      }
+    },
+    {
+      "id": "c0aac16a-b1e7-4330-bab0-3c27bb4987c7",
+      "title": "Remote Thread Creation In Mstsc.Exe From Suspicious Location",
+      "status": "test",
+      "description": "Detects remote thread creation in the \"mstsc.exe\" process by a process located in a potentially suspicious location.\nThis technique is often used by attackers in order to hook some APIs used by DLLs loaded by \"mstsc.exe\" during RDP authentications in order to steal credentials.\n",
+      "level": "high",
+      "tags": [
+        "attack.credential-access"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\mstsc.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": [
+                  ":\\Temp\\",
+                  ":\\Users\\Public\\",
+                  ":\\Windows\\PerfLogs\\",
+                  ":\\Windows\\Tasks\\",
+                  ":\\Windows\\Temp\\",
+                  "\\AppData\\Local\\Temp\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-07-28",
+        "modified": "2024-01-22",
+        "references": [
+          "https://github.com/S12cybersecurity/RDPCredentialStealer/blob/1b8947cdd065a06c1b62e80967d3c7af895fcfed/APIHookInjectorBin/APIHookInjectorBin/Inject.h#L25"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_mstsc_susp_location.yml"
+      }
+    },
+    {
+      "id": "6309645e-122d-4c5b-bb2b-22e4f9c2fa42",
+      "title": "HackTool - Potential CobaltStrike Process Injection",
+      "status": "test",
+      "description": "Detects a potential remote threat creation with certain characteristics which are typical for Cobalt Strike beacons",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.defense-evasion",
+        "attack.t1055.001"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "StartAddress__endswith": {
+                "field": "StartAddress",
+                "value": [
+                  "0B80",
+                  "0C7C",
+                  "0C88"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1055.001"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Olaf Hartong, Florian Roth (Nextron Systems), Aleksey Potapov, oscd.community",
+        "date": "2018-11-30",
+        "modified": "2023-05-05",
+        "references": [
+          "https://medium.com/@olafhartong/cobalt-strike-remote-threads-detection-206372d11d0f",
+          "https://blog.cobaltstrike.com/2018/04/09/cobalt-strike-3-11-the-snake-that-eats-its-tail/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_hktl_cobaltstrike.yml"
+      }
+    },
+    {
+      "id": "c15e99a3-c474-48ab-b9a7-84549a7a9d16",
+      "title": "Remote Thread Creation Ttdinject.exe Proxy",
+      "status": "test",
+      "description": "Detects a remote thread creation of Ttdinject.exe used as proxy",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1127"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\ttdinject.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1127"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2022-05-16",
+        "modified": "2022-06-02",
+        "references": [
+          "https://lolbas-project.github.io/lolbas/Binaries/Ttdinject/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_ttdinjec.yml"
+      }
+    },
+    {
+      "id": "2e4e488a-6164-4811-9ea1-f960c7359c40",
+      "title": "HackTool - CACTUSTORCH Remote Thread Creation",
+      "status": "test",
+      "description": "Detects remote thread creation from CACTUSTORCH as described in references.",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.defense-evasion",
+        "attack.execution",
+        "attack.t1055.012",
+        "attack.t1059.005",
+        "attack.t1059.007",
+        "attack.t1218.005"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\System32\\cscript.exe",
+                  "\\System32\\wscript.exe",
+                  "\\System32\\mshta.exe",
+                  "\\winword.exe",
+                  "\\excel.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": "\\SysWOW64\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "StartModule": {
+                "field": "StartModule",
+                "value": null,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1055.012",
+          "T1059.005",
+          "T1059.007",
+          "T1218.005"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "@SBousseaden (detection), Thomas Patzke (rule)",
+        "date": "2019-02-01",
+        "modified": "2023-05-05",
+        "references": [
+          "https://twitter.com/SBousseaden/status/1090588499517079552",
+          "https://github.com/mdsecactivebreach/CACTUSTORCH"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_hktl_cactustorch.yml"
+      }
+    },
+    {
+      "id": "99b97608-3e21-4bfe-8217-2a127c396a0e",
+      "title": "Remote Thread Creation Via PowerShell In Uncommon Target",
+      "status": "test",
+      "description": "Detects the creation of a remote thread from a Powershell process in an uncommon target process",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.execution",
+        "attack.t1218.011",
+        "attack.t1059.001"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\powershell.exe",
+                  "\\pwsh.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": [
+                  "\\rundll32.exe",
+                  "\\regsvr32.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1218.011",
+          "T1059.001"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2018-06-25",
+        "modified": "2023-11-10",
+        "references": [
+          "https://www.fireeye.com/blog/threat-research/2018/06/bring-your-own-land-novel-red-teaming-technique.html"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_powershell_susp_targets.yml"
+      }
+    },
+    {
+      "id": "f239b326-2f41-4d6b-9dfa-c846a60ef505",
+      "title": "Password Dumper Remote Thread in LSASS",
+      "status": "stable",
+      "description": "Detects password dumper activity by monitoring remote thread creation EventID 8 in combination with the lsass.exe process as TargetImage.\nThe process in field Process is the malicious program. A single execution can lead to hundreds of events.\n",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.s0005",
+        "attack.t1003.001"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "StartModule": {
+                "field": "StartModule",
+                "value": "",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Thomas Patzke",
+        "date": "2017-02-19",
+        "modified": "2021-06-21",
+        "references": [
+          "https://jpcertcc.github.io/ToolAnalysisResultSheet/details/WCE.htm"
+        ],
+        "falsepositives": [
+          "Antivirus products"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_susp_password_dumper_lsass.yml"
+      }
+    },
+    {
+      "id": "fb656378-f909-47c1-8747-278bf09f4f4f",
+      "title": "Potential Credential Dumping Attempt Via PowerShell Remote Thread",
+      "status": "test",
+      "description": "Detects remote thread creation by PowerShell processes into \"lsass.exe\"",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\powershell.exe",
+                  "\\pwsh.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\lsass.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "oscd.community, Natalia Shornikova",
+        "date": "2020-10-06",
+        "modified": "2022-12-18",
+        "references": [
+          "https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_powershell_lsass.yml"
+      }
+    },
+    {
+      "id": "a1a144b7-5c9b-4853-a559-2172be8d4a03",
+      "title": "Remote Thread Creation In Uncommon Target Image",
+      "status": "test",
+      "description": "Detects uncommon target processes for remote thread creation",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.privilege-escalation",
+        "attack.t1055.003"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": [
+                  "\\calc.exe",
+                  "\\calculator.exe",
+                  "\\mspaint.exe",
+                  "\\notepad.exe",
+                  "\\ping.exe",
+                  "\\sethc.exe",
+                  "\\spoolsv.exe",
+                  "\\wordpad.exe",
+                  "\\write.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_csrss": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\System32\\csrss.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_notepad": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": [
+                  "C:\\Windows\\System32\\explorer.exe",
+                  "C:\\Windows\\System32\\OpenWith.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\System32\\notepad.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_sethc": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\System32\\AtBroker.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\System32\\Sethc.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_aurora_1": {
+            "type": "field_match",
+            "matchers": {
+              "StartFunction": {
+                "field": "StartFunction",
+                "value": "EtwpNotificationThread",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_aurora_2": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": "unknown process",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_vmtoolsd": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Program Files\\VMware\\VMware Tools\\vmtoolsd.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "StartFunction": {
+                "field": "StartFunction",
+                "value": "GetCommandLineW",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Windows\\System32\\notepad.exe",
+                  "C:\\Windows\\System32\\spoolsv.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_xerox_pjems": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Program Files\\Xerox\\XeroxPrintExperience\\CommonFiles\\XeroxPrintJobEventManagerService.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "StartFunction": {
+                "field": "StartFunction",
+                "value": "LoadLibraryW",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\System32\\spoolsv.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1055.003"
+        ],
+        "tactics": [
+          "defense_evasion",
+          "privilege_escalation"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2022-03-16",
+        "modified": "2025-07-04",
+        "references": [
+          "https://web.archive.org/web/20220319032520/https://blog.redbluepurple.io/offensive-research/bypassing-injection-detection"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_susp_uncommon_target_image.yml"
+      }
+    },
+    {
+      "id": "66d31e5f-52d6-40a4-9615-002d3789a119",
+      "title": "Remote Thread Creation By Uncommon Source Image",
+      "status": "test",
+      "description": "Detects uncommon processes creating remote threads.",
+      "level": "medium",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.defense-evasion",
+        "attack.t1055"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\explorer.exe",
+                  "\\iexplore.exe",
+                  "\\msiexec.exe",
+                  "\\powerpnt.exe",
+                  "\\schtasks.exe",
+                  "\\winlogon.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_winlogon_1": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\System32\\winlogon.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Windows\\System32\\services.exe",
+                  "C:\\Windows\\System32\\wininit.exe",
+                  "C:\\Windows\\System32\\csrss.exe",
+                  "C:\\Windows\\System32\\LogonUI.exe",
+                  "C:\\Windows\\System32\\wlrmdr.exe",
+                  "C:\\Windows\\System32\\AtBroker.exe",
+                  "C:\\Windows\\System32\\dwm.exe",
+                  "C:\\Windows\\System32\\fontdrvhost.exe",
+                  "C:\\Windows\\System32\\userinit.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_winlogon_2": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\System32\\winlogon.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetParentProcessId": {
+                "field": "TargetParentProcessId",
+                "value": 4,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_schtasks_conhost": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": [
+                  "C:\\Windows\\System32\\schtasks.exe",
+                  "C:\\Windows\\SysWOW64\\schtasks.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\System32\\conhost.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_explorer": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\explorer.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__startswith": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Program Files (x86)\\",
+                  "C:\\Program Files\\",
+                  "C:\\Windows\\System32\\",
+                  "C:\\Windows\\SysWOW64\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_system": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "System",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_msiexec_1": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\msiexec.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": [
+                  "\\AppData\\Local\\",
+                  "C:\\Program Files (x86)\\",
+                  "C:\\Program Files\\",
+                  "C:\\Windows\\Microsoft.NET\\Framework64\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_msiexec_2": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\msiexec.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Windows\\System32\\msiexec.exe",
+                  "C:\\Windows\\SysWOW64\\msiexec.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_iexplore": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Program Files\\Internet Explorer\\iexplore.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Program Files (x86)\\Internet Explorer\\iexplore.exe",
+                  "C:\\Windows\\System32\\rundll32.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_powerpnt": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\POWERPNT.EXE",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__contains": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Program Files\\Microsoft Office\\",
+                  "C:\\Program Files (x86)\\Microsoft Office\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_aurora_smartconsole1": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Program Files\\internet explorer\\iexplore.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceCommandLine__contains_all": {
+                "field": "SourceCommandLine",
+                "value": [
+                  "https://",
+                  ".checkpoint.com/documents/",
+                  "SmartConsole_OLH/",
+                  "default.htm#cshid="
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_aurora_smartconsole2": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Program Files\\internet explorer\\iexplore.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceParentImage__startswith": {
+                "field": "SourceParentImage",
+                "value": [
+                  "C:\\Program Files\\",
+                  "C:\\Program Files (x86)\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "SourceParentImage__contains_all": {
+                "field": "SourceParentImage",
+                "value": [
+                  "\\CheckPoint\\SmartConsole\\",
+                  "\\SmartConsole.exe"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_powerpnt": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__contains": {
+                "field": "SourceImage",
+                "value": "\\Microsoft Office\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\POWERPNT.EXE",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\System32\\csrss.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_null": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": null,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_empty": {
+            "type": "field_match",
+            "matchers": {
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_onedrive": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\explorer.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_aurora": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\explorer.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\aurora-dashboard.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_officesetup": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\explorer.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__endswith": {
+                "field": "TargetImage",
+                "value": "\\OfficeSetup.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1055"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Perez Diego (@darkquassar), oscd.community",
+        "date": "2019-10-27",
+        "modified": "2025-07-08",
+        "references": [
+          "Personal research, statistical analysis",
+          "https://lolbas-project.github.io"
+        ],
+        "falsepositives": [
+          "This rule is best put in testing first in order to create a baseline that reflects the data in your environment."
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_susp_uncommon_source_image.yml"
+      }
+    },
+    {
+      "id": "02d1d718-dd13-41af-989d-ea85c7fab93f",
+      "title": "Rare Remote Thread Creation By Uncommon Source Image",
+      "status": "test",
+      "description": "Detects uncommon processes creating remote threads.",
+      "level": "high",
+      "tags": [
+        "attack.privilege-escalation",
+        "attack.defense-evasion",
+        "attack.t1055"
+      ],
+      "logsource": {
+        "category": "create_remote_thread",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": [
+                  "\\bash.exe",
+                  "\\cscript.exe",
+                  "\\cvtres.exe",
+                  "\\defrag.exe",
+                  "\\dialer.exe",
+                  "\\dnx.exe",
+                  "\\esentutl.exe",
+                  "\\excel.exe",
+                  "\\expand.exe",
+                  "\\find.exe",
+                  "\\findstr.exe",
+                  "\\forfiles.exe",
+                  "\\gpupdate.exe",
+                  "\\hh.exe",
+                  "\\installutil.exe",
+                  "\\lync.exe",
+                  "\\makecab.exe",
+                  "\\mDNSResponder.exe",
+                  "\\monitoringhost.exe",
+                  "\\msbuild.exe",
+                  "\\mshta.exe",
+                  "\\mspaint.exe",
+                  "\\outlook.exe",
+                  "\\ping.exe",
+                  "\\provtool.exe",
+                  "\\python.exe",
+                  "\\regsvr32.exe",
+                  "\\robocopy.exe",
+                  "\\runonce.exe",
+                  "\\sapcimc.exe",
+                  "\\smartscreen.exe",
+                  "\\spoolsv.exe",
+                  "\\tstheme.exe",
+                  "\\userinit.exe",
+                  "\\vssadmin.exe",
+                  "\\vssvc.exe",
+                  "\\w3wp.exe",
+                  "\\winscp.exe",
+                  "\\winword.exe",
+                  "\\wmic.exe",
+                  "\\wscript.exe"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_conhost": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": [
+                  "C:\\Windows\\System32\\Defrag.exe",
+                  "C:\\Windows\\System32\\makecab.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\System32\\conhost.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_provtol_svchost": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\System32\\provtool.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\System32\\svchost.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_provtool_system": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\System32\\provtool.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "System",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_userinit": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage": {
+                "field": "SourceImage",
+                "value": "C:\\Windows\\System32\\userinit.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "C:\\Windows\\explorer.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_winword": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\WINWORD.EXE",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage__startswith": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Program Files (x86)\\",
+                  "C:\\Program Files\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "filter_main_ms_office": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__startswith": {
+                "field": "SourceImage",
+                "value": [
+                  "C:\\Program Files\\Microsoft Office\\",
+                  "C:\\Program Files (x86)\\Microsoft Office\\"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": "System",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_explorer_vmtools": {
+            "type": "field_match",
+            "matchers": {
+              "SourceImage__endswith": {
+                "field": "SourceImage",
+                "value": "\\SysWOW64\\explorer.exe",
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "TargetImage": {
+                "field": "TargetImage",
+                "value": [
+                  "C:\\Program Files (x86)\\VMware\\VMware Tools\\vmtoolsd.exe",
+                  "C:\\Program Files\\VMware\\VMware Tools\\vmtoolsd.exe"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_* and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1055"
+        ],
+        "tactics": [
+          "privilege_escalation",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Perez Diego (@darkquassar), oscd.community",
+        "date": "2019-10-27",
+        "modified": "2025-12-08",
+        "references": [
+          "Personal research, statistical analysis",
+          "https://lolbas-project.github.io"
+        ],
+        "falsepositives": [
+          "This rule is best put in testing first in order to create a baseline that reflects the data in your environment."
+        ],
+        "source_file": "sigma_rules/windows/create_remote_thread/create_remote_thread_win_susp_relevant_source_image.yml"
+      }
+    }
+  ]
+}

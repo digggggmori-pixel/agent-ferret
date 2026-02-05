@@ -1,0 +1,491 @@
+{
+  "metadata": {
+    "logsource": "windows_dns_client",
+    "rule_count": 6,
+    "compiled_at": "2026-02-04T12:28:36.365206",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "0d18728b-f5bf-4381-9dcf-915539fff6c2",
+      "title": "Suspicious Cobalt Strike DNS Beaconing - DNS Client",
+      "status": "test",
+      "description": "Detects a program that invoked suspicious DNS queries known from Cobalt Strike beacons",
+      "level": "critical",
+      "tags": [
+        "attack.t1071.004",
+        "attack.command-and-control"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "dns-client"
+      },
+      "detection": {
+        "selections": {
+          "selection_eid": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3008,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_query_1": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__startswith": {
+                "field": "QueryName",
+                "value": [
+                  "aaa.stage.",
+                  "post.1"
+                ],
+                "modifiers": [
+                  "startswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          },
+          "selection_query_2": {
+            "type": "field_match",
+            "matchers": {
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": ".stage.123456.",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection_eid and 1 of selection_query_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection_eid"
+            },
+            {
+              "type": "ref",
+              "value": "1 of selection_query_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1071.004"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-01-16",
+        "modified": "",
+        "references": [
+          "https://www.icebrg.io/blog/footprints-of-fin7-tracking-actor-patterns",
+          "https://www.sekoia.io/en/hunting-and-detecting-cobalt-strike/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/dns_client/win_dns_client_mal_cobaltstrike.yml"
+      }
+    },
+    {
+      "id": "8384bd26-bde6-4da9-8e5d-4174a7a47ca2",
+      "title": "Query Tor Onion Address - DNS Client",
+      "status": "test",
+      "description": "Detects DNS resolution of an .onion address related to Tor routing networks",
+      "level": "high",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1090.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "dns-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3008,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "QueryName__endswith": {
+                "field": "QueryName",
+                "value": [
+                  ".hiddenservice.net",
+                  ".onion.ca",
+                  ".onion.cab",
+                  ".onion.casa",
+                  ".onion.city",
+                  ".onion.direct",
+                  ".onion.dog",
+                  ".onion.glass",
+                  ".onion.gq",
+                  ".onion.guide",
+                  ".onion.in.net",
+                  ".onion.ink",
+                  ".onion.it",
+                  ".onion.link",
+                  ".onion.lt",
+                  ".onion.lu",
+                  ".onion.ly",
+                  ".onion.mn",
+                  ".onion.network",
+                  ".onion.nu",
+                  ".onion.pet",
+                  ".onion.plus",
+                  ".onion.pt",
+                  ".onion.pw",
+                  ".onion.rip",
+                  ".onion.sh",
+                  ".onion.si",
+                  ".onion.to",
+                  ".onion.top",
+                  ".onion.ws",
+                  ".onion",
+                  ".s1.tor-gateways.de",
+                  ".s2.tor-gateways.de",
+                  ".s3.tor-gateways.de",
+                  ".s4.tor-gateways.de",
+                  ".s5.tor-gateways.de",
+                  ".t2w.pw",
+                  ".tor2web.ae.org",
+                  ".tor2web.blutmagie.de",
+                  ".tor2web.com",
+                  ".tor2web.fi",
+                  ".tor2web.io",
+                  ".tor2web.org",
+                  ".tor2web.xyz",
+                  ".torlink.co"
+                ],
+                "modifiers": [
+                  "endswith"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1090.003"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-02-20",
+        "modified": "2025-09-12",
+        "references": [
+          "https://www.logpoint.com/en/blog/detecting-tor-use-with-logpoint/",
+          "https://github.com/Azure/Azure-Sentinel/blob/f99542b94afe0ad2f19a82cc08262e7ac8e1428e/Detections/ASimDNS/imDNS_TorProxies.yaml"
+        ],
+        "falsepositives": [
+          "Unlikely"
+        ],
+        "source_file": "sigma_rules/windows/builtin/dns_client/win_dns_client_tor_onion.yml"
+      }
+    },
+    {
+      "id": "8b69fd42-9dad-4674-abef-7fdef43ef92a",
+      "title": "DNS Query To Put.io - DNS Client",
+      "status": "test",
+      "description": "Detects DNS queries for subdomains related to \"Put.io\" sharing website.",
+      "level": "medium",
+      "tags": [
+        "attack.command-and-control"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "dns-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3008,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": [
+                  "api.put.io",
+                  "upload.put.io"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Omar Khaled (@beacon_exe)",
+        "date": "2024-08-23",
+        "modified": "",
+        "references": [
+          "https://darkatlas.io/blog/medusa-ransomware-group-opsec-failure"
+        ],
+        "falsepositives": [
+          "Legitimate DNS queries and usage of Put.io"
+        ],
+        "source_file": "sigma_rules/windows/builtin/dns_client/win_dns_client_put_io.yml"
+      }
+    },
+    {
+      "id": "29f171d7-aa47-42c7-9c7b-3c87938164d9",
+      "title": "DNS Query for Anonfiles.com Domain - DNS Client",
+      "status": "test",
+      "description": "Detects DNS queries for anonfiles.com, which is an anonymous file upload platform often used for malicious purposes",
+      "level": "high",
+      "tags": [
+        "attack.exfiltration",
+        "attack.t1567.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "dns-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3008,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": ".anonfiles.com",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1567.002"
+        ],
+        "tactics": [
+          "exfiltration"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-01-16",
+        "modified": "",
+        "references": [
+          "https://www.trendmicro.com/vinfo/us/security/news/ransomware-spotlight/ransomware-spotlight-blackbyte"
+        ],
+        "falsepositives": [
+          "Rare legitimate access to anonfiles.com"
+        ],
+        "source_file": "sigma_rules/windows/builtin/dns_client/win_dns_client_anonymfiles_com.yml"
+      }
+    },
+    {
+      "id": "090ffaad-c01a-4879-850c-6d57da98452d",
+      "title": "DNS Query To Ufile.io - DNS Client",
+      "status": "test",
+      "description": "Detects DNS queries to \"ufile.io\", which was seen abused by malware and threat actors as a method for data exfiltration",
+      "level": "low",
+      "tags": [
+        "attack.exfiltration",
+        "attack.t1567.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "dns-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3008,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": "ufile.io",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1567.002"
+        ],
+        "tactics": [
+          "exfiltration"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-01-16",
+        "modified": "2023-09-18",
+        "references": [
+          "https://thedfirreport.com/2021/12/13/diavol-ransomware/"
+        ],
+        "falsepositives": [
+          "DNS queries for \"ufile\" are not malicious by nature necessarily. Investigate the source to determine the necessary actions to take"
+        ],
+        "source_file": "sigma_rules/windows/builtin/dns_client/win_dns_client_ufile_io.yml"
+      }
+    },
+    {
+      "id": "66474410-b883-415f-9f8d-75345a0a66a6",
+      "title": "DNS Query To MEGA Hosting Website - DNS Client",
+      "status": "test",
+      "description": "Detects DNS queries for subdomains related to MEGA sharing website",
+      "level": "medium",
+      "tags": [
+        "attack.exfiltration",
+        "attack.t1567.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "dns-client"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 3008,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "QueryName__contains": {
+                "field": "QueryName",
+                "value": "userstorage.mega.co.nz",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1567.002"
+        ],
+        "tactics": [
+          "exfiltration"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2023-01-16",
+        "modified": "",
+        "references": [
+          "https://research.nccgroup.com/2021/05/27/detecting-rclone-an-effective-tool-for-exfiltration/"
+        ],
+        "falsepositives": [
+          "Legitimate DNS queries and usage of Mega"
+        ],
+        "source_file": "sigma_rules/windows/builtin/dns_client/win_dns_client_mega_nz.yml"
+      }
+    }
+  ]
+}

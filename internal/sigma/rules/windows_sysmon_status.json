@@ -1,0 +1,100 @@
+{
+  "metadata": {
+    "logsource": "windows_sysmon_status",
+    "rule_count": 1,
+    "compiled_at": "2026-02-04T12:28:36.563205",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "1f2b5353-573f-4880-8e33-7d04dcf97744",
+      "title": "Sysmon Configuration Modification",
+      "status": "test",
+      "description": "Detects when an attacker tries to hide from Sysmon by disabling or stopping it",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1564"
+      ],
+      "logsource": {
+        "category": "sysmon_status",
+        "product": "windows",
+        "service": null
+      },
+      "detection": {
+        "selections": {
+          "selection_stop": {
+            "type": "field_match",
+            "matchers": {
+              "State": {
+                "field": "State",
+                "value": "Stopped",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_conf": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "Sysmon config state changed"
+              }
+            ]
+          }
+        },
+        "filters": {
+          "filter": {
+            "type": "field_match",
+            "matchers": {
+              "State": {
+                "field": "State",
+                "value": "Started",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "1 of selection_* and not filter",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "1 of selection_*"
+            },
+            {
+              "type": "not",
+              "value": "filter"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1564"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2021-06-04",
+        "modified": "2022-08-02",
+        "references": [
+          "https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md",
+          "https://talesfrominfosec.blogspot.com/2017/12/killing-sysmon-silently.html"
+        ],
+        "falsepositives": [
+          "Legitimate administrative action"
+        ],
+        "source_file": "sigma_rules/windows/sysmon/sysmon_config_modification_status.yml"
+      }
+    }
+  ]
+}

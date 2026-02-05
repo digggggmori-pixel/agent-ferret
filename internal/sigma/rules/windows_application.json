@@ -1,0 +1,2194 @@
+{
+  "metadata": {
+    "logsource": "windows_application",
+    "rule_count": 23,
+    "compiled_at": "2026-02-04T12:28:36.355232",
+    "version": "1.1"
+  },
+  "rules": [
+    {
+      "id": "545a5da6-f103-4919-a519-e9aec1026ee4",
+      "title": "Microsoft Malware Protection Engine Crash",
+      "status": "test",
+      "description": "This rule detects a suspicious crash of the Microsoft Malware Protection Engine",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1211",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Application Error",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 1000,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "MsMpEng.exe",
+                  "mpengine.dll"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1211",
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2017-05-09",
+        "modified": "2023-04-14",
+        "references": [
+          "https://bugs.chromium.org/p/project-zero/issues/detail?id=1252&desc=5",
+          "https://technet.microsoft.com/en-us/library/security/4022344"
+        ],
+        "falsepositives": [
+          "MsMpEng might crash if the \"C:\\\" partition is full"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/application_error/win_application_error_msmpeng_crash.yml"
+      }
+    },
+    {
+      "id": "a18e0862-127b-43ca-be12-1a542c75c7c5",
+      "title": "LSASS Process Crashed - Application",
+      "status": "experimental",
+      "description": "Detects Windows error reporting events where the process that crashed is LSASS (Local Security Authority Subsystem Service).\nThis could be the cause of a provoked crash by techniques such as Lsass-Shtinkering to dump credentials.\n",
+      "level": "high",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Application Error",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 1000,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "AppName": {
+                "field": "AppName",
+                "value": "lsass.exe",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "ExceptionCode": {
+                "field": "ExceptionCode",
+                "value": "c0000001",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.001"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-12-07",
+        "modified": "2025-12-03",
+        "references": [
+          "https://github.com/deepinstinct/Lsass-Shtinkering",
+          "https://media.defcon.org/DEF%20CON%2030/DEF%20CON%2030%20presentations/Asaf%20Gilboa%20-%20LSASS%20Shtinkering%20Abusing%20Windows%20Error%20Reporting%20to%20Dump%20LSASS.pdf",
+          "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+        ],
+        "falsepositives": [
+          "Rare legitimate crashing of the lsass process"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/application_error/win_application_error_lsass_crash.yml"
+      }
+    },
+    {
+      "id": "48d91a3a-2363-43ba-a456-ca71ac3da5c2",
+      "title": "Audit CVE Event",
+      "status": "test",
+      "description": "Detects events generated by user-mode applications when they call the CveEventWrite API when a known vulnerability is trying to be exploited.\nMS started using this log in Jan. 2020 with CVE-2020-0601 (a Windows CryptoAPI vulnerability.\nUnfortunately, that is about the only instance of CVEs being written to this log.\n",
+      "level": "critical",
+      "tags": [
+        "attack.execution",
+        "attack.t1203",
+        "attack.privilege-escalation",
+        "attack.t1068",
+        "attack.defense-evasion",
+        "attack.t1211",
+        "attack.credential-access",
+        "attack.t1212",
+        "attack.lateral-movement",
+        "attack.t1210",
+        "attack.impact",
+        "attack.t1499.004"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": [
+                  "Microsoft-Windows-Audit-CVE",
+                  "Audit-CVE"
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 1,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1203",
+          "T1068",
+          "T1211",
+          "T1212",
+          "T1210",
+          "T1499.004"
+        ],
+        "tactics": [
+          "execution",
+          "privilege_escalation",
+          "defense_evasion",
+          "credential_access",
+          "lateral_movement",
+          "impact"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Zach Mathis",
+        "date": "2020-01-15",
+        "modified": "2022-10-22",
+        "references": [
+          "https://twitter.com/VM_vivisector/status/1217190929330655232",
+          "https://twitter.com/DidierStevens/status/1217533958096924676",
+          "https://twitter.com/FlemmingRiis/status/1217147415482060800",
+          "https://www.youtube.com/watch?v=ebmW42YYveI",
+          "https://nullsec.us/windows-event-log-audit-cve/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/microsoft-windows_audit_cve/win_audit_cve.yml"
+      }
+    },
+    {
+      "id": "78bc5783-81d9-4d73-ac97-59f6db4f72a8",
+      "title": "Relevant Anti-Virus Signature Keywords In Application Log",
+      "status": "test",
+      "description": "Detects potentially highly relevant antivirus events in the application log based on known virus signature names and malware keywords.\n",
+      "level": "high",
+      "tags": [
+        "attack.resource-development",
+        "attack.t1588"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "keywords": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "Adfind"
+              },
+              {
+                "type": "literal",
+                "value": "ASP/BackDoor "
+              },
+              {
+                "type": "literal",
+                "value": "ATK/"
+              },
+              {
+                "type": "literal",
+                "value": "Backdoor.ASP"
+              },
+              {
+                "type": "literal",
+                "value": "Backdoor.Cobalt"
+              },
+              {
+                "type": "literal",
+                "value": "Backdoor.JSP"
+              },
+              {
+                "type": "literal",
+                "value": "Backdoor.PHP"
+              },
+              {
+                "type": "literal",
+                "value": "Blackworm"
+              },
+              {
+                "type": "literal",
+                "value": "Brutel"
+              },
+              {
+                "type": "literal",
+                "value": "BruteR"
+              },
+              {
+                "type": "literal",
+                "value": "Chopper"
+              },
+              {
+                "type": "literal",
+                "value": "Cobalt"
+              },
+              {
+                "type": "literal",
+                "value": "COBEACON"
+              },
+              {
+                "type": "literal",
+                "value": "Cometer"
+              },
+              {
+                "type": "literal",
+                "value": "CRYPTES"
+              },
+              {
+                "type": "literal",
+                "value": "Cryptor"
+              },
+              {
+                "type": "literal",
+                "value": "Destructor"
+              },
+              {
+                "type": "literal",
+                "value": "DumpCreds"
+              },
+              {
+                "type": "literal",
+                "value": "Exploit.Script.CVE"
+              },
+              {
+                "type": "literal",
+                "value": "FastReverseProxy"
+              },
+              {
+                "type": "literal",
+                "value": "Filecoder"
+              },
+              {
+                "type": "literal",
+                "value": "GrandCrab "
+              },
+              {
+                "type": "literal",
+                "value": "HackTool"
+              },
+              {
+                "type": "literal",
+                "value": "HKTL"
+              },
+              {
+                "type": "literal",
+                "value": "HTool-"
+              },
+              {
+                "type": "literal",
+                "value": "/HTool"
+              },
+              {
+                "type": "literal",
+                "value": ".HTool"
+              },
+              {
+                "type": "literal",
+                "value": "IISExchgSpawnCMD"
+              },
+              {
+                "type": "literal",
+                "value": "Impacket"
+              },
+              {
+                "type": "literal",
+                "value": "JSP/BackDoor "
+              },
+              {
+                "type": "literal",
+                "value": "Keylogger"
+              },
+              {
+                "type": "literal",
+                "value": "Koadic"
+              },
+              {
+                "type": "literal",
+                "value": "Krypt"
+              },
+              {
+                "type": "literal",
+                "value": "Lazagne"
+              },
+              {
+                "type": "literal",
+                "value": "Metasploit"
+              },
+              {
+                "type": "literal",
+                "value": "Meterpreter"
+              },
+              {
+                "type": "literal",
+                "value": "MeteTool"
+              },
+              {
+                "type": "literal",
+                "value": "mikatz"
+              },
+              {
+                "type": "literal",
+                "value": "Mimikatz"
+              },
+              {
+                "type": "literal",
+                "value": "Mpreter"
+              },
+              {
+                "type": "literal",
+                "value": "MsfShell"
+              },
+              {
+                "type": "literal",
+                "value": "Nighthawk"
+              },
+              {
+                "type": "literal",
+                "value": "Packed.Generic.347"
+              },
+              {
+                "type": "literal",
+                "value": "PentestPowerShell"
+              },
+              {
+                "type": "literal",
+                "value": "Phobos"
+              },
+              {
+                "type": "literal",
+                "value": "PHP/BackDoor "
+              },
+              {
+                "type": "literal",
+                "value": "Potato"
+              },
+              {
+                "type": "literal",
+                "value": "PowerSploit"
+              },
+              {
+                "type": "literal",
+                "value": "PowerSSH"
+              },
+              {
+                "type": "literal",
+                "value": "PshlSpy"
+              },
+              {
+                "type": "literal",
+                "value": "PSWTool"
+              },
+              {
+                "type": "literal",
+                "value": "PWCrack"
+              },
+              {
+                "type": "literal",
+                "value": "PWDump"
+              },
+              {
+                "type": "literal",
+                "value": "Ransom"
+              },
+              {
+                "type": "literal",
+                "value": "Rozena"
+              },
+              {
+                "type": "literal",
+                "value": "Ryzerlo"
+              },
+              {
+                "type": "literal",
+                "value": "Sbelt"
+              },
+              {
+                "type": "literal",
+                "value": "Seatbelt"
+              },
+              {
+                "type": "literal",
+                "value": "SecurityTool "
+              },
+              {
+                "type": "literal",
+                "value": "SharpDump"
+              },
+              {
+                "type": "literal",
+                "value": "Shellcode"
+              },
+              {
+                "type": "literal",
+                "value": "Sliver"
+              },
+              {
+                "type": "literal",
+                "value": "Splinter"
+              },
+              {
+                "type": "literal",
+                "value": "Swrort"
+              },
+              {
+                "type": "literal",
+                "value": "Tescrypt"
+              },
+              {
+                "type": "literal",
+                "value": "TeslaCrypt"
+              },
+              {
+                "type": "literal",
+                "value": "TurtleLoader"
+              },
+              {
+                "type": "literal",
+                "value": "Valyria"
+              },
+              {
+                "type": "literal",
+                "value": "Webshell"
+              }
+            ]
+          }
+        },
+        "filters": {
+          "filter_optional_generic": {
+            "type": "or_list",
+            "items": [
+              {
+                "type": "literal",
+                "value": "anti_ransomware_service.exe"
+              },
+              {
+                "type": "literal",
+                "value": "Anti-Ransomware"
+              },
+              {
+                "type": "literal",
+                "value": "Crack"
+              },
+              {
+                "type": "literal",
+                "value": "cyber-protect-service.exe"
+              },
+              {
+                "type": "literal",
+                "value": "encryptor"
+              },
+              {
+                "type": "literal",
+                "value": "Keygen"
+              }
+            ]
+          },
+          "filter_optional_information": {
+            "type": "field_match",
+            "matchers": {
+              "Level": {
+                "field": "Level",
+                "value": 4,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_optional_restartmanager": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-RestartManager",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "keywords and not 1 of filter_optional_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "keywords"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_optional_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1588"
+        ],
+        "tactics": [
+          "resource_development"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Arnim Rupp",
+        "date": "2017-02-19",
+        "modified": "2024-12-25",
+        "references": [
+          "https://www.virustotal.com/gui/file/13828b390d5f58b002e808c2c4f02fdd920e236cc8015480fa33b6c1a9300e31",
+          "https://www.virustotal.com/gui/file/15b57c1b68cd6ce3c161042e0f3be9f32d78151fe95461eedc59a79fc222c7ed",
+          "https://www.virustotal.com/gui/file/5092b2672b4cb87a8dd1c2e6047b487b95995ad8ed5e9fc217f46b8bfb1b8c01",
+          "https://www.nextron-systems.com/?s=antivirus"
+        ],
+        "falsepositives": [
+          "Some software piracy tools (key generators, cracks) are classified as hack tools"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/Other/win_av_relevant_match.yml"
+      }
+    },
+    {
+      "id": "b4c8da4a-1c12-46b0-8a2b-0a8521d03442",
+      "title": "Restricted Software Access By SRP",
+      "status": "test",
+      "description": "Detects restricted access to applications by the Software Restriction Policies (SRP) policy",
+      "level": "high",
+      "tags": [
+        "attack.lateral-movement",
+        "attack.execution",
+        "attack.defense-evasion",
+        "attack.t1072"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-SoftwareRestrictionPolicies",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  865,
+                  866,
+                  867,
+                  868,
+                  882
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1072"
+        ],
+        "tactics": [
+          "lateral_movement",
+          "execution",
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2023-01-12",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/windows-server/identity/software-restriction-policies/software-restriction-policies",
+          "https://github.com/nasbench/EVTX-ETW-Resources/blob/7a806a148b3d9d381193d4a80356016e6e8b1ee8/ETWEventsList/CSV/Windows11/22H2/W11_22H2_Pro_20220920_22621.382/Providers/Microsoft-Windows-AppXDeployment-Server.csv"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/microsoft_windows_software_restriction_policies/win_software_restriction_policies_block.yml"
+      }
+    },
+    {
+      "id": "87261fb2-69d0-42fe-b9de-88c6b5f65a43",
+      "title": "Atera Agent Installation",
+      "status": "test",
+      "description": "Detects successful installation of Atera Remote Monitoring & Management (RMM) agent as recently found to be used by Conti operators",
+      "level": "high",
+      "tags": [
+        "attack.command-and-control",
+        "attack.t1219.002"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 1033,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "MsiInstaller",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Message__contains": {
+                "field": "Message",
+                "value": "AteraAgent",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1219.002"
+        ],
+        "tactics": [
+          "command_and_control"
+        ]
+      },
+      "meta": {
+        "author": "Bhabesh Raj",
+        "date": "2021-09-01",
+        "modified": "2022-12-25",
+        "references": [
+          "https://www.advintel.io/post/secret-backdoor-behind-conti-ransomware-operation-introducing-atera-agent"
+        ],
+        "falsepositives": [
+          "Legitimate Atera agent installation"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/msiinstaller/win_software_atera_rmm_agent_install.yml"
+      }
+    },
+    {
+      "id": "570ae5ec-33dc-427c-b815-db86228ad43e",
+      "title": "Application Uninstalled",
+      "status": "test",
+      "description": "An application has been removed. Check if it is critical.",
+      "level": "low",
+      "tags": [
+        "attack.impact",
+        "attack.t1489"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "MsiInstaller",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  1034,
+                  11724
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1489"
+        ],
+        "tactics": [
+          "impact"
+        ]
+      },
+      "meta": {
+        "author": "frack113",
+        "date": "2022-01-28",
+        "modified": "2022-09-17",
+        "references": [
+          "https://github.com/nasbench/EVTX-ETW-Resources/blob/f1b010ce0ee1b71e3024180de1a3e67f99701fe4/ETWProvidersManifests/Windows11/22H2/W11_22H2_Pro_20221220_22621.963/WEPExplorer/Microsoft-Windows-MsiServer.xml",
+          "https://learn.microsoft.com/en-us/windows/win32/msi/event-logging"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/msiinstaller/win_builtin_remove_application.yml"
+      }
+    },
+    {
+      "id": "c7c8aa1c-5aff-408e-828b-998e3620b341",
+      "title": "MSI Installation From Suspicious Locations",
+      "status": "test",
+      "description": "Detects MSI package installation from suspicious locations",
+      "level": "medium",
+      "tags": [
+        "attack.execution"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "MsiInstaller",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  1040,
+                  1042
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  ":\\Windows\\TEMP\\",
+                  "\\\\\\\\",
+                  "\\Desktop\\",
+                  "\\PerfLogs\\",
+                  "\\Users\\Public\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_winget": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "\\AppData\\Local\\Temp\\WinGet\\",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "filter_updhealthtools": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": "C:\\Windows\\TEMP\\UpdHealthTools.msi",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-08-31",
+        "modified": "2023-10-23",
+        "references": [
+          "https://www.trendmicro.com/en_us/research/22/h/ransomware-actor-abuses-genshin-impact-anti-cheat-driver-to-kill-antivirus.html"
+        ],
+        "falsepositives": [
+          "False positives may occur if you allow installation from folders such as the desktop, the public folder or remote shares. A baseline is required before production use."
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/msiinstaller/win_msi_install_from_susp_locations.yml"
+      }
+    },
+    {
+      "id": "5594e67a-7f92-4a04-b65d-1a42fd824a60",
+      "title": "MSI Installation From Web",
+      "status": "test",
+      "description": "Detects installation of a remote msi file from web.",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1218",
+        "attack.t1218.007"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "MsiInstaller",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  1040,
+                  1042
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": "://",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1218",
+          "T1218.007"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Stamatis Chatzimangou",
+        "date": "2022-10-23",
+        "modified": "",
+        "references": [
+          "https://twitter.com/_st0pp3r_/status/1583922009842802689"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/msiinstaller/win_msi_install_from_web.yml"
+      }
+    },
+    {
+      "id": "d08dd86f-681e-4a00-a92c-1db218754417",
+      "title": "MSSQL XPCmdshell Option Change",
+      "status": "test",
+      "description": "Detects when the MSSQL \"xp_cmdshell\" stored procedure setting is changed.\n",
+      "level": "high",
+      "tags": [
+        "attack.execution"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name__contains": {
+                "field": "Provider_Name",
+                "value": "MSSQL",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 15457,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": "xp_cmdshell",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-07-12",
+        "modified": "2024-06-26",
+        "references": [
+          "https://www.netspi.com/blog/technical/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/",
+          "https://thedfirreport.com/2022/07/11/select-xmrig-from-sqlserver/"
+        ],
+        "falsepositives": [
+          "Legitimate enable/disable of the setting",
+          "Note that since the event contain the change for both values. This means that this will trigger on both enable and disable"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_xp_cmdshell_change.yml"
+      }
+    },
+    {
+      "id": "350dfb37-3706-4cdc-9e2e-5e24bc3a46df",
+      "title": "MSSQL Disable Audit Settings",
+      "status": "test",
+      "description": "Detects when an attacker calls the \"ALTER SERVER AUDIT\" or \"DROP SERVER AUDIT\" transaction in order to delete or disable audit logs on the server",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name__contains": {
+                "field": "Provider_Name",
+                "value": "MSSQL",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 33205,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "statement:ALTER SERVER AUDIT",
+                  "statement:DROP SERVER AUDIT"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-07-13",
+        "modified": "2024-06-26",
+        "references": [
+          "https://www.netspi.com/blog/technical/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/",
+          "https://learn.microsoft.com/en-us/sql/t-sql/statements/drop-server-audit-transact-sql?view=sql-server-ver16",
+          "https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-server-audit-transact-sql?view=sql-server-ver16"
+        ],
+        "falsepositives": [
+          "This event should only fire when an administrator is modifying the audit policy. Which should be a rare occurrence once it's set up"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_disable_audit_settings.yml"
+      }
+    },
+    {
+      "id": "00321fee-ca72-4cce-b011-5415af3b9960",
+      "title": "MSSQL Destructive Query",
+      "status": "experimental",
+      "description": "Detects the invocation of MS SQL transactions that are destructive towards table or database data, such as \"DROP TABLE\" or \"DROP DATABASE\".\n",
+      "level": "medium",
+      "tags": [
+        "attack.exfiltration",
+        "attack.impact",
+        "attack.t1485"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "MSSQLSERVER$AUDIT",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 33205,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "statement:TRUNCATE TABLE",
+                  "statement:DROP TABLE",
+                  "statement:DROP DATABASE"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1485"
+        ],
+        "tactics": [
+          "exfiltration",
+          "impact"
+        ]
+      },
+      "meta": {
+        "author": "Daniel Degasperi '@d4ns4n_'",
+        "date": "2025-06-04",
+        "modified": "",
+        "references": [
+          "https://learn.microsoft.com/en-us/sql/t-sql/statements/drop-table-transact-sql?view=sql-server-ver16",
+          "https://learn.microsoft.com/en-us/sql/t-sql/statements/drop-database-transact-sql?view=sql-server-ver16",
+          "https://learn.microsoft.com/en-us/sql/t-sql/statements/truncate-table-transact-sql?view=sql-server-ver16"
+        ],
+        "falsepositives": [
+          "Legitimate transaction from a sysadmin."
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_destructive_query.yml"
+      }
+    },
+    {
+      "id": "08200f85-2678-463e-9c32-88dce2f073d1",
+      "title": "MSSQL Add Account To Sysadmin Role",
+      "status": "test",
+      "description": "Detects when an attacker tries to backdoor the MSSQL server by adding a backdoor account to the sysadmin fixed server role",
+      "level": "high",
+      "tags": [
+        "attack.persistence"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name__contains": {
+                "field": "Provider_Name",
+                "value": "MSSQL",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 33205,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "object_name:sysadmin",
+                  "statement:alter server role [sysadmin] add member "
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-07-13",
+        "modified": "2024-06-26",
+        "references": [
+          "https://www.netspi.com/blog/technical/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/"
+        ],
+        "falsepositives": [
+          "Rare legitimate administrative activity"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_add_sysadmin_account.yml"
+      }
+    },
+    {
+      "id": "218d2855-2bba-4f61-9c85-81d0ea63ac71",
+      "title": "MSSQL Server Failed Logon",
+      "status": "test",
+      "description": "Detects failed logon attempts from clients to MSSQL server.",
+      "level": "low",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1110"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name__contains": {
+                "field": "Provider_Name",
+                "value": "MSSQL",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 18456,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1110"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems), j4son",
+        "date": "2023-10-11",
+        "modified": "2024-06-26",
+        "references": [
+          "https://cybersecthreat.com/2020/07/08/enable-mssql-authentication-log-to-eventlog/",
+          "https://www.experts-exchange.com/questions/27800944/EventID-18456-Failed-to-open-the-explicitly-specified-database.html"
+        ],
+        "falsepositives": [
+          "This event could stem from users changing an account's password that's used to authenticate via a job or an automated process. Investigate the source of such events and mitigate them"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_failed_logon.yml"
+      }
+    },
+    {
+      "id": "ebfe73c2-5bc9-4ed9-aaa8-8b54b2b4777d",
+      "title": "MSSQL Server Failed Logon From External Network",
+      "status": "test",
+      "description": "Detects failed logon attempts from clients with external network IP to an MSSQL server. This can be a sign of a bruteforce attack.",
+      "level": "medium",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1110"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name__contains": {
+                "field": "Provider_Name",
+                "value": "MSSQL",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 18456,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {
+          "filter_main_local_ips": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  "CLIENT: 10.",
+                  "CLIENT: 172.16.",
+                  "CLIENT: 172.17.",
+                  "CLIENT: 172.18.",
+                  "CLIENT: 172.19.",
+                  "CLIENT: 172.20.",
+                  "CLIENT: 172.21.",
+                  "CLIENT: 172.22.",
+                  "CLIENT: 172.23.",
+                  "CLIENT: 172.24.",
+                  "CLIENT: 172.25.",
+                  "CLIENT: 172.26.",
+                  "CLIENT: 172.27.",
+                  "CLIENT: 172.28.",
+                  "CLIENT: 172.29.",
+                  "CLIENT: 172.30.",
+                  "CLIENT: 172.31.",
+                  "CLIENT: 192.168.",
+                  "CLIENT: 127.",
+                  "CLIENT: 169.254.",
+                  "CLIENT: <local machine>"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "condition": "selection and not 1 of filter_main_*",
+        "condition_parsed": {
+          "op": "and",
+          "operands": [
+            {
+              "type": "ref",
+              "value": "selection"
+            },
+            {
+              "type": "not",
+              "value": "1 of filter_main_*"
+            }
+          ]
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1110"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "j4son",
+        "date": "2023-10-11",
+        "modified": "2025-05-28",
+        "references": [
+          "https://cybersecthreat.com/2020/07/08/enable-mssql-authentication-log-to-eventlog/",
+          "https://www.experts-exchange.com/questions/27800944/EventID-18456-Failed-to-open-the-explicitly-specified-database.html"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_failed_logon_from_external_network.yml"
+      }
+    },
+    {
+      "id": "b3d57a5c-c92e-4b48-9a79-5f124b7cf964",
+      "title": "MSSQL SPProcoption Set",
+      "status": "test",
+      "description": "Detects when the a stored procedure is set or cleared for automatic execution in MSSQL. A stored procedure that is set to automatic execution runs every time an instance of SQL Server is started",
+      "level": "high",
+      "tags": [
+        "attack.persistence"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name__contains": {
+                "field": "Provider_Name",
+                "value": "MSSQL",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 33205,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "object_name:sp_procoption",
+                  "statement:EXEC"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "persistence"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-07-13",
+        "modified": "2024-06-26",
+        "references": [
+          "https://www.netspi.com/blog/technical/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/",
+          "https://learn.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/sp-procoption-transact-sql?view=sql-server-ver16"
+        ],
+        "falsepositives": [
+          "Legitimate use of the feature by administrators (rare)"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_sp_procoption_set.yml"
+      }
+    },
+    {
+      "id": "7f103213-a04e-4d59-8261-213dddf22314",
+      "title": "MSSQL XPCmdshell Suspicious Execution",
+      "status": "test",
+      "description": "Detects when the MSSQL \"xp_cmdshell\" stored procedure is used to execute commands",
+      "level": "high",
+      "tags": [
+        "attack.execution"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name__contains": {
+                "field": "Provider_Name",
+                "value": "MSSQL",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 33205,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "object_name:xp_cmdshell",
+                  "statement:EXEC"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-07-12",
+        "modified": "2024-06-26",
+        "references": [
+          "https://www.netspi.com/blog/technical/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/",
+          "https://thedfirreport.com/2022/07/11/select-xmrig-from-sqlserver/"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/mssqlserver/win_mssql_xp_cmdshell_audit_log.yml"
+      }
+    },
+    {
+      "id": "94dc4390-6b7c-4784-8ffc-335334404650",
+      "title": "Dump Ntds.dit To Suspicious Location",
+      "status": "test",
+      "description": "Detects potential abuse of ntdsutil to dump ntds.dit database to a suspicious location",
+      "level": "medium",
+      "tags": [
+        "attack.execution"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection_root": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "ESENT",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 325,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": "ntds.dit",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          },
+          "selection_paths": {
+            "type": "field_match",
+            "matchers": {
+              "Data__contains": {
+                "field": "Data",
+                "value": [
+                  ":\\ntds.dit",
+                  "\\Appdata\\",
+                  "\\Desktop\\",
+                  "\\Downloads\\",
+                  "\\Perflogs\\",
+                  "\\Temp\\",
+                  "\\Users\\Public\\"
+                ],
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "all of selection_*",
+        "condition_parsed": {
+          "op": "all_of",
+          "pattern": "selection_"
+        }
+      },
+      "mitre": {
+        "techniques": [],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-08-14",
+        "modified": "2023-10-23",
+        "references": [
+          "https://twitter.com/mgreen27/status/1558223256704122882",
+          "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj574207(v=ws.11)"
+        ],
+        "falsepositives": [
+          "Legitimate backup operation/creating shadow copies"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/esent/win_esent_ntdsutil_abuse_susp_location.yml"
+      }
+    },
+    {
+      "id": "e6e88853-5f20-4c4a-8d26-cd469fd8d31f",
+      "title": "Ntdsutil Abuse",
+      "status": "test",
+      "description": "Detects potential abuse of ntdsutil to dump ntds.dit database",
+      "level": "medium",
+      "tags": [
+        "attack.credential-access",
+        "attack.t1003.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "ESENT",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": [
+                  216,
+                  325,
+                  326,
+                  327
+                ],
+                "modifiers": [],
+                "is_list": true,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": "ntds.dit",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1003.003"
+        ],
+        "tactics": [
+          "credential_access"
+        ]
+      },
+      "meta": {
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "date": "2022-08-14",
+        "modified": "",
+        "references": [
+          "https://twitter.com/mgreen27/status/1558223256704122882",
+          "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj574207(v=ws.11)"
+        ],
+        "falsepositives": [
+          "Legitimate backup operation/creating shadow copies"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/esent/win_esent_ntdsutil_abuse.yml"
+      }
+    },
+    {
+      "id": "9703792d-fd9a-456d-a672-ff92efe4806a",
+      "title": "Backup Catalog Deleted",
+      "status": "test",
+      "description": "Detects backup catalog deletions",
+      "level": "medium",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1070.004"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "EventID": {
+                "field": "EventID",
+                "value": 524,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Microsoft-Windows-Backup",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1070.004"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems), Tom U. @c_APT_ure (collection)",
+        "date": "2017-05-12",
+        "modified": "2022-12-25",
+        "references": [
+          "https://technet.microsoft.com/en-us/library/cc742154(v=ws.11).aspx",
+          "https://www.hybrid-analysis.com/sample/ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa?environmentId=100"
+        ],
+        "falsepositives": [
+          "Unknown"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/microsoft_windows_backup/win_susp_backup_delete.yml"
+      }
+    },
+    {
+      "id": "076ebe48-cc05-4d8f-9d41-89245cd93a14",
+      "title": "Remote Access Tool - ScreenConnect Command Execution",
+      "status": "test",
+      "description": "Detects command execution via ScreenConnect RMM",
+      "level": "low",
+      "tags": [
+        "attack.execution",
+        "attack.t1059.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "ScreenConnect",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 200,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": "Executed command of length",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.003"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Ali Alwashali",
+        "date": "2023-10-10",
+        "modified": "",
+        "references": [
+          "https://www.huntandhackett.com/blog/revil-the-usage-of-legitimate-remote-admin-tooling",
+          "https://github.com/SigmaHQ/sigma/pull/4467"
+        ],
+        "falsepositives": [
+          "Legitimate use of ScreenConnect"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/screenconnect/win_app_remote_access_tools_screenconnect_command_exec.yml"
+      }
+    },
+    {
+      "id": "5d19eb78-5b5b-4ef2-a9f0-4bfa94d58a13",
+      "title": "Remote Access Tool - ScreenConnect File Transfer",
+      "status": "test",
+      "description": "Detects file being transferred via ScreenConnect RMM",
+      "level": "low",
+      "tags": [
+        "attack.execution",
+        "attack.t1059.003"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "ScreenConnect",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 201,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains": {
+                "field": "Data",
+                "value": "Transferred files with action",
+                "modifiers": [
+                  "contains"
+                ],
+                "is_list": false,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1059.003"
+        ],
+        "tactics": [
+          "execution"
+        ]
+      },
+      "meta": {
+        "author": "Ali Alwashali",
+        "date": "2023-10-10",
+        "modified": "",
+        "references": [
+          "https://www.huntandhackett.com/blog/revil-the-usage-of-legitimate-remote-admin-tooling",
+          "https://github.com/SigmaHQ/sigma/pull/4467"
+        ],
+        "falsepositives": [
+          "Legitimate use of ScreenConnect"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/screenconnect/win_app_remote_access_tools_screenconnect_file_transfer.yml"
+      }
+    },
+    {
+      "id": "6c82cf5c-090d-4d57-9188-533577631108",
+      "title": "Microsoft Malware Protection Engine Crash - WER",
+      "status": "test",
+      "description": "This rule detects a suspicious crash of the Microsoft Malware Protection Engine",
+      "level": "high",
+      "tags": [
+        "attack.defense-evasion",
+        "attack.t1211",
+        "attack.t1562.001"
+      ],
+      "logsource": {
+        "category": null,
+        "product": "windows",
+        "service": "application"
+      },
+      "detection": {
+        "selections": {
+          "selection": {
+            "type": "field_match",
+            "matchers": {
+              "Provider_Name": {
+                "field": "Provider_Name",
+                "value": "Windows Error Reporting",
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "EventID": {
+                "field": "EventID",
+                "value": 1001,
+                "modifiers": [],
+                "is_list": false,
+                "negated": false
+              },
+              "Data__contains_all": {
+                "field": "Data",
+                "value": [
+                  "MsMpEng.exe",
+                  "mpengine.dll"
+                ],
+                "modifiers": [
+                  "contains",
+                  "all"
+                ],
+                "is_list": true,
+                "negated": false
+              }
+            }
+          }
+        },
+        "filters": {},
+        "condition": "selection",
+        "condition_parsed": {
+          "op": "single",
+          "selection": "selection"
+        }
+      },
+      "mitre": {
+        "techniques": [
+          "T1211",
+          "T1562.001"
+        ],
+        "tactics": [
+          "defense_evasion"
+        ]
+      },
+      "meta": {
+        "author": "Florian Roth (Nextron Systems)",
+        "date": "2017-05-09",
+        "modified": "2023-04-14",
+        "references": [
+          "https://bugs.chromium.org/p/project-zero/issues/detail?id=1252&desc=5",
+          "https://technet.microsoft.com/en-us/library/security/4022344"
+        ],
+        "falsepositives": [
+          "MsMpEng might crash if the \"C:\\\" partition is full"
+        ],
+        "source_file": "sigma_rules/windows/builtin/application/windows_error_reporting/win_application_msmpeng_crash_wer.yml"
+      }
+    }
+  ]
+}
