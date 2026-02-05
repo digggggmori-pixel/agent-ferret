@@ -46,46 +46,68 @@ type Logger struct {
 
 var (
 	instance *Logger
-	once     sync.Once
+	initMu   sync.Mutex
 )
 
 // Init initializes the global logger
+// Can be called multiple times - will reinitialize if previous attempt failed
 func Init(outputDir string, enabled bool) error {
-	var initErr error
-	once.Do(func() {
-		instance = &Logger{
-			enabled: enabled,
-			level:   LevelDebug,
-		}
+	initMu.Lock()
+	defer initMu.Unlock()
 
-		if !enabled {
-			return
-		}
+	// Close existing logger if any
+	if instance != nil && instance.file != nil {
+		instance.file.Close()
+	}
 
-		// Create log file with timestamp
-		timestamp := time.Now().Format("20060102_150405")
-		hostname, _ := os.Hostname()
-		logFileName := fmt.Sprintf("agent-lite_debug_%s_%s.log", hostname, timestamp)
+	instance = &Logger{
+		enabled: enabled,
+		level:   LevelDebug,
+	}
 
-		if outputDir == "" {
-			outputDir = "."
-		}
+	if !enabled {
+		return nil
+	}
 
-		logPath := filepath.Join(outputDir, logFileName)
-		file, err := os.Create(logPath)
-		if err != nil {
-			initErr = fmt.Errorf("failed to create log file: %w", err)
-			return
-		}
+	// Create log file with timestamp
+	timestamp := time.Now().Format("20060102_150405")
+	hostname, _ := os.Hostname()
+	logFileName := fmt.Sprintf("agent-lite_debug_%s_%s.log", hostname, timestamp)
 
-		instance.file = file
-		instance.filePath = logPath
+	if outputDir == "" {
+		outputDir = "."
+	}
 
-		// Write header
-		instance.writeHeader()
-	})
+	// Ensure output directory exists
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		fmt.Printf("[DEBUG LOGGER] Failed to create output directory %s: %v\n", outputDir, err)
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
 
-	return initErr
+	logPath := filepath.Join(outputDir, logFileName)
+
+	// Try to create absolute path for better debugging
+	absPath, err := filepath.Abs(logPath)
+	if err == nil {
+		logPath = absPath
+	}
+
+	fmt.Printf("[DEBUG LOGGER] Creating log file: %s\n", logPath)
+
+	file, err := os.Create(logPath)
+	if err != nil {
+		fmt.Printf("[DEBUG LOGGER] Failed to create log file: %v\n", err)
+		return fmt.Errorf("failed to create log file %s: %w", logPath, err)
+	}
+
+	instance.file = file
+	instance.filePath = logPath
+
+	// Write header
+	instance.writeHeader()
+
+	fmt.Printf("[DEBUG LOGGER] Log file created successfully: %s\n", logPath)
+	return nil
 }
 
 // GetLogPath returns the path to the log file

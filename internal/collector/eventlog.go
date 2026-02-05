@@ -197,7 +197,15 @@ func (c *EventLogCollector) scanChannel(channel string) ([]types.Detection, erro
 	// Open query handle
 	handle, err := evtQuery(channel, query, EvtQueryChannelPath|EvtQueryReverseDirection)
 	if err != nil {
-		logger.Error("EvtQuery failed for %s: %v", channel, err)
+		logger.Error("EvtQuery failed for channel %s: %v (query: %s)", channel, err, query)
+		// Provide more helpful error message
+		errStr := err.Error()
+		if strings.Contains(errStr, "5") || strings.Contains(errStr, "Access") {
+			return nil, fmt.Errorf("access denied to channel %s (run as Administrator)", channel)
+		}
+		if strings.Contains(errStr, "15007") || strings.Contains(errStr, "not found") {
+			return nil, fmt.Errorf("channel %s not found", channel)
+		}
 		return nil, fmt.Errorf("failed to query channel %s: %w", channel, err)
 	}
 	defer evtClose(handle)
@@ -549,9 +557,11 @@ func (c *EventLogCollector) CollectEvents(channel string, limit int) ([]types.Ev
 func IsChannelAccessible(channel string) bool {
 	handle, err := evtQuery(channel, "*", EvtQueryChannelPath)
 	if err != nil {
+		logger.Debug("Channel %s not accessible: %v", channel, err)
 		return false
 	}
 	evtClose(handle)
+	logger.Debug("Channel %s is accessible", channel)
 	return true
 }
 

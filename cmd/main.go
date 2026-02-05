@@ -366,10 +366,17 @@ func runScan() {
 
 	// Step 7: Scan event logs with Sigma rules
 	out.PrintStep(7, 8, "Scanning event logs (Sigma rules)...")
+	logger.Section("Event Log Sigma Scan")
 
-	if sigmaEngine != nil {
+	if sigmaEngine == nil {
+		logger.Error("Sigma engine is nil, skipping event log scan")
+		out.PrintDetail("Sigma engine not initialized, skipping event log scan")
+	} else {
+		logger.Info("Sigma engine ready with %d rules", sigmaEngine.TotalRules())
+
 		// Create progress callback
 		progressCB := func(progress sigma.ScanProgress) {
+			logger.Debug("[%s] Progress: %d events, %d matches", progress.Channel, progress.Current, progress.Matches)
 			if !quiet {
 				out.PrintDetail("[%s] Scanned %d events, %d matches",
 					progress.Channel, progress.Current, progress.Matches)
@@ -381,19 +388,32 @@ func runScan() {
 			collector.WithQuickMode(quickScan),
 			collector.WithProgress(progressCB),
 		)
+		logger.Info("EventLogCollector initialized (quickMode=%v)", quickScan)
 
 		// Check accessible channels
+		logger.Debug("Checking accessible event log channels...")
 		accessibleChannels := collector.GetAccessibleChannels()
+		logger.Info("Accessible channels: %d of %d", len(accessibleChannels), len(collector.DefaultChannels))
+
 		if len(accessibleChannels) == 0 {
+			logger.Warn("No accessible event log channels - admin privileges required")
 			out.PrintDetail("No accessible event log channels (admin required)")
+			out.PrintDetail("Run as Administrator to enable event log scanning")
 		} else {
 			out.PrintDetail("Accessible channels: %d", len(accessibleChannels))
+			for _, ch := range accessibleChannels {
+				logger.Debug("  - %s", ch)
+			}
 
 			// Scan event logs
+			logger.Info("Starting event log scan...")
 			sigmaDetections, err := eventCollector.Scan(sigmaEngine)
 			if err != nil {
+				logger.Error("Event log scan failed: %v", err)
 				out.PrintError("Event log scan error: %v", err)
 			} else {
+				logger.Info("Event log scan complete: %d events scanned, %d Sigma matches",
+					eventCollector.TotalScanned(), len(sigmaDetections))
 				out.PrintDetail("Event log scan complete: %d events, %d Sigma matches",
 					eventCollector.TotalScanned(), len(sigmaDetections))
 				result.Detections = append(result.Detections, sigmaDetections...)
