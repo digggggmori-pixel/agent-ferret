@@ -27,6 +27,7 @@ var (
 	outputDir  string
 	showHelp   bool
 	showVer    bool
+	forceRun   bool
 )
 
 func init() {
@@ -38,6 +39,7 @@ func init() {
 	flag.StringVar(&outputDir, "output", "", "Specify output directory")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.BoolVar(&showVer, "version", false, "Show version")
+	flag.BoolVar(&forceRun, "force", false, "Skip admin privilege check (limited results)")
 }
 
 func main() {
@@ -89,9 +91,11 @@ Scan Options:
   --quiet       Suppress progress, show results only
   --verbose     Show detailed debug output
   --output DIR  Specify output directory
+  --force       Skip admin check (run with limited results)
 
 Examples:
-  agent-lite scan                    # Full scan + upload
+  agent-lite scan                    # Full scan + upload (admin required)
+  agent-lite scan --force            # Run without admin (limited)
   agent-lite scan --quick            # Quick scan (24h)
   agent-lite scan --no-upload        # Local scan only
   agent-lite scan --json --quiet     # JSON output (for piping)`)
@@ -108,23 +112,32 @@ func runScan() {
 	})
 
 	// Check admin privileges
-	if !collector.IsRunningAsAdmin() {
+	isAdmin := collector.IsRunningAsAdmin()
+	if !isAdmin && !forceRun {
 		fmt.Println()
 		fmt.Println("╔════════════════════════════════════════════════════════════════════════╗")
-		fmt.Println("║  ERROR: Administrator privileges required!                             ║")
+		fmt.Println("║  WARNING: Administrator privileges recommended!                        ║")
 		fmt.Println("╠════════════════════════════════════════════════════════════════════════╣")
-		fmt.Println("║  This tool needs admin rights to:                                      ║")
-		fmt.Println("║    - Read process command line arguments                               ║")
-		fmt.Println("║    - Access Security event logs                                        ║")
-		fmt.Println("║    - Query all system services                                         ║")
+		fmt.Println("║  Without admin rights, some data cannot be collected:                  ║")
+		fmt.Println("║    - Process command line arguments                                    ║")
+		fmt.Println("║    - Security event logs                                               ║")
+		fmt.Println("║    - Some protected process information                                ║")
 		fmt.Println("║                                                                        ║")
-		fmt.Println("║  Please run as Administrator:                                          ║")
-		fmt.Println("║    1. Right-click on Command Prompt or PowerShell                      ║")
-		fmt.Println("║    2. Select 'Run as administrator'                                    ║")
-		fmt.Println("║    3. Run agent-lite.exe scan                                          ║")
+		fmt.Println("║  Options:                                                              ║")
+		fmt.Println("║    1. Run as Administrator (recommended)                               ║")
+		fmt.Println("║    2. Use --force flag to run anyway with limited results              ║")
 		fmt.Println("╚════════════════════════════════════════════════════════════════════════╝")
 		fmt.Println()
 		os.Exit(1)
+	}
+
+	if !isAdmin && forceRun {
+		fmt.Println()
+		fmt.Println("╔════════════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║  Running without admin privileges (--force mode)                       ║")
+		fmt.Println("║  Some detection capabilities will be limited.                          ║")
+		fmt.Println("╚════════════════════════════════════════════════════════════════════════╝")
+		fmt.Println()
 	}
 
 	// Print header
