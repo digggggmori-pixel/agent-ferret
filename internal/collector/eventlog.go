@@ -621,7 +621,8 @@ func CountEventsInChannel(channel string, since time.Time) (int64, error) {
 // Placeholder for non-Windows builds
 func init() {
 	// Check if we're running on Windows
-	if !strings.Contains(strings.ToLower(syscall.Getenv("OS")), "windows") {
+	osEnv, _ := syscall.Getenv("OS")
+	if !strings.Contains(strings.ToLower(osEnv), "windows") {
 		// On non-Windows, the wevtapi functions will fail gracefully
 	}
 }
