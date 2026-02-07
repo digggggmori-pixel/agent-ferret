@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digggggmori-pixel/agent-lite/internal/logger"
-	"github.com/digggggmori-pixel/agent-lite/pkg/types"
+	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
+	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 	"golang.org/x/sys/windows/registry"
 )
 

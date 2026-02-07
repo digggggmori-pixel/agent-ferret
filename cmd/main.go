@@ -8,13 +8,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/digggggmori-pixel/agent-lite/internal/collector"
-	"github.com/digggggmori-pixel/agent-lite/internal/detector"
-	"github.com/digggggmori-pixel/agent-lite/internal/logger"
-	"github.com/digggggmori-pixel/agent-lite/internal/output"
-	"github.com/digggggmori-pixel/agent-lite/internal/sigma"
-	"github.com/digggggmori-pixel/agent-lite/internal/sigma/rules"
-	"github.com/digggggmori-pixel/agent-lite/pkg/types"
+	"github.com/digggggmori-pixel/agent-ferret/internal/collector"
+	"github.com/digggggmori-pixel/agent-ferret/internal/detector"
+	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
+	"github.com/digggggmori-pixel/agent-ferret/internal/output"
+	"github.com/digggggmori-pixel/agent-ferret/internal/sigma"
+	"github.com/digggggmori-pixel/agent-ferret/internal/sigma/rules"
+	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 	"github.com/google/uuid"
 )
 

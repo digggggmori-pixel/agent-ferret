@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/digggggmori-pixel/agent-lite/pkg/types"
+	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 )
 
 // ProcessToSigmaEvent converts live process info to Sigma event format
