@@ -132,13 +132,17 @@ func ScanLiveNetwork(engine *Engine, connections []types.NetworkConnection, proc
 
 // ConvertSigmaMatchToDetection converts a SigmaMatch to a types.Detection
 func ConvertSigmaMatchToDetection(match *SigmaMatch, source string) types.Detection {
+	desc := match.Description
+	if desc == "" {
+		desc = match.RuleName
+	}
 	return types.Detection{
 		ID:          match.RuleID,
 		Type:        types.DetectionTypeSigma,
 		Severity:    match.Severity,
 		Confidence:  0.85, // Live data has good confidence
 		Timestamp:   match.Timestamp,
-		Description: match.RuleName,
+		Description: desc,
 		MITRE: &types.MITREMapping{
 			Tactics:    match.MITRE.Tactics,
 			Techniques: match.MITRE.Techniques,

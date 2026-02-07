@@ -2,6 +2,7 @@
   import { ExportJSON, OpenBRIQA } from '../../wailsjs/go/main/App.js'
   import DetectionCard from '../components/DetectionCard.svelte'
   import SeverityBadge from '../components/SeverityBadge.svelte'
+  import ThreatScore from '../components/ThreatScore.svelte'
 
   let { result, onrescan } = $props()
 
@@ -38,67 +39,67 @@
   }
 
   function formatDuration(ms) {
-    return (ms / 1000).toFixed(1) + '초'
+    return (ms / 1000).toFixed(1) + 's'
   }
 </script>
 
 <div class="flex-1 flex flex-col overflow-hidden">
   <!-- Header -->
-  <div class="px-6 py-4 bg-(--color-bg-secondary) border-b border-slate-700/50">
+  <div class="px-6 py-3 bg-(--color-bg-secondary)/60 border-b border-slate-800/50" style="backdrop-filter: blur(8px);">
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-white">점검 결과</h2>
-        <p class="text-xs text-slate-400 mt-0.5">
-          {result?.host?.hostname || 'Unknown'} | {formatDuration(result?.scan_duration_ms || 0)} 소요
+        <h2 class="text-base font-semibold text-white">Scan Results</h2>
+        <p class="text-[11px] text-slate-500 mt-0.5">
+          {result?.host?.hostname || 'Unknown'} &middot; {formatDuration(result?.scan_duration_ms || 0)} elapsed
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick={handleExport} class="px-3 py-1.5 text-xs bg-(--color-bg-card) hover:bg-slate-600 text-slate-300 rounded-lg transition cursor-pointer">
-          JSON 저장
+        <button onclick={handleExport} class="px-3 py-1.5 text-[11px] bg-(--color-bg-card) hover:bg-(--color-bg-elevated) text-slate-300 rounded-lg transition cursor-pointer border border-slate-700/30">
+          Export JSON
         </button>
-        <button onclick={onrescan} class="px-3 py-1.5 text-xs bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg transition cursor-pointer">
-          다시 점검
+        <button onclick={onrescan} class="px-3 py-1.5 text-[11px] bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg transition cursor-pointer">
+          Rescan
         </button>
       </div>
     </div>
     {#if exportPath}
-      <p class="text-xs text-green-400 mt-2">저장 완료: {exportPath}</p>
+      <p class="text-[11px] text-green-400 mt-1.5">Saved: {exportPath}</p>
     {/if}
   </div>
 
-  <!-- Summary Cards -->
-  <div class="px-6 py-4">
-    <div class="grid grid-cols-4 gap-3">
-      <button onclick={() => activeFilter = activeFilter === 'critical' ? 'all' : 'critical'}
-        class="p-3 rounded-xl text-center transition cursor-pointer border {activeFilter === 'critical' ? 'bg-red-900/40 border-red-700/80' : 'bg-(--color-bg-secondary) border-transparent hover:border-red-800/50'}">
-        <p class="text-2xl font-bold text-(--color-severity-critical)">{summary.critical}</p>
-        <p class="text-xs text-slate-400 mt-1">Critical</p>
-      </button>
-      <button onclick={() => activeFilter = activeFilter === 'high' ? 'all' : 'high'}
-        class="p-3 rounded-xl text-center transition cursor-pointer border {activeFilter === 'high' ? 'bg-orange-900/40 border-orange-700/80' : 'bg-(--color-bg-secondary) border-transparent hover:border-orange-800/50'}">
-        <p class="text-2xl font-bold text-(--color-severity-high)">{summary.high}</p>
-        <p class="text-xs text-slate-400 mt-1">High</p>
-      </button>
-      <button onclick={() => activeFilter = activeFilter === 'medium' ? 'all' : 'medium'}
-        class="p-3 rounded-xl text-center transition cursor-pointer border {activeFilter === 'medium' ? 'bg-yellow-900/40 border-yellow-700/80' : 'bg-(--color-bg-secondary) border-transparent hover:border-yellow-800/50'}">
-        <p class="text-2xl font-bold text-(--color-severity-medium)">{summary.medium}</p>
-        <p class="text-xs text-slate-400 mt-1">Medium</p>
-      </button>
-      <button onclick={() => activeFilter = activeFilter === 'low' ? 'all' : 'low'}
-        class="p-3 rounded-xl text-center transition cursor-pointer border {activeFilter === 'low' ? 'bg-green-900/40 border-green-700/80' : 'bg-(--color-bg-secondary) border-transparent hover:border-green-800/50'}">
-        <p class="text-2xl font-bold text-(--color-severity-low)">{summary.low}</p>
-        <p class="text-xs text-slate-400 mt-1">Low</p>
-      </button>
+  <!-- Threat Score + Summary -->
+  <div class="px-6 py-4 animate-fade-in-up">
+    <div class="flex items-center gap-6">
+      <ThreatScore {summary} />
+      <div class="flex-1 grid grid-cols-4 gap-2">
+        {#each [
+          { key: 'critical', label: 'Critical', color: 'red' },
+          { key: 'high', label: 'High', color: 'orange' },
+          { key: 'medium', label: 'Medium', color: 'yellow' },
+          { key: 'low', label: 'Low', color: 'green' },
+        ] as sev}
+          <button
+            onclick={() => activeFilter = activeFilter === sev.key ? 'all' : sev.key}
+            class="p-2.5 rounded-xl text-center transition cursor-pointer border
+              {activeFilter === sev.key
+                ? `bg-${sev.color}-900/30 border-${sev.color}-700/60`
+                : 'glass hover:border-slate-600/50'}"
+          >
+            <p class="text-xl font-bold text-(--color-severity-{sev.key})">{summary[sev.key]}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">{sev.label}</p>
+          </button>
+        {/each}
+      </div>
     </div>
   </div>
 
   <!-- Filter indicator -->
   {#if activeFilter !== 'all'}
-    <div class="px-6 pb-2 flex items-center gap-2">
+    <div class="px-6 pb-2 flex items-center gap-2 animate-fade-in">
       <SeverityBadge severity={activeFilter} />
-      <span class="text-xs text-slate-400">{sortedDetections().length}건 표시 중</span>
-      <button onclick={() => activeFilter = 'all'} class="text-xs text-cyan-400 hover:text-cyan-300 ml-auto cursor-pointer">
-        전체 보기
+      <span class="text-[11px] text-slate-400">{sortedDetections().length} showing</span>
+      <button onclick={() => activeFilter = 'all'} class="text-[11px] text-cyan-400 hover:text-cyan-300 ml-auto cursor-pointer">
+        Show all
       </button>
     </div>
   {/if}
@@ -106,34 +107,41 @@
   <!-- Detection List -->
   <div class="flex-1 overflow-y-auto px-6 pb-4 space-y-2">
     {#if sortedDetections().length === 0}
-      <div class="text-center py-12">
-        <svg class="w-12 h-12 mx-auto text-green-500 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-        <p class="text-slate-300 font-medium">위협이 탐지되지 않았습니다</p>
-        <p class="text-slate-500 text-sm mt-1">시스템이 안전한 상태입니다</p>
+      <div class="text-center py-16 animate-fade-in-up">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-green-900/20 border border-green-700/30 flex items-center justify-center">
+          <svg class="w-8 h-8 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+        <p class="text-white font-medium text-sm">No threats detected</p>
+        <p class="text-slate-500 text-xs mt-1">Your system appears safe</p>
       </div>
     {:else}
-      {#each sortedDetections() as detection (detection.id)}
-        <DetectionCard
-          {detection}
-          expanded={expandedId === detection.id}
-          ontoggle={() => toggleExpand(detection.id)}
-        />
+      {#each sortedDetections() as detection, i (detection.id)}
+        <div class="animate-fade-in-up" style="animation-delay: {Math.min(i * 0.05, 0.3)}s">
+          <DetectionCard
+            {detection}
+            expanded={expandedId === detection.id}
+            ontoggle={() => toggleExpand(detection.id)}
+          />
+        </div>
       {/each}
     {/if}
   </div>
 
   <!-- CTA Banner -->
   {#if totalDetections > 0}
-    <div class="px-6 py-4 bg-gradient-to-r from-cyan-900/60 to-blue-900/60 border-t border-cyan-800/30">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-white">AI 기반 상세 분석이 필요하신가요?</p>
-          <p class="text-xs text-slate-400 mt-0.5">탐지된 위협에 대한 심층 분석과 대응 가이드를 받아보세요</p>
+    <div class="px-6 py-4 bg-gradient-to-r from-cyan-900/40 via-blue-900/40 to-purple-900/30 border-t border-cyan-800/20">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex-1">
+          <p class="text-sm font-medium text-white">Get AI-powered threat analysis</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">Understand the real risk level and get actionable remediation steps</p>
         </div>
-        <button onclick={() => OpenBRIQA()} class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition whitespace-nowrap cursor-pointer">
-          BRIQA 분석 받기
+        <button onclick={() => OpenBRIQA()} class="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white text-sm font-medium rounded-lg transition-all hover:scale-[1.02] whitespace-nowrap cursor-pointer shadow-lg shadow-cyan-900/30">
+          Analyze with BRIQA
+          <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
         </button>
       </div>
     </div>

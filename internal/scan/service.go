@@ -84,43 +84,43 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	det := detector.New()
 
 	// ── Step 1: Collect processes ──
-	s.emitProgress(1, "프로세스 수집 중...", 0, "")
+	s.emitProgress(1, "Collecting processes...", 0, "")
 	processCollector := collector.NewProcessCollector()
 	processes, err := processCollector.Collect()
 	if err != nil {
 		processes = []types.ProcessInfo{}
 	}
 	result.Summary.TotalProcesses = len(processes)
-	s.emitProgress(1, "프로세스 수집 완료", 12, fmt.Sprintf("%d개 프로세스", len(processes)))
+	s.emitProgress(1, "Processes collected", 12, fmt.Sprintf("%d processes", len(processes)))
 
 	// ── Step 2: Collect network connections ──
-	s.emitProgress(2, "네트워크 연결 수집 중...", 12, "")
+	s.emitProgress(2, "Collecting network connections...", 12, "")
 	networkCollector := collector.NewNetworkCollector()
 	connections, err := networkCollector.Collect()
 	if err != nil {
 		connections = []types.NetworkConnection{}
 	}
 	result.Summary.TotalConnections = len(connections)
-	s.emitProgress(2, "네트워크 연결 수집 완료", 25, fmt.Sprintf("%d개 연결", len(connections)))
+	s.emitProgress(2, "Network connections collected", 25, fmt.Sprintf("%d connections", len(connections)))
 
 	// ── Step 3: Collect services ──
-	s.emitProgress(3, "서비스 수집 중...", 25, "")
+	s.emitProgress(3, "Collecting services...", 25, "")
 	serviceCollector := collector.NewServiceCollector()
 	services, err := serviceCollector.Collect()
 	if err != nil {
 		services = []types.ServiceInfo{}
 	}
 	result.Summary.TotalServices = len(services)
-	s.emitProgress(3, "서비스 수집 완료", 37, fmt.Sprintf("%d개 서비스", len(services)))
+	s.emitProgress(3, "Services collected", 37, fmt.Sprintf("%d services", len(services)))
 
 	// ── Step 4: Scan registry ──
-	s.emitProgress(4, "레지스트리 스캔 중...", 37, "19개 Persistence 키 검사")
+	s.emitProgress(4, "Scanning registry...", 37, "19 persistence keys")
 	registryCollector := collector.NewRegistryCollector()
 	registryCollector.Collect() // Entries used for persistence detection
-	s.emitProgress(4, "레지스트리 스캔 완료", 50, "")
+	s.emitProgress(4, "Registry scan complete", 50, "")
 
 	// ── Step 5: Run detection engine (11 detectors) ──
-	s.emitProgress(5, "탐지 엔진 실행 중...", 50, "12종 탐지 엔진")
+	s.emitProgress(5, "Running detection engines...", 50, "12 detection engines")
 
 	result.Detections = append(result.Detections, det.DetectLOLBins(processes)...)
 	result.Detections = append(result.Detections, det.DetectChains(processes)...)
@@ -135,10 +135,10 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	result.Detections = append(result.Detections, det.DetectEncodedCommands(processes)...)
 
 	detCount := len(result.Detections)
-	s.emitProgress(5, "탐지 엔진 완료", 62, fmt.Sprintf("%d건 탐지", detCount))
+	s.emitProgress(5, "Detection engines complete", 62, fmt.Sprintf("%d detections", detCount))
 
 	// ── Step 6: Live Sigma matching ──
-	s.emitProgress(6, "Sigma 룰 매칭 중...", 62, "")
+	s.emitProgress(6, "Sigma rule matching...", 62, "")
 	sigmaEngine, err := sigma.NewEngineWithRules(rules.EmbeddedRules)
 	if err == nil {
 		// Live process matching
@@ -154,19 +154,19 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_network"))
 		}
 
-		s.emitProgress(6, "Sigma 라이브 매칭 완료", 75,
-			fmt.Sprintf("%d룰, 프로세스 %d건 + 네트워크 %d건",
+		s.emitProgress(6, "Sigma live matching complete", 75,
+			fmt.Sprintf("%d rules, process %d + network %d",
 				sigmaEngine.TotalRules(), len(liveProcessMatches), len(liveNetworkMatches)))
 	} else {
-		s.emitProgress(6, "Sigma 엔진 초기화 실패", 75, err.Error())
+		s.emitProgress(6, "Sigma engine init failed", 75, err.Error())
 	}
 
 	// ── Step 7: Event log Sigma scan ──
-	s.emitProgress(7, "이벤트 로그 분석 중...", 75, "")
+	s.emitProgress(7, "Analyzing event logs...", 75, "")
 	if sigmaEngine != nil {
 		progressCB := func(progress sigma.ScanProgress) {
-			s.emitProgress(7, "이벤트 로그 분석 중...", 75,
-				fmt.Sprintf("[%s] %d 이벤트, %d 매칭", progress.Channel, progress.Current, progress.Matches))
+			s.emitProgress(7, "Analyzing event logs...", 75,
+				fmt.Sprintf("[%s] %d events, %d matches", progress.Channel, progress.Current, progress.Matches))
 		}
 
 		eventCollector := collector.NewEventLogCollector(
@@ -183,12 +183,21 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 			}
 		}
 	}
-	s.emitProgress(7, "이벤트 로그 분석 완료", 87, "")
+	s.emitProgress(7, "Event log analysis complete", 87, "")
 
 	// ── Step 8: Aggregate results ──
-	s.emitProgress(8, "결과 집계 중...", 87, "")
+	s.emitProgress(8, "Aggregating results...", 87, "")
 
-	// Count by severity
+	// Deduplicate FIRST, then count (fixes severity count mismatch bug)
+	result.Detections = deduplicateDetections(result.Detections)
+
+	// Enrich with user-friendly descriptions
+	for i := range result.Detections {
+		result.Detections[i].UserDescription = detector.GenerateUserDescription(&result.Detections[i])
+		result.Detections[i].Recommendation = detector.GenerateRecommendation(&result.Detections[i])
+	}
+
+	// Count by severity (after dedup)
 	for _, d := range result.Detections {
 		switch d.Severity {
 		case types.SeverityCritical:
@@ -202,9 +211,6 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 		}
 	}
 
-	// Deduplicate
-	result.Detections = deduplicateDetections(result.Detections)
-
 	// Extract IOCs
 	result.IOCs = det.ExtractIOCs(result)
 
@@ -215,9 +221,9 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	wailsRuntime.EventsEmit(s.ctx, "scan:progress", Progress{
 		Step:     8,
 		Total:    8,
-		StepName: "스캔 완료",
+		StepName: "Scan complete",
 		Percent:  100,
-		Detail:   fmt.Sprintf("총 %d건 탐지, %.1f초 소요", len(result.Detections), time.Since(startTime).Seconds()),
+		Detail:   fmt.Sprintf("%d detections, %.1fs elapsed", len(result.Detections), time.Since(startTime).Seconds()),
 		Done:     true,
 	})
 

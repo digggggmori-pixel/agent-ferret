@@ -56,18 +56,20 @@ type EventLogEntry struct {
 
 // Detection represents a security detection
 type Detection struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Severity    string                 `json:"severity"`
-	Confidence  float64                `json:"confidence"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Description string                 `json:"description"`
-	Process     *ProcessInfo           `json:"process,omitempty"`
-	Network     *NetworkConnection     `json:"network,omitempty"`
-	Registry    *RegistryEntry         `json:"registry,omitempty"`
-	MITRE       *MITREMapping          `json:"mitre,omitempty"`
-	SigmaRules  []string               `json:"sigma_rules,omitempty"`
-	Details     map[string]interface{} `json:"details,omitempty"`
+	ID              string                 `json:"id"`
+	Type            string                 `json:"type"`
+	Severity        string                 `json:"severity"`
+	Confidence      float64                `json:"confidence"`
+	Timestamp       time.Time              `json:"timestamp"`
+	Description     string                 `json:"description"`
+	UserDescription string                 `json:"user_description,omitempty"`
+	Recommendation  string                 `json:"recommendation,omitempty"`
+	Process         *ProcessInfo           `json:"process,omitempty"`
+	Network         *NetworkConnection     `json:"network,omitempty"`
+	Registry        *RegistryEntry         `json:"registry,omitempty"`
+	MITRE           *MITREMapping          `json:"mitre,omitempty"`
+	SigmaRules      []string               `json:"sigma_rules,omitempty"`
+	Details         map[string]interface{} `json:"details,omitempty"`
 }
 
 // MITREMapping represents MITRE ATT&CK mapping

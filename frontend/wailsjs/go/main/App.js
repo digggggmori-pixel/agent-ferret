@@ -21,33 +21,41 @@ const mockResult = {
     total_connections: 42,
     total_services: 215,
     total_events: 5420,
-    detections: { critical: 1, high: 3, medium: 7, low: 12 }
+    detections: { critical: 1, high: 3, medium: 2, low: 2 }
   },
   detections: [
     {
       id: "det-001", type: "lolbin_execution", severity: "critical", confidence: 0.95,
       timestamp: new Date().toISOString(),
-      description: "powershell.exe executing encoded command with suspicious parent process",
+      description: "LOLBin powershell.exe (Execute) executed",
+      user_description: "'powershell.exe' was executed with encoded commands. This is a built-in Windows tool that attackers commonly abuse to run malicious commands.",
+      recommendation: "Immediate attention required. Get a BRIQA AI analysis to assess the exact risk level.",
       process: { pid: 4521, ppid: 1234, name: "powershell.exe", path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", cmdline: "powershell -enc SQBFAHgA...", parent_name: "cmd.exe", create_time: new Date().toISOString() },
       mitre: { tactics: ["Execution"], techniques: ["T1059.001"] }
     },
     {
       id: "det-002", type: "suspicious_chain", severity: "high", confidence: 0.85,
       timestamp: new Date().toISOString(),
-      description: "explorer.exe -> cmd.exe -> powershell.exe chain detected",
-      process: { pid: 3201, ppid: 2100, name: "cmd.exe", path: "C:\\Windows\\System32\\cmd.exe", parent_name: "explorer.exe", create_time: new Date().toISOString() },
-      mitre: { tactics: ["Execution", "Defense Evasion"], techniques: ["T1059.003"] }
+      description: "Suspicious chain: w3wp.exe → cmd.exe",
+      user_description: "'w3wp.exe' launched 'cmd.exe'. This execution pattern is commonly seen in web shell attacks.",
+      recommendation: "Attention needed. Verify whether you recognize this program or activity.",
+      process: { pid: 3201, ppid: 2100, name: "cmd.exe", path: "C:\\Windows\\System32\\cmd.exe", parent_name: "w3wp.exe", create_time: new Date().toISOString() },
+      mitre: { tactics: ["Execution", "Initial Access"], techniques: ["T1190", "T1059.003"] }
     },
     {
       id: "det-003", type: "suspicious_port", severity: "high", confidence: 0.8,
       timestamp: new Date().toISOString(),
       description: "Connection to suspicious port 4444 (common C2 port)",
+      user_description: "Outbound connection detected on port 4444. This port is commonly associated with hacking tools or command-and-control servers.",
+      recommendation: "Attention needed. Verify whether you recognize this program or activity.",
       network: { protocol: "TCP", local_addr: "192.168.1.100", local_port: 51234, remote_addr: "45.33.32.156", remote_port: 4444, state: "ESTABLISHED", owning_pid: 5678, process_name: "svchost.exe" }
     },
     {
       id: "det-004", type: "sigma_match", severity: "high", confidence: 0.9,
       timestamp: new Date().toISOString(),
-      description: "Sigma: Suspicious PowerShell Download Cradle",
+      description: "Suspicious PowerShell Download Cradle",
+      user_description: "Suspicious PowerShell Download Cradle",
+      recommendation: "Attention needed. Verify whether you recognize this program or activity.",
       process: { pid: 4521, ppid: 1234, name: "powershell.exe", path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", create_time: new Date().toISOString() },
       sigma_rules: ["win_powershell_download"],
       mitre: { tactics: ["Execution"], techniques: ["T1059.001"] }
@@ -55,24 +63,32 @@ const mockResult = {
     {
       id: "det-005", type: "path_anomaly", severity: "medium", confidence: 0.7,
       timestamp: new Date().toISOString(),
-      description: "svchost.exe running from non-standard path: C:\\Users\\Public\\svchost.exe",
+      description: "Suspicious path pattern: Temp folder executable",
+      user_description: "'svchost.exe' is running from an unusual location. Legitimate software typically runs from standard system directories.",
+      recommendation: "Worth noting. This could be normal activity, but verify if anything seems unfamiliar.",
       process: { pid: 6789, ppid: 1, name: "svchost.exe", path: "C:\\Users\\Public\\svchost.exe", create_time: new Date().toISOString() }
     },
     {
       id: "det-006", type: "typosquatting", severity: "medium", confidence: 0.65,
       timestamp: new Date().toISOString(),
       description: "Possible typosquatting: svch0st.exe (similar to svchost.exe)",
+      user_description: "'svch0st.exe' has a name very similar to a known Windows system process. Attackers often disguise malware with lookalike names.",
+      recommendation: "Worth noting. This could be normal activity, but verify if anything seems unfamiliar.",
       process: { pid: 7890, ppid: 1, name: "svch0st.exe", path: "C:\\Windows\\Temp\\svch0st.exe", create_time: new Date().toISOString() }
     },
     {
-      id: "det-007", type: "service_path_anomaly", severity: "medium", confidence: 0.6,
+      id: "det-007", type: "encoded_command", severity: "low", confidence: 0.6,
       timestamp: new Date().toISOString(),
-      description: "Service 'UpdateService' running from user temp directory"
+      description: "Encoded/obfuscated command detected: -enc",
+      user_description: "An encoded or obfuscated command was detected. Attackers use encoding to hide malicious commands from security tools.",
+      recommendation: "Low risk. Most likely normal activity, noted for your reference."
     },
     {
       id: "det-008", type: "suspicious_domain", severity: "low", confidence: 0.5,
       timestamp: new Date().toISOString(),
-      description: "Connection to suspicious TLD: xyzmalware.tk",
+      description: "Suspicious domain: xyzmalware.tk (High-risk TLD: .tk)",
+      user_description: "A connection to suspicious domain 'xyzmalware.tk' was detected. This may indicate communication with a malicious server.",
+      recommendation: "Low risk. Most likely normal activity, noted for your reference.",
       network: { protocol: "TCP", local_addr: "192.168.1.100", local_port: 52345, remote_addr: "1.2.3.4", remote_port: 443, state: "ESTABLISHED", owning_pid: 3456 }
     }
   ],
@@ -89,23 +105,22 @@ const mockResult = {
 };
 
 export async function StartScan() {
-  // Simulate scan with progress events
   const steps = [
-    { step: 1, stepName: "프로세스 수집 중...", percent: 0, detail: "" },
-    { step: 1, stepName: "프로세스 수집 완료", percent: 12, detail: "187개 프로세스" },
-    { step: 2, stepName: "네트워크 연결 수집 중...", percent: 12, detail: "" },
-    { step: 2, stepName: "네트워크 연결 수집 완료", percent: 25, detail: "42개 연결" },
-    { step: 3, stepName: "서비스 수집 중...", percent: 25, detail: "" },
-    { step: 3, stepName: "서비스 수집 완료", percent: 37, detail: "215개 서비스" },
-    { step: 4, stepName: "레지스트리 스캔 중...", percent: 37, detail: "19개 Persistence 키 검사" },
-    { step: 4, stepName: "레지스트리 스캔 완료", percent: 50, detail: "" },
-    { step: 5, stepName: "탐지 엔진 실행 중...", percent: 50, detail: "12종 탐지 엔진" },
-    { step: 5, stepName: "탐지 엔진 완료", percent: 62, detail: "23건 탐지" },
-    { step: 6, stepName: "Sigma 룰 매칭 중...", percent: 62, detail: "" },
-    { step: 6, stepName: "Sigma 라이브 매칭 완료", percent: 75, detail: "63룰 적용" },
-    { step: 7, stepName: "이벤트 로그 분석 중...", percent: 75, detail: "" },
-    { step: 7, stepName: "이벤트 로그 분석 완료", percent: 87, detail: "5420 이벤트 스캔" },
-    { step: 8, stepName: "스캔 완료", percent: 100, detail: "총 23건 탐지, 12.3초 소요", done: true },
+    { step: 1, stepName: "Collecting processes...", percent: 0, detail: "" },
+    { step: 1, stepName: "Processes collected", percent: 12, detail: "187 processes" },
+    { step: 2, stepName: "Collecting network connections...", percent: 12, detail: "" },
+    { step: 2, stepName: "Network connections collected", percent: 25, detail: "42 connections" },
+    { step: 3, stepName: "Collecting services...", percent: 25, detail: "" },
+    { step: 3, stepName: "Services collected", percent: 37, detail: "215 services" },
+    { step: 4, stepName: "Scanning registry...", percent: 37, detail: "19 persistence keys" },
+    { step: 4, stepName: "Registry scan complete", percent: 50, detail: "" },
+    { step: 5, stepName: "Running detection engines...", percent: 50, detail: "12 detection engines" },
+    { step: 5, stepName: "Detection engines complete", percent: 62, detail: "8 detections" },
+    { step: 6, stepName: "Sigma rule matching...", percent: 62, detail: "" },
+    { step: 6, stepName: "Sigma live matching complete", percent: 75, detail: "63 rules applied" },
+    { step: 7, stepName: "Analyzing event logs...", percent: 75, detail: "" },
+    { step: 7, stepName: "Event log analysis complete", percent: 87, detail: "5420 events scanned" },
+    { step: 8, stepName: "Scan complete", percent: 100, detail: "8 detections, 12.3s elapsed", done: true },
   ];
 
   for (const s of steps) {

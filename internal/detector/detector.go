@@ -92,12 +92,14 @@ func isNormalWindowsShell(name, path, cmdline, parentName string) bool {
 	pathLower := strings.ToLower(path)
 	parentLower := strings.ToLower(parentName)
 
-	// Common Windows shell processes that run normally
+	// Common Windows shell/installer processes that run normally
 	shellProcesses := map[string]bool{
 		"explorer.exe":   true,
 		"cmd.exe":        true,
 		"powershell.exe": true,
 		"pwsh.exe":       true,
+		"msiexec.exe":    true,
+		"mmc.exe":        true,
 	}
 
 	if !shellProcesses[nameLower] {
@@ -143,6 +145,17 @@ func isNormalWindowsShell(name, path, cmdline, parentName string) bool {
 		"services.exe":        true,
 		"userinit.exe":        true,
 		"winlogon.exe":        true,
+		// Developer tools
+		"wails.exe":           true,
+		"go.exe":              true,
+		"npm.exe":             true,
+		"node.exe":            true,
+		"cargo.exe":           true,
+		"python.exe":          true,
+		"python3.exe":         true,
+		"idea64.exe":          true,
+		"devenv.exe":          true,
+		"goland64.exe":        true,
 	}
 
 	// For explorer.exe, it's almost always normal when from Windows path
@@ -215,6 +228,13 @@ func isDeveloperFriendlyChain(parent, child, parentPath string) bool {
 		"php.exe":     true,
 		"java.exe":    true,
 		"javaw.exe":   true,
+		"wails.exe":   true,
+		"go.exe":      true,
+		"npm.exe":     true,
+		"cargo.exe":   true,
+		"gradle.exe":  true,
+		"maven.exe":   true,
+		"dotnet.exe":  true,
 	}
 
 	if developerParents[parentLower] {
@@ -225,6 +245,9 @@ func isDeveloperFriendlyChain(parent, child, parentPath string) bool {
 			`\nodejs\`,
 			`\program files\`,
 			`\appdata\local\programs\`,
+			`\go\bin\`,
+			`\cargo\bin\`,
+			`\npm\`,
 		}
 
 		for _, path := range legitDevPaths {
