@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ferret Character Designer</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #080810;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 20px 10px;
+  }
+
+  .window-frame {
+    width: 940px;
+    max-width: 100%;
+    border: 2px solid #00ffff;
+    background: #0a0a18;
+    box-shadow: 0 0 30px rgba(0,255,255,0.15), inset 0 0 60px rgba(0,0,0,0.5);
+  }
+
+  /* Title bar */
+  .title-bar {
+    background: linear-gradient(90deg, #001a1a, #002a2a, #001a1a);
+    border-bottom: 2px solid #00ffff;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .title-bar-text {
+    font-size: 9px;
+    color: #00ffff;
+    text-shadow: 0 0 6px #00ffff;
+  }
+  .title-bar-buttons {
+    display: flex;
+    gap: 6px;
+  }
+  .title-bar-buttons span {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1px solid #00ffff;
+    font-size: 7px;
+    text-align: center;
+    line-height: 11px;
+    color: #00ffff;
+    cursor: pointer;
+  }
+  .title-bar-buttons span:hover { background: #00ffff22; }
+
+  .content {
+    padding: 30px 20px;
+  }
+
+  /* Header */
+  .page-header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .page-header h1 {
+    font-size: 18px;
+    color: #00ffff;
+    text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 40px #005f7f;
+    margin-bottom: 14px;
+    letter-spacing: 2px;
+  }
+  .page-header p {
+    font-size: 9px;
+    color: #7fa8b8;
+    text-shadow: 0 0 4px #005f7f;
+  }
+
+  /* Style row */
+  .style-row {
+    border: 1px solid #00ffff44;
+    background: #0c0c1c;
+    margin-bottom: 30px;
+    padding: 20px;
+    position: relative;
+    box-shadow: 0 0 15px rgba(0,255,255,0.05), inset 0 0 30px rgba(0,0,0,0.3);
+    transition: box-shadow 0.3s, border-color 0.3s;
+  }
+  .style-row:hover {
+    border-color: #00ffffaa;
+    box-shadow: 0 0 25px rgba(0,255,255,0.15), inset 0 0 30px rgba(0,0,0,0.3);
+  }
+  .style-row::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: -1px; right: -1px; bottom: -1px;
+    border: 1px solid transparent;
+    pointer-events: none;
+  }
+
+  .style-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .style-name {
+    font-size: 12px;
+    color: #00ffff;
+    text-shadow: 0 0 8px #00ffff;
+  }
+  .style-name span {
+    color: #ff69b4;
+    text-shadow: 0 0 8px #ff69b4;
+  }
+  .style-desc {
+    font-size: 7px;
+    color: #9ab8c8;
+    max-width: 400px;
+    line-height: 1.8;
+    text-align: right;
+  }
+
+  /* Pose grid */
+  .poses-grid {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .pose-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    min-width: 100px;
+  }
+  .pose-container {
+    width: 120px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: #06060e;
+    border: 1px solid #1a1a3a;
+    border-radius: 2px;
+  }
+  .pose-container.anim-box {
+    border-color: #00ffff44;
+    background: #08081a;
+  }
+  .pose-label {
+    font-size: 7px;
+    color: #5a8a9a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* Pixel art base */
+  .pixel-art {
+    width: 1px;
+    height: 1px;
+    transform: scale(4);
+    image-rendering: pixelated;
+    position: relative;
+  }
+  .pixel-art.hidden { display: none; }
+
+  /* Style personality text */
+  .style-personality {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #1a1a3a;
+    font-size: 7px;
+    color: #6a8a9a;
+    line-height: 1.8;
+    text-align: center;
+  }
+
+  /* Vote section */
+  .vote-section {
+    text-align: center;
+    margin-top: 40px;
+    padding: 30px 20px;
+    border: 1px solid #ff69b466;
+    background: #0e0818;
+    box-shadow: 0 0 20px rgba(255,105,180,0.08);
+  }
+  .vote-section h2 {
+    font-size: 14px;
+    color: #ff69b4;
+    text-shadow: 0 0 10px #ff69b4;
+    margin-bottom: 8px;
+  }
+  .vote-section p {
+    font-size: 7px;
+    color: #9a7a8a;
+    margin-bottom: 24px;
+  }
+  .vote-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+  }
+  .vote-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 12px 16px;
+    border: 2px solid #00ffff44;
+    background: #0a0a1a;
+    color: #00ffff;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    min-width: 140px;
+  }
+  .vote-btn:hover {
+    border-color: #00ffff;
+    box-shadow: 0 0 15px rgba(0,255,255,0.3);
+    transform: translateY(-2px);
+  }
+  .vote-btn.selected {
+    border-color: #ff69b4;
+    color: #ff69b4;
+    box-shadow: 0 0 20px rgba(255,105,180,0.4), 0 0 40px rgba(255,105,180,0.15);
+    background: #1a0818;
+  }
+  .vote-btn .selected-text {
+    display: none;
+    font-size: 6px;
+    color: #ff69b4;
+    margin-top: 6px;
+  }
+  .vote-btn.selected .selected-text { display: block; }
+
+  /* Status bar */
+  .status-bar {
+    background: linear-gradient(90deg, #001a1a, #002a2a, #001a1a);
+    border-top: 2px solid #00ffff;
+    padding: 6px 12px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 7px;
+    color: #00808088;
+  }
+
+  /* Animation classes for pose cycling */
+  @keyframes idleBob {
+    0%, 100% { transform: scale(4) translateY(0); }
+    50% { transform: scale(4) translateY(-0.5px); }
+  }
+  @keyframes sniffBob {
+    0%, 100% { transform: scale(4) translateX(0); }
+    30% { transform: scale(4) translateX(0.5px); }
+    60% { transform: scale(4) translateX(-0.3px); }
+  }
+  @keyframes foundBounce {
+    0%, 100% { transform: scale(4) translateY(0); }
+    40% { transform: scale(4) translateY(-1.5px); }
+  }
+
+  .pose-idle-anim { animation: idleBob 1.2s ease-in-out infinite; }
+  .pose-sniff-anim { animation: sniffBob 0.6s ease-in-out infinite; }
+  .pose-found-anim { animation: foundBounce 0.5s ease-in-out infinite; }
+
+  /* Visor pulse for cyber style */
+  @keyframes visorPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* Subtle sparkle for chibi */
+  .sparkle-dot {
+    position: absolute;
+    width: 1px; height: 1px;
+    background: #fff;
+    border-radius: 50%;
+    animation: sparkle 1s ease-in-out infinite;
+  }
+  @keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0); }
+    50% { opacity: 1; transform: scale(4); }
+  }
+</style>
+</head>
+<body>
+
+<div class="window-frame">
+  <!-- Title bar -->
+  <div class="title-bar">
+    <div class="title-bar-text">&#9632; Ferret Character Designer</div>
+    <div class="title-bar-buttons">
+      <span>_</span><span>&#9633;</span><span>X</span>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Header -->
+    <div class="page-header">
+      <h1>FERRET CHARACTER DESIGNS</h1>
+      <p>Pick your ferret mascot &mdash; 5 pixel art styles</p>
+    </div>
+
+    <!-- ==================== STYLE 1: CLASSIC NES ==================== -->
+    <div class="style-row" id="style1">
+      <div class="style-header">
+        <div class="style-name">#1 <span>"Classic"</span> &mdash; NES 8-bit</div>
+        <div class="style-desc">Minimal and iconic. 3 colors, pure nostalgia.</div>
+      </div>
+      <div class="poses-grid">
+        <!-- Idle -->
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s1-idle"></div>
+          </div>
+          <div class="pose-label">Idle</div>
+        </div>
+        <!-- Sniff -->
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s1-sniff"></div>
+          </div>
+          <div class="pose-label">Sniff</div>
+        </div>
+        <!-- Found -->
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s1-found"></div>
+          </div>
+          <div class="pose-label">Found!</div>
+        </div>
+        <!-- Animated -->
+        <div class="pose-cell">
+          <div class="pose-container anim-box">
+            <div class="pixel-art" id="s1-anim-idle"></div>
+            <div class="pixel-art hidden" id="s1-anim-sniff"></div>
+            <div class="pixel-art hidden" id="s1-anim-found"></div>
+          </div>
+          <div class="pose-label">Animation</div>
+        </div>
+      </div>
+      <div class="style-personality">
+        The original 8-bit ferret. Reads like a classic NES sprite &mdash; immediately recognizable
+        with minimal pixel count. Perfect for retro purists.
+      </div>
+    </div>
+
+    <!-- ==================== STYLE 2: DETAILED 16-BIT ==================== -->
+    <div class="style-row" id="style2">
+      <div class="style-header">
+        <div class="style-name">#2 <span>"Detailed"</span> &mdash; 16-bit SNES</div>
+        <div class="style-desc">Rich detail with personality. The classic game sprite approach.</div>
+      </div>
+      <div class="poses-grid">
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s2-idle"></div>
+          </div>
+          <div class="pose-label">Idle</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s2-sniff"></div>
+          </div>
+          <div class="pose-label">Sniff</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s2-found"></div>
+          </div>
+          <div class="pose-label">Found!</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container anim-box">
+            <div class="pixel-art" id="s2-anim-idle"></div>
+            <div class="pixel-art hidden" id="s2-anim-sniff"></div>
+            <div class="pixel-art hidden" id="s2-anim-found"></div>
+          </div>
+          <div class="pose-label">Animation</div>
+        </div>
+      </div>
+      <div class="style-personality">
+        16-bit era detail &mdash; visible mask pattern, tail curl, paw pads, and whiskers.
+        Balanced between cute and professional. A sprite that tells a story.
+      </div>
+    </div>
+
+    <!-- ==================== STYLE 3: CHIBI ==================== -->
+    <div class="style-row" id="style3">
+      <div class="style-header">
+        <div class="style-name">#3 <span>"Chibi"</span> &mdash; Cute Big-Head</div>
+        <div class="style-desc">Maximum cuteness. Big eyes, small body, irresistible.</div>
+      </div>
+      <div class="poses-grid">
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s3-idle"></div>
+          </div>
+          <div class="pose-label">Idle</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s3-sniff"></div>
+          </div>
+          <div class="pose-label">Sniff</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s3-found"></div>
+          </div>
+          <div class="pose-label">Found!</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container anim-box">
+            <div class="pixel-art" id="s3-anim-idle"></div>
+            <div class="pixel-art hidden" id="s3-anim-sniff"></div>
+            <div class="pixel-art hidden" id="s3-anim-found"></div>
+          </div>
+          <div class="pose-label">Animation</div>
+        </div>
+      </div>
+      <div class="style-personality">
+        Oversized head, sparkly eyes, blushing cheeks. The chibi ferret wins hearts instantly.
+        Approachable and friendly &mdash; makes security feel less intimidating.
+      </div>
+    </div>
+
+    <!-- ==================== STYLE 4: DETECTIVE ==================== -->
+    <div class="style-row" id="style4">
+      <div class="style-header">
+        <div class="style-name">#4 <span>"Detective"</span> &mdash; Investigator</div>
+        <div class="style-desc">Detective ferret on the case. Magnifying glass + deerstalker hat = investigator.</div>
+      </div>
+      <div class="poses-grid">
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s4-idle"></div>
+          </div>
+          <div class="pose-label">Idle</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s4-sniff"></div>
+          </div>
+          <div class="pose-label">Sniff</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s4-found"></div>
+          </div>
+          <div class="pose-label">Found!</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container anim-box">
+            <div class="pixel-art" id="s4-anim-idle"></div>
+            <div class="pixel-art hidden" id="s4-anim-sniff"></div>
+            <div class="pixel-art hidden" id="s4-anim-found"></div>
+          </div>
+          <div class="pose-label">Animation</div>
+        </div>
+      </div>
+      <div class="style-personality">
+        The Sherlock Holmes of ferrets. Deerstalker hat and magnifying glass
+        directly convey "investigation" &mdash; perfect thematic match for a security scanner.
+      </div>
+    </div>
+
+    <!-- ==================== STYLE 5: CYBER ==================== -->
+    <div class="style-row" id="style5">
+      <div class="style-header">
+        <div class="style-name">#5 <span>"Cyber"</span> &mdash; Cyberpunk</div>
+        <div class="style-desc">Cyber-enhanced operative. Visor and circuits = digital security.</div>
+      </div>
+      <div class="poses-grid">
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s5-idle"></div>
+          </div>
+          <div class="pose-label">Idle</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s5-sniff"></div>
+          </div>
+          <div class="pose-label">Sniff</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container">
+            <div class="pixel-art" id="s5-found"></div>
+          </div>
+          <div class="pose-label">Found!</div>
+        </div>
+        <div class="pose-cell">
+          <div class="pose-container anim-box">
+            <div class="pixel-art" id="s5-anim-idle"></div>
+            <div class="pixel-art hidden" id="s5-anim-sniff"></div>
+            <div class="pixel-art hidden" id="s5-anim-found"></div>
+          </div>
+          <div class="pose-label">Animation</div>
+        </div>
+      </div>
+      <div class="style-personality">
+        Neon visor, circuit traces, angular silhouette. The cyber ferret is a digital operative,
+        scanning networks with augmented senses. Peak cybersecurity aesthetic.
+      </div>
+    </div>
+
+    <!-- ==================== VOTE SECTION ==================== -->
+    <div class="vote-section">
+      <h2>CAST YOUR VOTE</h2>
+      <p>Select your favorite ferret style for the Ferret security scanner</p>
+      <div class="vote-buttons">
+        <button class="vote-btn" data-style="1" onclick="vote(this)">
+          #1 Classic
+          <div class="selected-text">SELECTED!</div>
+        </button>
+        <button class="vote-btn" data-style="2" onclick="vote(this)">
+          #2 Detailed
+          <div class="selected-text">SELECTED!</div>
+        </button>
+        <button class="vote-btn" data-style="3" onclick="vote(this)">
+          #3 Chibi
+          <div class="selected-text">SELECTED!</div>
+        </button>
+        <button class="vote-btn" data-style="4" onclick="vote(this)">
+          #4 Detective
+          <div class="selected-text">SELECTED!</div>
+        </button>
+        <button class="vote-btn" data-style="5" onclick="vote(this)">
+          #5 Cyber
+          <div class="selected-text">SELECTED!</div>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span>5 CHARACTER STYLES LOADED</span>
+    <span>PIXEL SCALE: 4x</span>
+    <span>FERRET v1.0</span>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// PIXEL ART DATA
+// Each sprite is an array of [x, y, color] entries
+// ============================================================
+
+// Color constants
+const C = {
+  // Style 1 - NES Classic
+  body:     '#b8834e',
+  belly:    '#e8d0a8',
+  mask:     '#3a2010',
+  eyes:     '#00ffff',
+  nose:     '#ff6b9d',
+  // Style 2 - SNES Detailed
+  body2:    '#c4956a',
+  light2:   '#d4ab82',
+  belly2:   '#f0dcc0',
+  dark2:    '#5a3820',
+  mask2:    '#3a2a1a',
+  eyes2:    '#00ffff',
+  pupil2:   '#005f5f',
+  nose2:    '#ff69b4',
+  ear2:     '#e8a0b0',
+  // Style 3 - Chibi
+  body3:    '#c4956a',
+  belly3:   '#f0dcc0',
+  blush:    '#ffb8c0',
+  eyeW:     '#ffffff',
+  iris3:    '#00ffff',
+  // Style 4 - Detective (uses style2 colors + hat/glass)
+  hat:      '#5a4a2a',
+  hatBand:  '#8a7a5a',
+  glass:    '#c0c0c0',
+  lens:     '#aaddff',
+  lensGlint:'#ffffff',
+  // Style 5 - Cyber
+  visor:    '#00ffff',
+  circuit:  '#00ff41',
+  visorDk:  '#008888',
+  alertRed: '#ff3333',
+  // Shared
+  black:    '#000000',
+  white:    '#ffffff',
+  excl:     '#ffff00',
+  exclR:    '#ff3333',
+};
+
+// Helper: generate box-shadow string from pixel array
+function pixelsToShadow(pixels) {
+  return pixels.map(p => `${p[0]}px ${p[1]}px 0 ${p[2]}`).join(',');
+}
+
+// Apply pixel art to element
+function applyPixels(id, pixels) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.boxShadow = pixelsToShadow(pixels);
+}
+
+// ============================================================
+// STYLE 1: CLASSIC NES 8-BIT (~10x8)
+// Sitting ferret facing right, simple oval body
+// ============================================================
+
+const s1_idle = [
+  // Ears (tiny, row 0)
+  [3,0,C.body], [4,0,C.body],  [7,0,C.body], [8,0,C.body],
+  // Head row 1
+  [2,1,C.body], [3,1,C.body], [4,1,C.body], [5,1,C.body], [6,1,C.body], [7,1,C.body], [8,1,C.body], [9,1,C.body],
+  // Head row 2 - mask and eyes
+  [2,2,C.body], [3,2,C.mask], [4,2,C.eyes], [5,2,C.mask], [6,2,C.mask], [7,2,C.eyes], [8,2,C.mask], [9,2,C.body],
+  // Head row 3 - nose
+  [2,3,C.body], [3,3,C.body], [4,3,C.body], [5,3,C.body], [6,3,C.nose], [7,3,C.body], [8,3,C.body], [9,3,C.body],
+  // Body row 4
+  [3,4,C.body], [4,4,C.body], [5,4,C.belly], [6,4,C.belly], [7,4,C.body], [8,4,C.body],
+  // Body row 5
+  [3,5,C.body], [4,5,C.belly], [5,5,C.belly], [6,5,C.belly], [7,5,C.body], [8,5,C.body],
+  // Body row 6
+  [3,6,C.body], [4,6,C.belly], [5,6,C.belly], [6,6,C.belly], [7,6,C.body], [8,6,C.body],
+  // Legs row 7
+  [3,7,C.body], [4,7,C.body], [7,7,C.body], [8,7,C.body],
+];
+
+const s1_sniff = [
+  // Stretched horizontal ferret, nose down
+  // Ears row 0
+  [1,0,C.body], [2,0,C.body],
+  // Head row 1
+  [0,1,C.body], [1,1,C.body], [2,1,C.body], [3,1,C.body],
+  // Head row 2 - mask/eyes
+  [0,2,C.body], [1,2,C.mask], [2,2,C.eyes], [3,2,C.mask],
+  // Head row 3
+  [0,3,C.body], [1,3,C.body], [2,3,C.body], [3,3,C.body], [4,3,C.body],
+  // Body row 4
+  [3,4,C.body], [4,4,C.body], [5,4,C.body], [6,4,C.body], [7,4,C.body], [8,4,C.body], [9,4,C.body],
+  // Body row 5 - belly
+  [3,5,C.body], [4,5,C.belly], [5,5,C.belly], [6,5,C.belly], [7,5,C.belly], [8,5,C.body], [9,5,C.body], [10,5,C.body],
+  // Legs/tail row 6
+  [4,6,C.body], [5,6,C.body], [8,6,C.body], [9,6,C.body], [10,6,C.body],
+  // Nose
+  [0,4,C.nose], [1,4,C.body],  [2,4,C.body],
+  // Tail tip
+  [11,4,C.body], [11,5,C.body],
+];
+
+const s1_found = [
+  // Standing tall ferret with "!" above
+  // Exclamation mark
+  [5,0,C.excl], [5,1,C.excl], [5,2,C.excl],
+  [5,4,C.excl],
+  // Ears row 5
+  [3,5,C.body], [4,5,C.body], [7,5,C.body], [8,5,C.body],
+  // Head row 6
+  [2,6,C.body], [3,6,C.body], [4,6,C.body], [5,6,C.body], [6,6,C.body], [7,6,C.body], [8,6,C.body], [9,6,C.body],
+  // Mask/eyes row 7
+  [2,7,C.body], [3,7,C.mask], [4,7,C.eyes], [5,7,C.mask], [6,7,C.mask], [7,7,C.eyes], [8,7,C.mask], [9,7,C.body],
+  // Nose row 8
+  [3,8,C.body], [4,8,C.body], [5,8,C.body], [6,8,C.nose], [7,8,C.body], [8,8,C.body],
+  // Body row 9
+  [4,9,C.body], [5,9,C.belly], [6,9,C.belly], [7,9,C.body],
+  // Body row 10
+  [4,10,C.body], [5,10,C.belly], [6,10,C.belly], [7,10,C.body],
+  // Body row 11
+  [4,11,C.body], [5,11,C.belly], [6,11,C.belly], [7,11,C.body],
+  // Legs row 12
+  [4,12,C.body], [5,12,C.body], [6,12,C.body], [7,12,C.body],
+];
+
+
+// ============================================================
+// STYLE 2: DETAILED 16-BIT (~16x12)
+// ============================================================
+
+const s2_idle = [
+  // Ears row 0
+  [4,0,C.body2], [5,0,C.body2], [10,0,C.body2], [11,0,C.body2],
+  // Ear inner + head row 1
+  [4,1,C.body2], [5,1,C.ear2], [6,1,C.body2], [7,1,C.body2], [8,1,C.body2], [9,1,C.body2], [10,1,C.ear2], [11,1,C.body2],
+  // Head row 2
+  [3,2,C.body2], [4,2,C.body2], [5,2,C.body2], [6,2,C.body2], [7,2,C.body2], [8,2,C.body2], [9,2,C.body2], [10,2,C.body2], [11,2,C.body2], [12,2,C.body2],
+  // Mask + eyes row 3
+  [3,3,C.body2], [4,3,C.mask2], [5,3,C.eyes2], [6,3,C.pupil2], [7,3,C.mask2], [8,3,C.mask2], [9,3,C.pupil2], [10,3,C.eyes2], [11,3,C.mask2], [12,3,C.body2],
+  // Mask row 4
+  [3,4,C.body2], [4,4,C.mask2], [5,4,C.mask2], [6,4,C.body2], [7,4,C.body2], [8,4,C.body2], [9,4,C.body2], [10,4,C.mask2], [11,4,C.mask2], [12,4,C.body2],
+  // Nose/mouth row 5
+  [4,5,C.body2], [5,5,C.body2], [6,5,C.body2], [7,5,C.nose2], [8,5,C.body2], [9,5,C.body2], [10,5,C.body2], [11,5,C.body2],
+  // Whiskers
+  [2,4,C.light2], [13,4,C.light2], [1,5,C.light2], [13,5,C.light2],
+  // Neck row 6
+  [5,6,C.body2], [6,6,C.body2], [7,6,C.light2], [8,6,C.light2], [9,6,C.body2], [10,6,C.body2],
+  // Body row 7
+  [4,7,C.body2], [5,7,C.body2], [6,7,C.belly2], [7,7,C.belly2], [8,7,C.belly2], [9,7,C.body2], [10,7,C.body2], [11,7,C.body2],
+  // Body row 8
+  [4,8,C.body2], [5,8,C.belly2], [6,8,C.belly2], [7,8,C.belly2], [8,8,C.belly2], [9,8,C.belly2], [10,8,C.body2], [11,8,C.body2], [12,8,C.body2],
+  // Body row 9
+  [4,9,C.body2], [5,9,C.belly2], [6,9,C.belly2], [7,9,C.belly2], [8,9,C.belly2], [9,9,C.body2], [10,9,C.body2], [11,9,C.body2], [12,9,C.body2], [13,9,C.body2],
+  // Legs row 10
+  [4,10,C.dark2], [5,10,C.dark2], [8,10,C.dark2], [9,10,C.dark2], [13,10,C.body2], [14,10,C.body2],
+  // Tail
+  [13,8,C.body2], [14,7,C.body2], [14,8,C.light2], [15,7,C.light2],
+];
+
+const s2_sniff = [
+  // Low-to-ground elongated body, nose forward
+  // Ears row 0
+  [1,0,C.body2], [2,0,C.body2],
+  // Head row 1
+  [0,1,C.body2], [1,1,C.ear2], [2,1,C.body2], [3,1,C.body2], [4,1,C.body2],
+  // Eyes/mask row 2
+  [0,2,C.body2], [1,2,C.mask2], [2,2,C.eyes2], [3,2,C.mask2], [4,2,C.body2], [5,2,C.body2],
+  // Mask continued row 3
+  [0,3,C.body2], [1,3,C.mask2], [2,3,C.mask2], [3,3,C.body2], [4,3,C.body2], [5,3,C.body2],
+  // Nose row 4
+  [0,4,C.nose2], [1,4,C.body2], [2,4,C.body2], [3,4,C.body2], [4,4,C.body2], [5,4,C.body2], [6,4,C.body2], [7,4,C.body2], [8,4,C.body2],
+  // Body row 5
+  [4,5,C.body2], [5,5,C.body2], [6,5,C.belly2], [7,5,C.belly2], [8,5,C.belly2], [9,5,C.body2], [10,5,C.body2], [11,5,C.body2], [12,5,C.body2],
+  // Belly row 6
+  [4,6,C.body2], [5,6,C.belly2], [6,6,C.belly2], [7,6,C.belly2], [8,6,C.belly2], [9,6,C.belly2], [10,6,C.body2], [11,6,C.body2], [12,6,C.body2], [13,6,C.body2],
+  // Legs/tail row 7
+  [5,7,C.dark2], [6,7,C.dark2], [9,7,C.dark2], [10,7,C.dark2], [13,7,C.body2], [14,7,C.body2],
+  // Whiskers
+  [0,3,C.light2], [0,5,C.light2],
+  // Tail
+  [14,6,C.body2], [15,5,C.light2], [15,6,C.light2],
+];
+
+const s2_found = [
+  // On hind legs, arms up, "!" with glow
+  // "!" mark
+  [7,0,C.excl], [7,1,C.excl], [7,2,C.excl],
+  [7,4,C.excl],
+  // Glow around !
+  [6,0,'#ffff0044'], [8,0,'#ffff0044'], [6,2,'#ffff0044'], [8,2,'#ffff0044'],
+  // Ears row 5
+  [4,5,C.body2], [5,5,C.body2], [10,5,C.body2], [11,5,C.body2],
+  // Head row 6
+  [4,6,C.body2], [5,6,C.ear2], [6,6,C.body2], [7,6,C.body2], [8,6,C.body2], [9,6,C.body2], [10,6,C.ear2], [11,6,C.body2],
+  // Eyes row 7
+  [3,7,C.body2], [4,7,C.body2], [5,7,C.mask2], [6,7,C.eyes2], [7,7,C.mask2], [8,7,C.mask2], [9,7,C.eyes2], [10,7,C.mask2], [11,7,C.body2], [12,7,C.body2],
+  // Mouth row 8
+  [4,8,C.body2], [5,8,C.body2], [6,8,C.body2], [7,8,C.nose2], [8,8,C.body2], [9,8,C.body2], [10,8,C.body2], [11,8,C.body2],
+  // Arms up row 9
+  [3,9,C.body2], [4,9,C.body2], [5,9,C.body2], [6,9,C.belly2], [7,9,C.belly2], [8,9,C.belly2], [9,9,C.body2], [10,9,C.body2], [11,9,C.body2], [12,9,C.body2],
+  // Body row 10
+  [5,10,C.body2], [6,10,C.belly2], [7,10,C.belly2], [8,10,C.belly2], [9,10,C.body2], [10,10,C.body2],
+  // Body row 11
+  [5,11,C.body2], [6,11,C.belly2], [7,11,C.belly2], [8,11,C.belly2], [9,11,C.body2],
+  // Body row 12
+  [5,12,C.body2], [6,12,C.belly2], [7,12,C.belly2], [8,12,C.body2], [9,12,C.body2],
+  // Legs row 13
+  [5,13,C.dark2], [6,13,C.dark2], [8,13,C.dark2], [9,13,C.dark2],
+];
+
+// ============================================================
+// STYLE 3: CHIBI (~12x14, big head)
+// ============================================================
+
+const s3_idle = [
+  // Big round head
+  // Row 0 - top of head
+  [4,0,C.body3], [5,0,C.body3], [6,0,C.body3], [7,0,C.body3],
+  // Row 1
+  [3,1,C.body3], [4,1,C.body3], [5,1,C.body3], [6,1,C.body3], [7,1,C.body3], [8,1,C.body3],
+  // Row 2 - ears poke up from sides
+  [2,2,C.body3], [3,2,C.body3], [4,2,C.body3], [5,2,C.body3], [6,2,C.body3], [7,2,C.body3], [8,2,C.body3], [9,2,C.body3],
+  // Row 3 - eyes (HUGE)
+  [2,3,C.body3], [3,3,C.mask], [4,3,C.eyeW], [5,3,C.iris3], [6,3,C.body3], [7,3,C.eyeW], [8,3,C.iris3], [9,3,C.body3],
+  // Row 4 - eyes lower + highlight
+  [2,4,C.body3], [3,4,C.mask], [4,4,C.iris3], [5,4,C.iris3], [6,4,C.body3], [7,4,C.iris3], [8,4,C.iris3], [9,4,C.body3],
+  // Eye highlights
+  [4,3,C.white], [7,3,C.white],
+  // Row 5 - nose and blush
+  [2,5,C.blush], [3,5,C.body3], [4,5,C.body3], [5,5,C.nose2], [6,5,C.body3], [7,5,C.body3], [8,5,C.body3], [9,5,C.blush],
+  // Row 6 - lower face
+  [3,6,C.body3], [4,6,C.body3], [5,6,C.body3], [6,6,C.body3], [7,6,C.body3], [8,6,C.body3],
+  // Row 7 - chin
+  [4,7,C.body3], [5,7,C.body3], [6,7,C.body3], [7,7,C.body3],
+  // Tiny body row 8
+  [4,8,C.body3], [5,8,C.belly3], [6,8,C.belly3], [7,8,C.body3],
+  // Body row 9
+  [4,9,C.body3], [5,9,C.belly3], [6,9,C.belly3], [7,9,C.body3],
+  // Tiny legs row 10
+  [4,10,C.body3], [5,10,C.body3], [6,10,C.body3], [7,10,C.body3],
+  // Feet
+  [3,11,C.body3], [4,11,C.body3], [7,11,C.body3], [8,11,C.body3],
+];
+
+const s3_sniff = [
+  // Head tilted down, big curious eyes looking up
+  // Row 0
+  [4,1,C.body3], [5,1,C.body3], [6,1,C.body3], [7,1,C.body3],
+  // Row 1
+  [3,2,C.body3], [4,2,C.body3], [5,2,C.body3], [6,2,C.body3], [7,2,C.body3], [8,2,C.body3],
+  // Row 2
+  [2,3,C.body3], [3,3,C.body3], [4,3,C.body3], [5,3,C.body3], [6,3,C.body3], [7,3,C.body3], [8,3,C.body3], [9,3,C.body3],
+  // Eyes looking UP (highlight at top)
+  [2,4,C.body3], [3,4,C.mask], [4,4,C.white], [5,4,C.white], [6,4,C.body3], [7,4,C.white], [8,4,C.white], [9,4,C.body3],
+  [2,5,C.body3], [3,5,C.mask], [4,5,C.iris3], [5,5,C.iris3], [6,5,C.body3], [7,5,C.iris3], [8,5,C.iris3], [9,5,C.body3],
+  // Blush + nose (lower)
+  [2,6,C.blush], [3,6,C.body3], [4,6,C.body3], [5,6,C.body3], [6,6,C.body3], [7,6,C.body3], [8,6,C.body3], [9,6,C.blush],
+  [3,7,C.body3], [4,7,C.body3], [5,7,C.nose2], [6,7,C.body3], [7,7,C.body3], [8,7,C.body3],
+  // Chin
+  [4,8,C.body3], [5,8,C.body3], [6,8,C.body3], [7,8,C.body3],
+  // Tiny body leaning forward
+  [5,9,C.body3], [6,9,C.belly3], [7,9,C.body3],
+  [5,10,C.body3], [6,10,C.belly3], [7,10,C.body3],
+  // Legs
+  [4,11,C.body3], [5,11,C.body3], [7,11,C.body3], [8,11,C.body3],
+];
+
+const s3_found = [
+  // Jumping up with big mouth open "!"
+  // Sparkles
+  [1,1,C.excl], [10,0,C.excl], [0,4,C.excl], [11,3,C.excl],
+  // "!" above head
+  [5,0,C.excl], [6,0,C.excl],
+  [5,1,C.excl], [6,1,C.excl],
+  [5,3,C.excl], [6,3,C.excl],
+  // Head row 4
+  [4,4,C.body3], [5,4,C.body3], [6,4,C.body3], [7,4,C.body3],
+  [3,5,C.body3], [4,5,C.body3], [5,5,C.body3], [6,5,C.body3], [7,5,C.body3], [8,5,C.body3],
+  // Big head
+  [2,6,C.body3], [3,6,C.body3], [4,6,C.body3], [5,6,C.body3], [6,6,C.body3], [7,6,C.body3], [8,6,C.body3], [9,6,C.body3],
+  // Eyes wide open
+  [2,7,C.body3], [3,7,C.white], [4,7,C.iris3], [5,7,C.body3], [6,7,C.body3], [7,7,C.white], [8,7,C.iris3], [9,7,C.body3],
+  [2,8,C.body3], [3,8,C.iris3], [4,8,C.iris3], [5,8,C.body3], [6,8,C.body3], [7,8,C.iris3], [8,8,C.iris3], [9,8,C.body3],
+  // Open mouth "O"
+  [3,9,C.body3], [4,9,C.body3], [5,9,C.mask], [6,9,C.mask], [7,9,C.body3], [8,9,C.body3],
+  [3,10,C.body3], [4,10,C.body3], [5,10,C.body3], [6,10,C.body3], [7,10,C.body3], [8,10,C.body3],
+  // Tiny body + arms out
+  [3,11,C.body3], [4,11,C.body3], [5,11,C.belly3], [6,11,C.belly3], [7,11,C.body3], [8,11,C.body3],
+  [4,12,C.body3], [5,12,C.belly3], [6,12,C.belly3], [7,12,C.body3],
+  // Legs (floating - jumping)
+  [4,14,C.body3], [5,14,C.body3], [6,14,C.body3], [7,14,C.body3],
+];
+
+// ============================================================
+// STYLE 4: DETECTIVE (~16x16)
+// ============================================================
+
+const s4_idle = [
+  // Deerstalker hat
+  [5,0,C.hat], [6,0,C.hat], [7,0,C.hat], [8,0,C.hat], [9,0,C.hat],
+  [4,1,C.hat], [5,1,C.hat], [6,1,C.hatBand], [7,1,C.hatBand], [8,1,C.hatBand], [9,1,C.hat], [10,1,C.hat],
+  [3,2,C.hat], [4,2,C.hat], [5,2,C.hat], [6,2,C.hat], [7,2,C.hat], [8,2,C.hat], [9,2,C.hat], [10,2,C.hat], [11,2,C.hat],
+  // Hat brim / ear flaps
+  [2,3,C.hat], [3,3,C.hat], [11,3,C.hat], [12,3,C.hat],
+  // Head row 3
+  [4,3,C.body2], [5,3,C.body2], [6,3,C.body2], [7,3,C.body2], [8,3,C.body2], [9,3,C.body2], [10,3,C.body2],
+  // Mask + eyes row 4
+  [3,4,C.body2], [4,4,C.mask2], [5,4,C.eyes2], [6,4,C.pupil2], [7,4,C.mask2], [8,4,C.mask2], [9,4,C.pupil2], [10,4,C.eyes2], [11,4,C.mask2], [12,4,C.body2],
+  // Face row 5
+  [3,5,C.body2], [4,5,C.mask2], [5,5,C.mask2], [6,5,C.body2], [7,5,C.body2], [8,5,C.body2], [9,5,C.body2], [10,5,C.mask2], [11,5,C.body2],
+  // Nose row 6
+  [4,6,C.body2], [5,6,C.body2], [6,6,C.body2], [7,6,C.nose2], [8,6,C.body2], [9,6,C.body2], [10,6,C.body2],
+  // Whiskers
+  [2,5,C.light2], [13,5,C.light2],
+  // Neck row 7
+  [5,7,C.body2], [6,7,C.light2], [7,7,C.light2], [8,7,C.body2], [9,7,C.body2],
+  // Body row 8
+  [4,8,C.body2], [5,8,C.body2], [6,8,C.belly2], [7,8,C.belly2], [8,8,C.belly2], [9,8,C.body2], [10,8,C.body2],
+  // Body row 9 - arm holding magnifying glass
+  [4,9,C.body2], [5,9,C.belly2], [6,9,C.belly2], [7,9,C.belly2], [8,9,C.body2], [9,9,C.body2], [10,9,C.body2], [11,9,C.dark2],
+  // Body row 10
+  [4,10,C.body2], [5,10,C.belly2], [6,10,C.belly2], [7,10,C.belly2], [8,10,C.body2], [9,10,C.body2],
+  // Magnifying glass handle
+  [11,10,C.glass], [12,10,C.glass],
+  // Magnifying glass lens
+  [12,8,C.glass], [13,7,C.glass], [14,7,C.glass], [15,7,C.lens], [13,8,C.glass], [14,8,C.lens], [15,8,C.lens], [16,8,C.glass],
+  [13,9,C.glass], [14,9,C.lens], [15,9,C.lens], [16,9,C.glass],
+  [14,10,C.glass], [15,10,C.glass],
+  // Glint
+  [15,7,C.lensGlint],
+  // Legs row 11
+  [4,11,C.dark2], [5,11,C.dark2], [8,11,C.dark2], [9,11,C.dark2],
+  // Tail
+  [10,9,C.body2], [11,8,C.body2], [11,7,C.light2],
+];
+
+const s4_sniff = [
+  // Holding magnifying glass up, peering through it
+  // Hat
+  [5,0,C.hat], [6,0,C.hat], [7,0,C.hat], [8,0,C.hat], [9,0,C.hat],
+  [4,1,C.hat], [5,1,C.hat], [6,1,C.hatBand], [7,1,C.hatBand], [8,1,C.hatBand], [9,1,C.hat], [10,1,C.hat],
+  [3,2,C.hat], [4,2,C.hat], [5,2,C.hat], [6,2,C.hat], [7,2,C.hat], [8,2,C.hat], [9,2,C.hat], [10,2,C.hat], [11,2,C.hat],
+  // Hat flaps
+  [2,3,C.hat], [3,3,C.hat], [11,3,C.hat], [12,3,C.hat],
+  // Head
+  [4,3,C.body2], [5,3,C.body2], [6,3,C.body2], [7,3,C.body2], [8,3,C.body2], [9,3,C.body2], [10,3,C.body2],
+  // Eyes - one eye behind lens
+  [3,4,C.body2], [4,4,C.mask2], [5,4,C.eyes2], [6,4,C.mask2], [7,4,C.mask2], [8,4,C.mask2], [9,4,C.mask2], [10,4,C.body2],
+  // Magnifying glass held up to right eye area
+  [11,3,C.glass], [12,2,C.glass], [13,2,C.glass], [14,2,C.lens], [12,3,C.glass], [13,3,C.lens], [14,3,C.lens], [15,3,C.glass],
+  [12,4,C.glass], [13,4,C.lens], [14,4,C.lens], [15,4,C.glass],
+  [13,5,C.glass], [14,5,C.glass],
+  // Glint
+  [14,2,C.lensGlint],
+  // Eye visible through lens
+  [13,3,C.eyes2], [14,3,C.pupil2],
+  // Face row 5
+  [4,5,C.body2], [5,5,C.body2], [6,5,C.body2], [7,5,C.nose2], [8,5,C.body2], [9,5,C.body2], [10,5,C.body2], [11,5,C.body2],
+  // Handle
+  [11,6,C.glass], [12,6,C.glass],
+  // Body
+  [5,6,C.body2], [6,6,C.light2], [7,6,C.light2], [8,6,C.body2], [9,6,C.body2], [10,6,C.body2],
+  [4,7,C.body2], [5,7,C.body2], [6,7,C.belly2], [7,7,C.belly2], [8,7,C.belly2], [9,7,C.body2], [10,7,C.body2],
+  [4,8,C.body2], [5,8,C.belly2], [6,8,C.belly2], [7,8,C.belly2], [8,8,C.body2], [9,8,C.body2],
+  [4,9,C.body2], [5,9,C.belly2], [6,9,C.belly2], [7,9,C.body2], [8,9,C.body2],
+  // Legs
+  [4,10,C.dark2], [5,10,C.dark2], [7,10,C.dark2], [8,10,C.dark2],
+  // Whiskers
+  [2,5,C.light2],
+];
+
+const s4_found = [
+  // Magnifying glass raised high, "!"
+  // "!"
+  [7,0,C.excl], [7,1,C.excl], [7,2,C.excl],
+  [7,4,C.excl],
+  // Magnifying glass raised (left hand up)
+  [2,3,C.glass], [3,2,C.glass], [4,2,C.glass], [5,2,C.lens], [3,3,C.glass], [4,3,C.lens], [5,3,C.lens], [6,3,C.glass],
+  [3,4,C.glass], [4,4,C.lens], [5,4,C.lens], [6,4,C.glass],
+  [4,5,C.glass], [5,5,C.glass],
+  // Glint
+  [5,2,C.lensGlint],
+  // Hat
+  [7,5,C.hat], [8,5,C.hat], [9,5,C.hat], [10,5,C.hat], [11,5,C.hat],
+  [6,6,C.hat], [7,6,C.hat], [8,6,C.hatBand], [9,6,C.hatBand], [10,6,C.hatBand], [11,6,C.hat], [12,6,C.hat],
+  [5,7,C.hat], [6,7,C.hat], [7,7,C.hat], [8,7,C.hat], [9,7,C.hat], [10,7,C.hat], [11,7,C.hat], [12,7,C.hat], [13,7,C.hat],
+  // Hat flaps
+  [4,8,C.hat], [5,8,C.hat], [13,8,C.hat], [14,8,C.hat],
+  // Head
+  [6,8,C.body2], [7,8,C.body2], [8,8,C.body2], [9,8,C.body2], [10,8,C.body2], [11,8,C.body2], [12,8,C.body2],
+  // Eyes (excited)
+  [5,9,C.body2], [6,9,C.mask2], [7,9,C.eyes2], [8,9,C.mask2], [9,9,C.mask2], [10,9,C.eyes2], [11,9,C.mask2], [12,9,C.body2],
+  // Nose
+  [6,10,C.body2], [7,10,C.body2], [8,10,C.nose2], [9,10,C.body2], [10,10,C.body2], [11,10,C.body2],
+  // Body - arms spread
+  [4,11,C.body2], [5,11,C.body2], [6,11,C.body2], [7,11,C.belly2], [8,11,C.belly2], [9,11,C.belly2], [10,11,C.body2], [11,11,C.body2], [12,11,C.body2], [13,11,C.body2],
+  [6,12,C.body2], [7,12,C.belly2], [8,12,C.belly2], [9,12,C.body2], [10,12,C.body2],
+  [6,13,C.body2], [7,13,C.belly2], [8,13,C.body2], [9,13,C.body2],
+  // Legs
+  [6,14,C.dark2], [7,14,C.dark2], [9,14,C.dark2], [10,14,C.dark2],
+  // Handle
+  [5,6,C.glass], [5,7,C.glass],
+];
+
+// ============================================================
+// STYLE 5: CYBER (~14x12)
+// ============================================================
+
+const s5_idle = [
+  // Antenna
+  [9,0,C.circuit], [10,0,C.circuit],
+  [9,1,C.circuit],
+  // Ears
+  [4,1,C.body2], [5,1,C.body2], [9,1,C.body2], [10,1,C.body2],
+  // Head row 2
+  [3,2,C.body2], [4,2,C.body2], [5,2,C.body2], [6,2,C.body2], [7,2,C.body2], [8,2,C.body2], [9,2,C.body2], [10,2,C.body2],
+  // Visor row 3 (replaces eyes - angular)
+  [2,3,C.visorDk], [3,3,C.visor], [4,3,C.visor], [5,3,C.visor], [6,3,C.visor], [7,3,C.visor], [8,3,C.visor], [9,3,C.visor], [10,3,C.visor], [11,3,C.visorDk],
+  // Visor lower edge
+  [3,4,C.visorDk], [4,4,C.visor], [5,4,C.white], [6,4,C.visorDk], [7,4,C.visorDk], [8,4,C.white], [9,4,C.visor], [10,4,C.visorDk],
+  // Face row 5
+  [3,5,C.body2], [4,5,C.body2], [5,5,C.body2], [6,5,C.body2], [7,5,C.nose2], [8,5,C.body2], [9,5,C.body2], [10,5,C.body2],
+  // Neck + circuit
+  [5,6,C.body2], [6,6,C.circuit], [7,6,C.body2], [8,6,C.body2],
+  // Body with circuit traces
+  [4,7,C.body2], [5,7,C.body2], [6,7,C.belly2], [7,7,C.belly2], [8,7,C.body2], [9,7,C.body2], [10,7,C.circuit],
+  [4,8,C.body2], [5,8,C.belly2], [6,8,C.belly2], [7,8,C.belly2], [8,8,C.body2], [9,8,C.body2], [10,8,C.body2],
+  [4,9,C.body2], [5,9,C.belly2], [6,9,C.belly2], [7,9,C.body2], [8,9,C.circuit], [9,9,C.body2],
+  // Circuit trace on body
+  [10,7,C.circuit], [10,8,C.circuit],
+  // Legs
+  [4,10,C.dark2], [5,10,C.dark2], [8,10,C.dark2], [9,10,C.dark2],
+  // Tail
+  [10,8,C.body2], [11,7,C.body2], [11,8,C.circuit],
+];
+
+const s5_sniff = [
+  // Leaning forward, visor scanning with beam
+  // Antenna
+  [2,0,C.circuit],
+  [2,1,C.circuit],
+  // Head
+  [1,1,C.body2], [2,1,C.body2], [3,1,C.body2], [4,1,C.body2],
+  [0,2,C.body2], [1,2,C.body2], [2,2,C.body2], [3,2,C.body2], [4,2,C.body2], [5,2,C.body2],
+  // Visor
+  [0,3,C.visorDk], [1,3,C.visor], [2,3,C.visor], [3,3,C.visor], [4,3,C.visor], [5,3,C.visorDk],
+  [1,4,C.visorDk], [2,4,C.visor], [3,4,C.white], [4,4,C.visorDk],
+  // Scan beam from visor
+  [0,4,C.visor+'88'], [0,5,C.visor+'44'],
+  // Face
+  [1,5,C.body2], [2,5,C.body2], [3,5,C.nose2], [4,5,C.body2], [5,5,C.body2],
+  // Body
+  [4,6,C.body2], [5,6,C.body2], [6,6,C.body2], [7,6,C.body2], [8,6,C.body2], [9,6,C.body2], [10,6,C.body2],
+  [4,7,C.body2], [5,7,C.belly2], [6,7,C.belly2], [7,7,C.belly2], [8,7,C.body2], [9,7,C.body2], [10,7,C.body2], [11,7,C.body2],
+  // Circuit traces
+  [9,6,C.circuit], [10,7,C.circuit], [11,7,C.circuit],
+  // Legs
+  [5,8,C.dark2], [6,8,C.dark2], [9,8,C.dark2], [10,8,C.dark2],
+  // Tail
+  [12,6,C.body2], [12,7,C.circuit],
+];
+
+const s5_found = [
+  // Visor flashing red, alert pose, "!" in red
+  // Red "!"
+  [7,0,C.alertRed], [7,1,C.alertRed], [7,2,C.alertRed],
+  [7,4,C.alertRed],
+  // Antenna (red flash)
+  [10,5,C.alertRed], [11,5,C.alertRed],
+  [10,6,C.alertRed],
+  // Ears
+  [4,6,C.body2], [5,6,C.body2], [10,6,C.body2],
+  // Head
+  [3,7,C.body2], [4,7,C.body2], [5,7,C.body2], [6,7,C.body2], [7,7,C.body2], [8,7,C.body2], [9,7,C.body2], [10,7,C.body2],
+  // Visor FLASHING RED
+  [2,8,C.alertRed], [3,8,C.alertRed], [4,8,C.alertRed], [5,8,C.alertRed], [6,8,C.alertRed], [7,8,C.alertRed], [8,8,C.alertRed], [9,8,C.alertRed], [10,8,C.alertRed], [11,8,C.alertRed],
+  [3,9,C.alertRed], [4,9,C.white], [5,9,C.alertRed], [6,9,C.alertRed], [7,9,C.alertRed], [8,9,C.white], [9,9,C.alertRed],
+  // Face
+  [3,10,C.body2], [4,10,C.body2], [5,10,C.body2], [6,10,C.body2], [7,10,C.nose2], [8,10,C.body2], [9,10,C.body2], [10,10,C.body2],
+  // Body - alert pose arms spread
+  [3,11,C.body2], [4,11,C.body2], [5,11,C.body2], [6,11,C.belly2], [7,11,C.belly2], [8,11,C.belly2], [9,11,C.body2], [10,11,C.body2], [11,11,C.body2],
+  [5,12,C.body2], [6,12,C.belly2], [7,12,C.belly2], [8,12,C.body2], [9,12,C.body2],
+  // Circuit traces glow
+  [10,11,C.circuit], [11,11,C.circuit], [9,12,C.circuit],
+  // Legs
+  [5,13,C.dark2], [6,13,C.dark2], [8,13,C.dark2], [9,13,C.dark2],
+];
+
+
+// ============================================================
+// RENDER ALL SPRITES
+// ============================================================
+
+function renderAll() {
+  // Style 1
+  applyPixels('s1-idle', s1_idle);
+  applyPixels('s1-sniff', s1_sniff);
+  applyPixels('s1-found', s1_found);
+  applyPixels('s1-anim-idle', s1_idle);
+  applyPixels('s1-anim-sniff', s1_sniff);
+  applyPixels('s1-anim-found', s1_found);
+
+  // Style 2
+  applyPixels('s2-idle', s2_idle);
+  applyPixels('s2-sniff', s2_sniff);
+  applyPixels('s2-found', s2_found);
+  applyPixels('s2-anim-idle', s2_idle);
+  applyPixels('s2-anim-sniff', s2_sniff);
+  applyPixels('s2-anim-found', s2_found);
+
+  // Style 3
+  applyPixels('s3-idle', s3_idle);
+  applyPixels('s3-sniff', s3_sniff);
+  applyPixels('s3-found', s3_found);
+  applyPixels('s3-anim-idle', s3_idle);
+  applyPixels('s3-anim-sniff', s3_sniff);
+  applyPixels('s3-anim-found', s3_found);
+
+  // Style 4
+  applyPixels('s4-idle', s4_idle);
+  applyPixels('s4-sniff', s4_sniff);
+  applyPixels('s4-found', s4_found);
+  applyPixels('s4-anim-idle', s4_idle);
+  applyPixels('s4-anim-sniff', s4_sniff);
+  applyPixels('s4-anim-found', s4_found);
+
+  // Style 5
+  applyPixels('s5-idle', s5_idle);
+  applyPixels('s5-sniff', s5_sniff);
+  applyPixels('s5-found', s5_found);
+  applyPixels('s5-anim-idle', s5_idle);
+  applyPixels('s5-anim-sniff', s5_sniff);
+  applyPixels('s5-anim-found', s5_found);
+}
+
+renderAll();
+
+// ============================================================
+// ANIMATION SYSTEM
+// Cycle through poses: idle 2s -> sniff 2s -> found 1s -> pause 1s -> loop
+// ============================================================
+
+const ANIM_PHASES = [
+  { pose: 'idle',  duration: 2000, animClass: 'pose-idle-anim' },
+  { pose: 'sniff', duration: 2000, animClass: 'pose-sniff-anim' },
+  { pose: 'found', duration: 1000, animClass: 'pose-found-anim' },
+  { pose: 'idle',  duration: 1000, animClass: '' }, // brief pause on idle
+];
+
+const TOTAL_CYCLE = ANIM_PHASES.reduce((sum, p) => sum + p.duration, 0);
+
+function animateStyle(styleNum) {
+  const prefix = `s${styleNum}-anim-`;
+  const idleEl  = document.getElementById(prefix + 'idle');
+  const sniffEl = document.getElementById(prefix + 'sniff');
+  const foundEl = document.getElementById(prefix + 'found');
+
+  if (!idleEl || !sniffEl || !foundEl) return;
+
+  const allEls = [idleEl, sniffEl, foundEl];
+  const poseMap = { idle: idleEl, sniff: sniffEl, found: foundEl };
+
+  function update() {
+    const t = Date.now() % TOTAL_CYCLE;
+    let elapsed = 0;
+    let currentPhase = ANIM_PHASES[0];
+
+    for (const phase of ANIM_PHASES) {
+      if (t < elapsed + phase.duration) {
+        currentPhase = phase;
+        break;
+      }
+      elapsed += phase.duration;
+    }
+
+    allEls.forEach(el => {
+      el.classList.add('hidden');
+      el.classList.remove('pose-idle-anim', 'pose-sniff-anim', 'pose-found-anim');
+    });
+
+    const activeEl = poseMap[currentPhase.pose];
+    activeEl.classList.remove('hidden');
+    if (currentPhase.animClass) {
+      activeEl.classList.add(currentPhase.animClass);
+    }
+
+    requestAnimationFrame(update);
+  }
+
+  // Stagger start per style
+  setTimeout(() => requestAnimationFrame(update), styleNum * 200);
+}
+
+// Start animations for all 5 styles
+for (let i = 1; i <= 5; i++) {
+  animateStyle(i);
+}
+
+// ============================================================
+// VOTE SYSTEM
+// ============================================================
+
+function vote(btn) {
+  document.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  // Highlight the corresponding style row
+  document.querySelectorAll('.style-row').forEach(r => {
+    r.style.borderColor = '#00ffff44';
+    r.style.boxShadow = '0 0 15px rgba(0,255,255,0.05), inset 0 0 30px rgba(0,0,0,0.3)';
+  });
+
+  const styleNum = btn.getAttribute('data-style');
+  const row = document.getElementById('style' + styleNum);
+  if (row) {
+    row.style.borderColor = '#ff69b4';
+    row.style.boxShadow = '0 0 25px rgba(255,105,180,0.2), inset 0 0 30px rgba(255,105,180,0.05)';
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+</script>
+</body>
+</html>
