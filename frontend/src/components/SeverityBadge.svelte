@@ -1,12 +1,12 @@
 <script>
   let { severity } = $props()
 
-  const styles = {
-    critical: 'bg-red-900/50 text-red-300 border-red-700/50',
-    high: 'bg-orange-900/50 text-orange-300 border-orange-700/50',
-    medium: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
-    low: 'bg-green-900/50 text-green-300 border-green-700/50',
-    info: 'bg-slate-700/50 text-slate-300 border-slate-600/50',
+  const colors = {
+    critical: '#ff0040',
+    high: '#ff8800',
+    medium: '#ffb800',
+    low: '#00ffff',
+    info: '#555',
   }
 
   const labels = {
@@ -16,8 +16,25 @@
     low: 'LOW',
     info: 'INFO',
   }
+
+  const color = $derived(colors[severity] || colors.info)
 </script>
 
-<span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold tracking-wider rounded border {styles[severity] || styles.info}">
+<span
+  class="pixel-font badge"
+  style="color:{color}; border-color:{color}; text-shadow: 0 0 8px {color}40;"
+>
   {labels[severity] || severity?.toUpperCase()}
 </span>
+
+<style>
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    font-size: 6px;
+    letter-spacing: 0.5px;
+    border: 1px solid;
+    background: rgba(0, 0, 0, 0.3);
+  }
+</style>

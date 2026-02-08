@@ -3,6 +3,7 @@
   import Home from './pages/Home.svelte'
   import Scanning from './pages/Scanning.svelte'
   import Results from './pages/Results.svelte'
+  import { WindowMinimise, WindowMaximise, Quit } from '../wailsjs/runtime/runtime.js'
 
   let page = $state('home')
   let scanResult = $state(null)
@@ -22,21 +23,22 @@
   }
 </script>
 
-<div class="h-full flex flex-col bg-(--color-bg-primary)">
-  <!-- Header -->
-  <header class="flex items-center justify-between px-5 py-2.5 bg-(--color-bg-secondary)/80 border-b border-slate-800/50" style="backdrop-filter: blur(8px); -webkit-app-region: drag;">
-    <div class="flex items-center gap-2">
-      <svg class="w-5 h-5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-      <span class="text-sm font-semibold text-white tracking-wide">Ferret</span>
-      <span class="text-[10px] text-slate-500 ml-1">by BRIQA</span>
+<div class="h-full flex flex-col" style="background:#080810;">
+  <!-- Retro Title Bar -->
+  <header class="title-bar" style="-webkit-app-region: drag;">
+    <div class="title-left">
+      <span class="pixel-font neon-text-cyan" style="font-size:9px;">&#9632; Ferret v1.0.0</span>
     </div>
     {#if page !== 'home'}
-      <span class="text-[10px] text-slate-500 uppercase tracking-widest">
-        {page === 'scanning' ? 'Scanning' : 'Results'}
+      <span class="pixel-font" style="font-size:7px; color:#555;">
+        {page === 'scanning' ? 'SCANNING...' : 'RESULTS'}
       </span>
     {/if}
+    <div class="title-buttons" style="-webkit-app-region: no-drag;">
+      <button class="title-btn" onclick={() => WindowMinimise()}>_</button>
+      <button class="title-btn" onclick={() => WindowMaximise()}>&#9633;</button>
+      <button class="title-btn close" onclick={() => Quit()}>X</button>
+    </div>
   </header>
 
   <!-- Page Content -->
@@ -51,4 +53,85 @@
       {/if}
     </div>
   {/key}
+
+  <!-- Status Bar -->
+  <footer class="status-bar">
+    <div class="status-left">
+      <span class="status-dot"></span>
+      <span class="mono-font" style="font-size:10px;">
+        {page === 'scanning' ? 'SCANNING' : 'READY'}
+      </span>
+    </div>
+    <div class="status-right mono-font">
+      <span style="color:#555;">FERRET v1.0.0</span>
+      <span style="color:#333; margin:0 6px;">|</span>
+      <span style="color:#555;">BRIQA</span>
+    </div>
+  </footer>
 </div>
+
+<style>
+  .title-bar {
+    background: linear-gradient(90deg, #0a0a1e, #12122a);
+    border-bottom: 2px solid #1a1a3a;
+    padding: 7px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .title-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .title-buttons {
+    display: flex;
+    gap: 4px;
+  }
+  .title-btn {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #1a1a3a;
+    background: #0d0d1a;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-pixel);
+    font-size: 6px;
+    color: #555;
+    padding: 0;
+    transition: all 0.2s;
+  }
+  .title-btn:hover { border-color: #00ffff; color: #00ffff; }
+  .title-btn.close:hover { border-color: #ff0040; color: #ff0040; }
+
+  .status-bar {
+    background: #0a0a15;
+    border-top: 2px solid #1a1a3a;
+    padding: 5px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .status-left {
+    display: flex;
+    align-items: center;
+    color: #00ff41;
+    font-size: 10px;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    background: #00ff41;
+    box-shadow: 0 0 6px #00ff41;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .status-right {
+    font-size: 10px;
+  }
+</style>

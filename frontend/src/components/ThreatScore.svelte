@@ -9,39 +9,77 @@
 
   const grade = $derived(() => {
     const s = score()
-    if (s === 0) return { label: 'Safe', color: '#22c55e' }
-    if (s <= 20) return { label: 'Low Risk', color: '#22c55e' }
-    if (s <= 50) return { label: 'Caution', color: '#eab308' }
-    if (s <= 80) return { label: 'Warning', color: '#f97316' }
-    return { label: 'Critical', color: '#ef4444' }
+    if (s === 0) return { label: 'SAFE', color: '#00ff41' }
+    if (s <= 20) return { label: 'LOW', color: '#00ff41' }
+    if (s <= 50) return { label: 'CAUTION', color: '#ffb800' }
+    if (s <= 80) return { label: 'WARNING', color: '#ff8800' }
+    return { label: 'CRITICAL', color: '#ff0040' }
   })
 
-  // SVG circle math: r=45, circumference=2*PI*45≈283
-  const circumference = 283
-  const dashOffset = $derived(() => circumference - (score() / 100) * circumference)
+  const totalBlocks = 20
+  const filledBlocks = $derived(() => Math.round((score() / 100) * totalBlocks))
+
+  function blockColor(index) {
+    const ratio = index / totalBlocks
+    if (ratio < 0.25) return '#00ff41'
+    if (ratio < 0.5) return '#ffb800'
+    if (ratio < 0.75) return '#ff8800'
+    return '#ff0040'
+  }
 </script>
 
-<div class="flex flex-col items-center">
-  <div class="relative w-28 h-28">
-    <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
-      <!-- Background circle -->
-      <circle cx="50" cy="50" r="45" fill="none" stroke="#1e293b" stroke-width="8" />
-      <!-- Score arc -->
-      <circle
-        cx="50" cy="50" r="45" fill="none"
-        stroke={grade().color}
-        stroke-width="8"
-        stroke-linecap="round"
-        stroke-dasharray={circumference}
-        stroke-dashoffset={dashOffset()}
-        style="transition: stroke-dashoffset 1s ease-out; animation: score-fill 1s ease-out;"
-      />
-    </svg>
-    <!-- Center score -->
-    <div class="absolute inset-0 flex flex-col items-center justify-center">
-      <span class="text-2xl font-bold text-white">{score()}</span>
-      <span class="text-[10px] text-slate-400 uppercase tracking-wider">/ 100</span>
-    </div>
+<div class="threat-score">
+  <div class="score-number pixel-font" style="color:{grade().color}; text-shadow: 0 0 20px {grade().color}60;">
+    {score()}
   </div>
-  <p class="mt-2 text-sm font-semibold" style="color: {grade().color}">{grade().label}</p>
+  <div class="score-label pixel-font" style="color:{grade().color};">{grade().label}</div>
+  <div class="score-bar">
+    {#each Array(totalBlocks) as _, i}
+      <div
+        class="bar-block"
+        style="background:{i < filledBlocks() ? blockColor(i) : '#1a1a3a'}; box-shadow:{i < filledBlocks() ? `0 0 4px ${blockColor(i)}40` : 'none'};"
+      ></div>
+    {/each}
+  </div>
+  <div class="score-range mono-font">
+    <span>0</span>
+    <span style="color:#555;">/ 100</span>
+  </div>
 </div>
+
+<style>
+  .threat-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 100px;
+  }
+  .score-number {
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .score-label {
+    font-size: 7px;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .score-bar {
+    display: flex;
+    gap: 2px;
+    width: 100%;
+  }
+  .bar-block {
+    flex: 1;
+    height: 8px;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .score-range {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 9px;
+    color: #555;
+    margin-top: 3px;
+  }
+</style>

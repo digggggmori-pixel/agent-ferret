@@ -3,6 +3,7 @@
   import DetectionCard from '../components/DetectionCard.svelte'
   import SeverityBadge from '../components/SeverityBadge.svelte'
   import ThreatScore from '../components/ThreatScore.svelte'
+  import FerretMascot from '../components/FerretMascot.svelte'
 
   let { result, onrescan } = $props()
 
@@ -41,80 +42,69 @@
   function formatDuration(ms) {
     return (ms / 1000).toFixed(1) + 's'
   }
+
+  const sevConfig = [
+    { key: 'critical', label: 'CRIT', color: '#ff0040' },
+    { key: 'high', label: 'HIGH', color: '#ff8800' },
+    { key: 'medium', label: 'MED', color: '#ffb800' },
+    { key: 'low', label: 'LOW', color: '#00ffff' },
+  ]
 </script>
 
-<div class="flex-1 flex flex-col overflow-hidden">
+<div class="results-page">
   <!-- Header -->
-  <div class="px-6 py-3 bg-(--color-bg-secondary)/60 border-b border-slate-800/50" style="backdrop-filter: blur(8px);">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-base font-semibold text-white">Scan Results</h2>
-        <p class="text-[11px] text-slate-500 mt-0.5">
-          {result?.host?.hostname || 'Unknown'} &middot; {formatDuration(result?.scan_duration_ms || 0)} elapsed
-        </p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button onclick={handleExport} class="px-3 py-1.5 text-[11px] bg-(--color-bg-card) hover:bg-(--color-bg-elevated) text-slate-300 rounded-lg transition cursor-pointer border border-slate-700/30">
-          Export JSON
-        </button>
-        <button onclick={onrescan} class="px-3 py-1.5 text-[11px] bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg transition cursor-pointer">
-          Rescan
-        </button>
-      </div>
+  <div class="results-header">
+    <div class="header-left">
+      <h2 class="pixel-font neon-text-cyan" style="font-size:10px;">SCAN RESULTS</h2>
+      <p class="mono-font" style="font-size:10px; color:#555; margin-top:2px;">
+        {result?.host?.hostname || 'Unknown'} &middot; {formatDuration(result?.scan_duration_ms || 0)}
+      </p>
     </div>
-    {#if exportPath}
-      <p class="text-[11px] text-green-400 mt-1.5">Saved: {exportPath}</p>
-    {/if}
+    <div class="header-buttons">
+      <button onclick={handleExport} class="retro-btn mono-font">EXPORT</button>
+      <button onclick={onrescan} class="retro-btn primary mono-font">RESCAN</button>
+    </div>
   </div>
+  {#if exportPath}
+    <p class="mono-font neon-text-green" style="font-size:10px; padding:0 16px;">Saved: {exportPath}</p>
+  {/if}
 
   <!-- Threat Score + Summary -->
-  <div class="px-6 py-4 animate-fade-in-up">
-    <div class="flex items-center gap-6">
-      <ThreatScore {summary} />
-      <div class="flex-1 grid grid-cols-4 gap-2">
-        {#each [
-          { key: 'critical', label: 'Critical', color: 'red' },
-          { key: 'high', label: 'High', color: 'orange' },
-          { key: 'medium', label: 'Medium', color: 'yellow' },
-          { key: 'low', label: 'Low', color: 'green' },
-        ] as sev}
-          <button
-            onclick={() => activeFilter = activeFilter === sev.key ? 'all' : sev.key}
-            class="p-2.5 rounded-xl text-center transition cursor-pointer border
-              {activeFilter === sev.key
-                ? `bg-${sev.color}-900/30 border-${sev.color}-700/60`
-                : 'glass hover:border-slate-600/50'}"
-          >
-            <p class="text-xl font-bold text-(--color-severity-{sev.key})">{summary[sev.key]}</p>
-            <p class="text-[10px] text-slate-400 mt-0.5">{sev.label}</p>
-          </button>
-        {/each}
-      </div>
+  <div class="score-section animate-fade-in-up">
+    <ThreatScore {summary} />
+    <div class="sev-grid">
+      {#each sevConfig as sev}
+        <button
+          onclick={() => activeFilter = activeFilter === sev.key ? 'all' : sev.key}
+          class="sev-card"
+          class:active={activeFilter === sev.key}
+          style="--sev-color:{sev.color};"
+        >
+          <span class="sev-count pixel-font" style="color:{sev.color}; text-shadow: 0 0 10px {sev.color}40;">
+            {summary[sev.key]}
+          </span>
+          <span class="sev-label pixel-font">{sev.label}</span>
+        </button>
+      {/each}
     </div>
   </div>
 
   <!-- Filter indicator -->
   {#if activeFilter !== 'all'}
-    <div class="px-6 pb-2 flex items-center gap-2 animate-fade-in">
+    <div class="filter-bar">
       <SeverityBadge severity={activeFilter} />
-      <span class="text-[11px] text-slate-400">{sortedDetections().length} showing</span>
-      <button onclick={() => activeFilter = 'all'} class="text-[11px] text-cyan-400 hover:text-cyan-300 ml-auto cursor-pointer">
-        Show all
-      </button>
+      <span class="mono-font" style="font-size:10px; color:#555;">{sortedDetections().length} showing</span>
+      <button onclick={() => activeFilter = 'all'} class="mono-font filter-clear">Show all</button>
     </div>
   {/if}
 
   <!-- Detection List -->
-  <div class="flex-1 overflow-y-auto px-6 pb-4 space-y-2">
+  <div class="detection-list">
     {#if sortedDetections().length === 0}
-      <div class="text-center py-16 animate-fade-in-up">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-green-900/20 border border-green-700/30 flex items-center justify-center">
-          <svg class="w-8 h-8 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-        </div>
-        <p class="text-white font-medium text-sm">No threats detected</p>
-        <p class="text-slate-500 text-xs mt-1">Your system appears safe</p>
+      <div class="no-threats animate-fade-in-up">
+        <FerretMascot pose="happy" scale={5} speech="All clear!" />
+        <p class="pixel-font neon-text-green" style="font-size:9px; margin-top:16px;">NO THREATS DETECTED</p>
+        <p class="mono-font" style="color:#555; font-size:11px; margin-top:4px;">Your system appears safe</p>
       </div>
     {:else}
       {#each sortedDetections() as detection, i (detection.id)}
@@ -131,19 +121,162 @@
 
   <!-- CTA Banner -->
   {#if totalDetections > 0}
-    <div class="px-6 py-4 bg-gradient-to-r from-cyan-900/40 via-blue-900/40 to-purple-900/30 border-t border-cyan-800/20">
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex-1">
-          <p class="text-sm font-medium text-white">Get AI-powered threat analysis</p>
-          <p class="text-[11px] text-slate-400 mt-0.5">Understand the real risk level and get actionable remediation steps</p>
+    <div class="cta-banner">
+      <div class="cta-content">
+        <FerretMascot pose="sniff" scale={3} />
+        <div class="cta-text">
+          <p class="pixel-font" style="font-size:8px; color:#ff00ff;">GET AI ANALYSIS</p>
+          <p class="mono-font" style="font-size:10px; color:#888; margin-top:3px;">Understand threats and get remediation steps</p>
         </div>
-        <button onclick={() => OpenBRIQA()} class="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white text-sm font-medium rounded-lg transition-all hover:scale-[1.02] whitespace-nowrap cursor-pointer shadow-lg shadow-cyan-900/30">
-          Analyze with BRIQA
-          <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
-          </svg>
-        </button>
       </div>
+      <button onclick={() => OpenBRIQA()} class="cta-btn pixel-font">
+        [ ANALYZE WITH BRIQA AI ]
+      </button>
     </div>
   {/if}
 </div>
+
+<style>
+  .results-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #0a0a15;
+    border-bottom: 2px solid #1a1a3a;
+  }
+  .header-buttons {
+    display: flex;
+    gap: 6px;
+  }
+  .retro-btn {
+    font-size: 9px;
+    padding: 5px 12px;
+    border: 1px solid #1a1a3a;
+    background: #0d0d1a;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .retro-btn:hover {
+    border-color: #00ffff;
+    color: #00ffff;
+  }
+  .retro-btn.primary {
+    border-color: #00ffff40;
+    color: #00ffff;
+  }
+  .retro-btn.primary:hover {
+    background: rgba(0, 255, 255, 0.05);
+    border-color: #00ffff;
+  }
+
+  .score-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 16px;
+  }
+  .sev-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .sev-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 4px;
+    background: #0a0a1a;
+    border: 2px solid #1a1a3a;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .sev-card.active {
+    border-color: var(--sev-color);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--sev-color) 20%, transparent);
+    background: color-mix(in srgb, var(--sev-color) 3%, #0a0a1a);
+  }
+  .sev-card:hover {
+    border-color: var(--sev-color);
+  }
+  .sev-count {
+    font-size: 18px;
+  }
+  .sev-label {
+    font-size: 6px;
+    color: #555;
+  }
+
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+  }
+  .filter-clear {
+    margin-left: auto;
+    font-size: 10px;
+    color: #00ffff;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  .filter-clear:hover { text-decoration: underline; }
+
+  .detection-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .no-threats {
+    text-align: center;
+    padding: 40px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .cta-banner {
+    padding: 12px 16px;
+    background: #0a0a1a;
+    border-top: 2px solid #1a1a3a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .cta-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .cta-btn {
+    font-size: 8px;
+    padding: 10px 16px;
+    border: 2px solid #ff00ff;
+    background: transparent;
+    color: #ff00ff;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-shadow: 0 0 10px rgba(255, 0, 255, 0.4);
+    box-shadow: 0 0 12px rgba(255, 0, 255, 0.1);
+    white-space: nowrap;
+  }
+  .cta-btn:hover {
+    background: rgba(255, 0, 255, 0.05);
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
+  }
+</style>
