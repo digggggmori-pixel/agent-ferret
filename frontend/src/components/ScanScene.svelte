@@ -1,128 +1,180 @@
 <script>
-  import { onDestroy } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import FerretMascot from './FerretMascot.svelte'
 
   let { currentStep = 0, detectionCount = 0 } = $props()
 
-  // Waypoints: ferret roams to these positions (% of stage)
-  const waypoints = [
-    { x: 8,  y: 75, label: '' },                // step 0: sleeping
-    { x: 15, y: 60, label: 'Processes...' },     // step 1
-    { x: 70, y: 25, label: 'Network...' },       // step 2
-    { x: 85, y: 70, label: 'Services...' },      // step 3
-    { x: 25, y: 20, label: 'Registry...' },      // step 4
-    { x: 50, y: 50, label: 'Detectors...' },     // step 5
-    { x: 78, y: 35, label: 'Sigma rules...' },   // step 6
-    { x: 12, y: 40, label: 'Event logs...' },    // step 7
-    { x: 45, y: 55, label: '' },                 // step 8: done
-  ]
-
-  let ferretX = $state(8)
-  let ferretY = $state(75)
-  let moving = $state(false)
+  let ferretX = $state(10)
+  let ferretY = $state(70)
+  let targetX = $state(10)
+  let targetY = $state(70)
   let pose = $state('sleep')
   let speech = $state('')
-  let alerts = $state([])  // { id, x, y, text }
-  let prevStep = $state(0)
-  let prevDetections = $state(0)
-  let moveTimer = null
+  let facingLeft = $state(false)
+  let alerts = $state([])
+  let footprints = $state([])
+  let scanning = $state(false)
+  let done = $state(false)
+  let prevDetections = 0
   let alertId = 0
 
-  // Footprints trail
-  let footprints = $state([])
+  // Roaming loop — runs independently of scan steps
+  let roamTimer = null
+  let phase = $state('idle') // 'idle' | 'running' | 'sniffing' | 'found' | 'done'
 
-  $effect(() => {
-    if (currentStep === prevStep) return
-    const step = currentStep
-    const wp = waypoints[step] || waypoints[0]
+  function randRange(min, max) {
+    return min + Math.random() * (max - min)
+  }
 
-    // Add footprint at current position before moving
-    if (prevStep > 0 && step > prevStep) {
-      footprints = [...footprints.slice(-12), { x: ferretX, y: ferretY, id: Date.now() }]
-    }
+  function pickNextTarget() {
+    // Pick a random spot, biased away from current position for variety
+    let nx, ny, attempts = 0
+    do {
+      nx = randRange(8, 88)
+      ny = randRange(15, 80)
+      attempts++
+    } while (Math.abs(nx - ferretX) < 15 && Math.abs(ny - ferretY) < 10 && attempts < 10)
+    return { x: nx, y: ny }
+  }
 
-    if (step === 0) {
-      pose = 'sleep'
+  function calcMoveDuration(fromX, fromY, toX, toY) {
+    // Distance-based duration so speed feels consistent
+    const dist = Math.sqrt((toX - fromX) ** 2 + (toY - fromY) ** 2)
+    // ~30ms per % unit of distance, clamped 0.8s - 2.5s
+    return Math.max(0.8, Math.min(dist * 30, 2500)) / 1000
+  }
+
+  function startRoaming() {
+    if (done) return
+
+    // Phase: run to a new spot
+    const next = pickNextTarget()
+    const dur = calcMoveDuration(ferretX, ferretY, next.x, next.y)
+
+    // Leave footprint
+    footprints = [...footprints.slice(-15), { x: ferretX, y: ferretY, id: Date.now() }]
+
+    // Face direction of travel
+    facingLeft = next.x < ferretX
+
+    // Start moving
+    phase = 'running'
+    pose = 'run'
+    speech = ''
+    targetX = next.x
+    targetY = next.y
+
+    // After arrival: sniff for a bit then move again
+    roamTimer = setTimeout(() => {
+      ferretX = targetX
+      ferretY = targetY
+      phase = 'sniffing'
+      pose = 'sniff'
       speech = ''
-      ferretX = wp.x
-      ferretY = wp.y
-    } else if (step >= 8) {
-      // Complete: run to center then happy
-      moving = true
+
+      // Sniff for 0.8-1.8s then move again
+      const sniffTime = 800 + Math.random() * 1000
+      roamTimer = setTimeout(() => {
+        if (!done) startRoaming()
+      }, sniffTime)
+    }, dur * 1000)
+  }
+
+  function stopRoaming() {
+    if (roamTimer) { clearTimeout(roamTimer); roamTimer = null }
+  }
+
+  // Start/stop roaming based on scan state
+  $effect(() => {
+    if (currentStep >= 1 && !scanning && !done) {
+      // Scan just started — wake up and start roaming
+      scanning = true
+      pose = 'idle'
+      speech = ''
+      // Brief wake-up then start
+      stopRoaming()
+      roamTimer = setTimeout(() => startRoaming(), 400)
+    }
+    if (currentStep >= 8 && !done) {
+      // Scan complete
+      done = true
+      stopRoaming()
+      phase = 'done'
+      // Run to center-ish
+      facingLeft = 45 < ferretX
+      targetX = 45
+      targetY = 55
       pose = 'run'
       speech = ''
-      ferretX = wp.x
-      ferretY = wp.y
-      if (moveTimer) clearTimeout(moveTimer)
-      moveTimer = setTimeout(() => {
-        moving = false
+      roamTimer = setTimeout(() => {
+        ferretX = 45
+        ferretY = 55
         pose = 'happy'
         speech = 'All done!'
-      }, 800)
-    } else {
-      // Normal step: run to waypoint, then sniff
-      moving = true
-      pose = 'run'
-      speech = ''
-      ferretX = wp.x
-      ferretY = wp.y
-
-      if (moveTimer) clearTimeout(moveTimer)
-      moveTimer = setTimeout(() => {
-        moving = false
-        pose = 'sniff'
-        speech = wp.label
-      }, 800)
+      }, 1000)
     }
-
-    prevStep = step
   })
 
-  // Watch for new detections → show found pose + alert popup
+  // Detection alerts — interrupt briefly
   $effect(() => {
     if (detectionCount > prevDetections && detectionCount > 0) {
       const count = detectionCount
-      // Switch to found pose
-      if (moveTimer) clearTimeout(moveTimer)
-      moving = false
+      prevDetections = count
+
+      // Interrupt roaming briefly
+      stopRoaming()
+      phase = 'found'
       pose = 'found'
       speech = `Found ${count}!`
 
-      // Add alert popup at ferret position
+      // Show alert popup
       const aid = ++alertId
-      alerts = [...alerts, { id: aid, x: ferretX, y: ferretY - 15, text: `! ${count} detected` }]
+      alerts = [...alerts, { id: aid, x: ferretX, y: ferretY - 18, text: `! ${count} detected` }]
+      setTimeout(() => { alerts = alerts.filter(a => a.id !== aid) }, 3000)
 
-      // After a bit, resume sniffing
-      moveTimer = setTimeout(() => {
-        pose = 'sniff'
-        speech = waypoints[currentStep]?.label || 'Hmm...'
+      // Resume roaming after 1.5s
+      roamTimer = setTimeout(() => {
+        if (!done) startRoaming()
       }, 1500)
-
-      // Fade out alert
-      setTimeout(() => {
-        alerts = alerts.filter(a => a.id !== aid)
-      }, 2500)
-
-      prevDetections = count
     }
   })
 
-  onDestroy(() => { if (moveTimer) clearTimeout(moveTimer) })
+  // Cleanup footprints periodically
+  let cleanupTimer = null
+  onMount(() => {
+    cleanupTimer = setInterval(() => {
+      const now = Date.now()
+      footprints = footprints.filter(fp => now - fp.id < 5000)
+    }, 2000)
+  })
+
+  onDestroy(() => {
+    stopRoaming()
+    if (cleanupTimer) clearInterval(cleanupTimer)
+  })
+
+  // CSS transition duration synced to movement
+  const moveDur = $derived.by(() => {
+    if (phase === 'running') {
+      return calcMoveDuration(ferretX, ferretY, targetX, targetY)
+    }
+    if (phase === 'done') return 1
+    return 0
+  })
 </script>
 
 <div class="stage">
   <!-- Grid background -->
   <div class="grid-bg"></div>
 
-  <!-- Subtle data nodes -->
-  <div class="node" style="left:20%; top:30%;"></div>
-  <div class="node" style="left:50%; top:15%;"></div>
-  <div class="node" style="left:75%; top:45%;"></div>
-  <div class="node" style="left:35%; top:70%;"></div>
-  <div class="node" style="left:60%; top:65%;"></div>
-  <div class="node" style="left:10%; top:50%;"></div>
-  <div class="node" style="left:85%; top:25%;"></div>
-  <div class="node" style="left:45%; top:40%;"></div>
+  <!-- Subtle data nodes scattered around -->
+  {#each [
+    [18,25], [42,18], [72,38], [30,68], [58,62],
+    [8,48], [82,22], [50,42], [65,75], [25,52],
+    [88,58], [38,32], [75,68], [15,72], [55,28]
+  ] as [nx, ny]}
+    <div class="node" style="left:{nx}%; top:{ny}%;"></div>
+  {/each}
 
   <!-- Footprints trail -->
   {#each footprints as fp (fp.id)}
@@ -136,14 +188,15 @@
     </div>
   {/each}
 
-  <!-- Ground line -->
-  <div class="ground"></div>
-
   <!-- Ferret -->
   <div
     class="ferret-wrapper"
-    class:flipped={moving && ferretX < (waypoints[prevStep]?.x ?? ferretX)}
-    style="left:{ferretX}%; top:{ferretY}%; transition: left {moving ? '0.8s' : '0s'} ease-in-out, top {moving ? '0.8s' : '0s'} ease-in-out;"
+    class:flipped={facingLeft}
+    style="
+      left: {phase === 'running' || phase === 'done' ? targetX : ferretX}%;
+      top: {phase === 'running' || phase === 'done' ? targetY : ferretY}%;
+      transition: left {moveDur}s ease-in-out, top {moveDur}s ease-in-out;
+    "
   >
     <FerretMascot {pose} scale={3} {speech} />
   </div>
@@ -167,16 +220,7 @@
       linear-gradient(90deg, rgba(0, 255, 255, 0.02) 1px, transparent 1px);
     background-size: 30px 30px;
   }
-  .ground {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: #1a1a3a;
-  }
 
-  /* Data nodes - subtle dots in the background */
   .node {
     position: absolute;
     width: 3px;
@@ -186,43 +230,40 @@
     transform: translate(-50%, -50%);
   }
 
-  /* Footprint trail */
   .footprint {
     position: absolute;
     width: 4px;
     height: 2px;
-    background: rgba(0, 255, 255, 0.08);
+    background: rgba(0, 255, 255, 0.1);
     transform: translate(-50%, -50%);
-    animation: footprint-fade 4s ease-out forwards;
+    animation: fp-fade 5s ease-out forwards;
   }
-  @keyframes footprint-fade {
-    from { opacity: 1; }
-    to { opacity: 0; }
+  @keyframes fp-fade {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
   }
 
-  /* Alert popup */
   .alert-popup {
     position: absolute;
     transform: translate(-50%, -100%);
     font-size: 7px;
     color: #ff0040;
     text-shadow: 0 0 8px rgba(255, 0, 64, 0.6);
-    padding: 3px 8px;
+    padding: 4px 10px;
     border: 1px solid #ff004060;
-    background: rgba(255, 0, 64, 0.08);
+    background: rgba(255, 0, 64, 0.1);
     white-space: nowrap;
     z-index: 10;
-    animation: alert-pop 0.3s ease-out, alert-out 0.5s 2s ease-out forwards;
+    animation: alert-in 0.3s ease-out, alert-out 0.5s 2.2s ease-out forwards;
   }
-  @keyframes alert-pop {
-    from { transform: translate(-50%, -80%) scale(0.8); opacity: 0; }
+  @keyframes alert-in {
+    from { transform: translate(-50%, -80%) scale(0.7); opacity: 0; }
     to { transform: translate(-50%, -100%) scale(1); opacity: 1; }
   }
   @keyframes alert-out {
-    to { opacity: 0; transform: translate(-50%, -120%); }
+    to { opacity: 0; transform: translate(-50%, -130%); }
   }
 
-  /* Ferret container */
   .ferret-wrapper {
     position: absolute;
     transform: translate(-50%, -50%);
