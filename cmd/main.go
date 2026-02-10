@@ -12,8 +12,8 @@ import (
 	"github.com/digggggmori-pixel/agent-ferret/internal/detector"
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
 	"github.com/digggggmori-pixel/agent-ferret/internal/output"
+	"github.com/digggggmori-pixel/agent-ferret/internal/rulestore"
 	"github.com/digggggmori-pixel/agent-ferret/internal/sigma"
-	"github.com/digggggmori-pixel/agent-ferret/internal/sigma/rules"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 	"github.com/google/uuid"
 )
@@ -212,9 +212,21 @@ func runScan() {
 	logger.Debug("Creating RegistryCollector")
 	registryCollector := collector.NewRegistryCollector()
 
+	// Load rules from external file
+	logger.Debug("Loading rule bundle")
+	rs := rulestore.NewRuleStore()
+	if err := rs.Load(); err != nil {
+		logger.Error("Failed to load rules: %v", err)
+		out.PrintError("Failed to load rules: %v", err)
+		fmt.Println("Place rules.json next to the executable and try again.")
+		os.Exit(1)
+	}
+	bundle := rs.GetBundle()
+	logger.Info("Rules loaded: version=%s, sigma=%d rules", bundle.Version, bundle.Sigma.TotalRules())
+
 	// Initialize detectors
 	logger.Debug("Creating Detector")
-	det := detector.New()
+	det := detector.New(bundle.Detection)
 	logger.Info("All collectors and detectors initialized")
 
 	// Step 1: Collect processes
@@ -347,31 +359,25 @@ func runScan() {
 	logger.Section("Live Sigma Matching")
 	out.PrintStep(6, 8, "Scanning live data (Sigma rules)...")
 
-	// Initialize Sigma engine with embedded rules
-	logger.Debug("Loading Sigma rules from embedded filesystem")
-	sigmaEngine, err := sigma.NewEngineWithRules(rules.EmbeddedRules)
-	if err != nil {
-		logger.Error("Failed to initialize Sigma engine: %v", err)
-		out.PrintError("Failed to initialize Sigma engine: %v", err)
-	} else {
-		logger.Info("Sigma engine initialized: %d rules loaded", sigmaEngine.TotalRules())
-		out.PrintDetail("Loaded %d Sigma rules", sigmaEngine.TotalRules())
+	// Use Sigma engine from loaded bundle
+	sigmaEngine := bundle.Sigma
+	logger.Info("Sigma engine ready: %d rules loaded", sigmaEngine.TotalRules())
+	out.PrintDetail("Loaded %d Sigma rules", sigmaEngine.TotalRules())
 
-		// Live process Sigma matching
-		liveProcessMatches := sigma.ScanLiveProcesses(sigmaEngine, processes)
-		for _, match := range liveProcessMatches {
-			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_process"))
-		}
-		out.PrintDetectorResult("Live Process Sigma (process_creation rules)", len(liveProcessMatches))
-
-		// Live network Sigma matching
-		processMap := sigma.BuildProcessMap(processes)
-		liveNetworkMatches := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
-		for _, match := range liveNetworkMatches {
-			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_network"))
-		}
-		out.PrintDetectorResult("Live Network Sigma (network_connection rules)", len(liveNetworkMatches))
+	// Live process Sigma matching
+	liveProcessMatches := sigma.ScanLiveProcesses(sigmaEngine, processes)
+	for _, match := range liveProcessMatches {
+		result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_process"))
 	}
+	out.PrintDetectorResult("Live Process Sigma (process_creation rules)", len(liveProcessMatches))
+
+	// Live network Sigma matching
+	processMap := sigma.BuildProcessMap(processes)
+	liveNetworkMatches := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
+	for _, match := range liveNetworkMatches {
+		result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_network"))
+	}
+	out.PrintDetectorResult("Live Network Sigma (network_connection rules)", len(liveNetworkMatches))
 
 	out.PrintDone(time.Since(stepStart))
 
@@ -381,57 +387,52 @@ func runScan() {
 	out.PrintStep(7, 8, "Scanning event logs (Sigma rules)...")
 	logger.Section("Event Log Sigma Scan")
 
-	if sigmaEngine == nil {
-		logger.Error("Sigma engine is nil, skipping event log scan")
-		out.PrintDetail("Sigma engine not initialized, skipping event log scan")
-	} else {
-		logger.Info("Sigma engine ready with %d rules", sigmaEngine.TotalRules())
+	logger.Info("Sigma engine ready with %d rules", sigmaEngine.TotalRules())
 
-		// Create progress callback
-		progressCB := func(progress sigma.ScanProgress) {
-			logger.Debug("[%s] Progress: %d events, %d matches", progress.Channel, progress.Current, progress.Matches)
-			if !quiet {
-				out.PrintDetail("[%s] Scanned %d events, %d matches",
-					progress.Channel, progress.Current, progress.Matches)
-			}
+	// Create progress callback
+	progressCB := func(progress sigma.ScanProgress) {
+		logger.Debug("[%s] Progress: %d events, %d matches", progress.Channel, progress.Current, progress.Matches)
+		if !quiet {
+			out.PrintDetail("[%s] Scanned %d events, %d matches",
+				progress.Channel, progress.Current, progress.Matches)
+		}
+	}
+
+	// Initialize event log collector
+	eventCollector := collector.NewEventLogCollector(
+		collector.WithQuickMode(quickScan),
+		collector.WithProgress(progressCB),
+	)
+	logger.Info("EventLogCollector initialized (quickMode=%v)", quickScan)
+
+	// Check accessible channels
+	logger.Debug("Checking accessible event log channels...")
+	accessibleChannels := collector.GetAccessibleChannels()
+	logger.Info("Accessible channels: %d of %d", len(accessibleChannels), len(collector.DefaultChannels))
+
+	if len(accessibleChannels) == 0 {
+		logger.Warn("No accessible event log channels - admin privileges required")
+		out.PrintDetail("No accessible event log channels (admin required)")
+		out.PrintDetail("Run as Administrator to enable event log scanning")
+	} else {
+		out.PrintDetail("Accessible channels: %d", len(accessibleChannels))
+		for _, ch := range accessibleChannels {
+			logger.Debug("  - %s", ch)
 		}
 
-		// Initialize event log collector
-		eventCollector := collector.NewEventLogCollector(
-			collector.WithQuickMode(quickScan),
-			collector.WithProgress(progressCB),
-		)
-		logger.Info("EventLogCollector initialized (quickMode=%v)", quickScan)
-
-		// Check accessible channels
-		logger.Debug("Checking accessible event log channels...")
-		accessibleChannels := collector.GetAccessibleChannels()
-		logger.Info("Accessible channels: %d of %d", len(accessibleChannels), len(collector.DefaultChannels))
-
-		if len(accessibleChannels) == 0 {
-			logger.Warn("No accessible event log channels - admin privileges required")
-			out.PrintDetail("No accessible event log channels (admin required)")
-			out.PrintDetail("Run as Administrator to enable event log scanning")
+		// Scan event logs
+		logger.Info("Starting event log scan...")
+		sigmaDetections, err := eventCollector.Scan(sigmaEngine)
+		if err != nil {
+			logger.Error("Event log scan failed: %v", err)
+			out.PrintError("Event log scan error: %v", err)
 		} else {
-			out.PrintDetail("Accessible channels: %d", len(accessibleChannels))
-			for _, ch := range accessibleChannels {
-				logger.Debug("  - %s", ch)
-			}
-
-			// Scan event logs
-			logger.Info("Starting event log scan...")
-			sigmaDetections, err := eventCollector.Scan(sigmaEngine)
-			if err != nil {
-				logger.Error("Event log scan failed: %v", err)
-				out.PrintError("Event log scan error: %v", err)
-			} else {
-				logger.Info("Event log scan complete: %d events scanned, %d Sigma matches",
-					eventCollector.TotalScanned(), len(sigmaDetections))
-				out.PrintDetail("Event log scan complete: %d events, %d Sigma matches",
-					eventCollector.TotalScanned(), len(sigmaDetections))
-				result.Detections = append(result.Detections, sigmaDetections...)
-				result.Summary.TotalEvents = int(eventCollector.TotalScanned())
-			}
+			logger.Info("Event log scan complete: %d events scanned, %d Sigma matches",
+				eventCollector.TotalScanned(), len(sigmaDetections))
+			out.PrintDetail("Event log scan complete: %d events, %d Sigma matches",
+				eventCollector.TotalScanned(), len(sigmaDetections))
+			result.Detections = append(result.Detections, sigmaDetections...)
+			result.Summary.TotalEvents = int(eventCollector.TotalScanned())
 		}
 	}
 

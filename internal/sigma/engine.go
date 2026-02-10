@@ -1,8 +1,6 @@
 package sigma
 
 import (
-	"embed"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -15,7 +13,7 @@ type Engine struct {
 	mu              sync.RWMutex
 }
 
-// NewEngine creates a new Sigma engine with embedded rules
+// NewEngine creates a new empty Sigma engine
 func NewEngine() (*Engine, error) {
 	engine := &Engine{
 		rulesByCategory: make(map[string][]*SigmaRule),
@@ -25,50 +23,19 @@ func NewEngine() (*Engine, error) {
 	return engine, nil
 }
 
-// NewEngineWithRules creates a new Sigma engine with the given embedded rules
-func NewEngineWithRules(rulesFS embed.FS) (*Engine, error) {
-	engine := &Engine{
-		rulesByCategory: make(map[string][]*SigmaRule),
-		allRules:        make([]*SigmaRule, 0),
-	}
-
-	// Load rules from embedded filesystem
-	rulesByCategory, totalRules, err := LoadRulesFromFS(rulesFS)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load rules: %w", err)
-	}
-
-	engine.rulesByCategory = rulesByCategory
-	engine.totalRules = totalRules
-
-	// Build allRules slice
-	for _, rules := range rulesByCategory {
-		engine.allRules = append(engine.allRules, rules...)
-	}
-
-	return engine, nil
-}
-
-// LoadRules loads rules from an embedded filesystem
-func (e *Engine) LoadRules(rulesFS embed.FS) error {
+// LoadFromBundle loads pre-parsed rules directly into the engine.
+// This is used by the rulestore package for external bundle loading.
+func (e *Engine) LoadFromBundle(rulesByCategory map[string][]*SigmaRule, totalRules int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-
-	rulesByCategory, totalRules, err := LoadRulesFromFS(rulesFS)
-	if err != nil {
-		return err
-	}
 
 	e.rulesByCategory = rulesByCategory
 	e.totalRules = totalRules
 
-	// Build allRules slice
 	e.allRules = make([]*SigmaRule, 0, totalRules)
 	for _, rules := range rulesByCategory {
 		e.allRules = append(e.allRules, rules...)
 	}
-
-	return nil
 }
 
 // TotalRules returns the total number of loaded rules

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
+	"github.com/digggggmori-pixel/agent-ferret/internal/rulestore"
 	"github.com/digggggmori-pixel/agent-ferret/internal/scan"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -18,6 +20,7 @@ const Version = "1.0.0"
 // App struct - methods exposed to the frontend via Wails bindings
 type App struct {
 	ctx        context.Context
+	ruleStore  *rulestore.RuleStore
 	scanner    *scan.Service
 	lastResult *types.ScanResult
 }
@@ -29,7 +32,14 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	a.scanner = scan.NewService(ctx)
+
+	// Initialize rule store and load rules from external file
+	a.ruleStore = rulestore.NewRuleStore()
+	if err := a.ruleStore.Load(); err != nil {
+		logger.Error("Failed to load rules: %v", err)
+	}
+
+	a.scanner = scan.NewService(ctx, a.ruleStore)
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -98,4 +108,19 @@ func (a *App) OpenBRIQA() {
 // GetVersion returns the application version
 func (a *App) GetVersion() string {
 	return Version
+}
+
+// GetRuleVersion returns the loaded rule bundle version, or "" if not loaded
+func (a *App) GetRuleVersion() string {
+	return a.ruleStore.Version()
+}
+
+// IsRulesLoaded returns whether rules have been successfully loaded
+func (a *App) IsRulesLoaded() bool {
+	return a.ruleStore.IsLoaded()
+}
+
+// ReloadRules reloads rules.json from disk (hot-reload)
+func (a *App) ReloadRules() error {
+	return a.ruleStore.Reload()
 }

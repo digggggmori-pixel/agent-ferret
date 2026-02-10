@@ -9,8 +9,8 @@ import (
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/collector"
 	"github.com/digggggmori-pixel/agent-ferret/internal/detector"
+	"github.com/digggggmori-pixel/agent-ferret/internal/rulestore"
 	"github.com/digggggmori-pixel/agent-ferret/internal/sigma"
-	"github.com/digggggmori-pixel/agent-ferret/internal/sigma/rules"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 	"github.com/google/uuid"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -18,8 +18,9 @@ import (
 
 // Service manages the scan lifecycle
 type Service struct {
-	ctx    context.Context
-	config Config
+	ctx       context.Context
+	config    Config
+	ruleStore *rulestore.RuleStore
 }
 
 // Progress represents scan progress sent to the frontend via events
@@ -33,10 +34,11 @@ type Progress struct {
 }
 
 // NewService creates a new scan service
-func NewService(ctx context.Context) *Service {
+func NewService(ctx context.Context, rs *rulestore.RuleStore) *Service {
 	return &Service{
-		ctx:    ctx,
-		config: DefaultConfig(),
+		ctx:       ctx,
+		config:    DefaultConfig(),
+		ruleStore: rs,
 	}
 }
 
@@ -80,8 +82,14 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 		Detections:   make([]types.Detection, 0),
 	}
 
-	// Initialize detector
-	det := detector.New()
+	// Get rule bundle
+	bundle := s.ruleStore.GetBundle()
+	if bundle == nil {
+		return nil, fmt.Errorf("rules not loaded: place rules.json next to ferret.exe")
+	}
+
+	// Initialize detector with loaded rules
+	det := detector.New(bundle.Detection)
 
 	// ── Step 1: Collect processes ──
 	s.emitProgress(1, "Collecting processes...", 0, "")
@@ -139,8 +147,8 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 
 	// ── Step 6: Live Sigma matching ──
 	s.emitProgress(6, "Sigma rule matching...", 62, "")
-	sigmaEngine, err := sigma.NewEngineWithRules(rules.EmbeddedRules)
-	if err == nil {
+	sigmaEngine := bundle.Sigma
+	if sigmaEngine != nil {
 		// Live process matching
 		liveProcessMatches := sigma.ScanLiveProcesses(sigmaEngine, processes)
 		for _, match := range liveProcessMatches {
@@ -157,8 +165,6 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 		s.emitProgress(6, "Sigma live matching complete", 75,
 			fmt.Sprintf("%d rules, process %d + network %d",
 				sigmaEngine.TotalRules(), len(liveProcessMatches), len(liveNetworkMatches)))
-	} else {
-		s.emitProgress(6, "Sigma engine init failed", 75, err.Error())
 	}
 
 	// ── Step 7: Event log Sigma scan ──

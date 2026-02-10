@@ -8,6 +8,10 @@
 # Debug/scan output
 *.log
 scan_*.json
+result/
+
+# Rule bundle (deploy via GitHub Releases)
+rules.json
 
 # Go
 /build/

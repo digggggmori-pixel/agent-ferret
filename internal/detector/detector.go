@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
+	"github.com/digggggmori-pixel/agent-ferret/internal/rulestore"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 )
 
@@ -19,22 +20,16 @@ var (
 
 // Detector is the main detection engine
 type Detector struct {
+	rules        *rulestore.DetectionRules
 	pathPatterns []*regexp.Regexp
 }
 
-// New creates a new Detector instance
-func New() *Detector {
+// New creates a new Detector instance with injected detection rules
+func New(rules *rulestore.DetectionRules) *Detector {
 	d := &Detector{
-		pathPatterns: make([]*regexp.Regexp, 0, len(PathAnomalyPatterns)),
+		rules:        rules,
+		pathPatterns: rules.PathAnomalyRegexps,
 	}
-
-	// Compile path anomaly patterns
-	for _, pattern := range PathAnomalyPatterns {
-		if re, err := regexp.Compile("(?i)" + pattern); err == nil {
-			d.pathPatterns = append(d.pathPatterns, re)
-		}
-	}
-
 	return d
 }
 
@@ -48,14 +43,14 @@ func (d *Detector) DetectLOLBins(processes []types.ProcessInfo) []types.Detectio
 		proc := processes[i] // Copy to avoid pointer issues
 		nameLower := strings.ToLower(proc.Name)
 
-		if AllLOLBins[nameLower] {
+		if d.rules.AllLOLBins[nameLower] {
 			// Skip common Windows shell processes running normally
 			// Only flag when there's suspicious context
 			if isNormalWindowsShell(nameLower, proc.Path, proc.CommandLine, proc.ParentName) {
 				continue
 			}
 
-			category := LOLBinCategory(nameLower)
+			category := d.rules.LOLBinCategory(nameLower)
 			severity := determineLOLBinSeverity(nameLower, proc.CommandLine)
 
 			procCopy := proc // Make a copy for the pointer
@@ -180,7 +175,7 @@ func (d *Detector) DetectChains(processes []types.ProcessInfo) []types.Detection
 		parentName := strings.ToLower(proc.ParentName)
 		childName := strings.ToLower(proc.Name)
 
-		if suspiciousChildren, exists := SuspiciousChains[parentName]; exists {
+		if suspiciousChildren, exists := d.rules.SuspiciousChains[parentName]; exists {
 			for _, suspChild := range suspiciousChildren {
 				if childName == suspChild {
 					// Check if this is a developer-friendly chain that should be reduced severity
@@ -269,7 +264,7 @@ func (d *Detector) DetectSuspiciousPorts(connections []types.NetworkConnection) 
 
 		// Check remote port for outbound connections
 		if conn.State == "ESTABLISHED" && conn.RemotePort > 0 {
-			if description, suspicious := SuspiciousPorts[conn.RemotePort]; suspicious {
+			if description, suspicious := d.rules.SuspiciousPorts[conn.RemotePort]; suspicious {
 				connCopy := conn
 				detection := types.Detection{
 					ID:          fmt.Sprintf("port-%d-%d", conn.OwningPID, time.Now().UnixNano()),
@@ -291,7 +286,7 @@ func (d *Detector) DetectSuspiciousPorts(connections []types.NetworkConnection) 
 
 		// Check local port for listening services
 		if conn.State == "LISTEN" {
-			if description, suspicious := SuspiciousPorts[conn.LocalPort]; suspicious {
+			if description, suspicious := d.rules.SuspiciousPorts[conn.LocalPort]; suspicious {
 				// Skip standard Windows services (System process PID 4)
 				if isStandardWindowsService(conn.LocalPort, conn.OwningPID) {
 					continue
@@ -391,10 +386,10 @@ func (d *Detector) DetectTyposquatting(processes []types.ProcessInfo) []types.De
 
 		// Skip if this process is itself a known system process (prevents system process vs system process false positives)
 		// e.g., smss.exe should not be flagged as similar to lsass.exe or csrss.exe
-		if _, isKnownSystem := TyposquatTargets[proc.Name]; isKnownSystem {
+		if _, isKnownSystem := d.rules.TyposquatTargets[proc.Name]; isKnownSystem {
 			continue
 		}
-		if _, isKnownSystem := TyposquatTargets[strings.ToLower(proc.Name)]; isKnownSystem {
+		if _, isKnownSystem := d.rules.TyposquatTargets[strings.ToLower(proc.Name)]; isKnownSystem {
 			continue
 		}
 
@@ -403,7 +398,7 @@ func (d *Detector) DetectTyposquatting(processes []types.ProcessInfo) []types.De
 			continue
 		}
 
-		for targetName, expectedPath := range TyposquatTargets {
+		for targetName, expectedPath := range d.rules.TyposquatTargets {
 			targetLower := strings.ToLower(targetName)
 
 			// Check if name is similar but not exact
@@ -808,7 +803,7 @@ func (d *Detector) DetectServiceVendorTyposquatting(services []types.ServiceInfo
 	for _, svc := range services {
 		displayLower := strings.ToLower(svc.DisplayName)
 
-		for _, vendor := range TrustedVendors {
+		for _, vendor := range d.rules.TrustedVendors {
 			vendorLower := strings.ToLower(vendor)
 
 			// Skip short vendor names (too many false positives)
@@ -825,7 +820,7 @@ func (d *Detector) DetectServiceVendorTyposquatting(services []types.ServiceInfo
 				}
 
 				// Skip common English words that cause false positives
-				if CommonEnglishWords[word] {
+				if d.rules.CommonEnglishWords[word] {
 					continue
 				}
 
@@ -877,7 +872,7 @@ func (d *Detector) DetectServiceNameTyposquatting(services []types.ServiceInfo) 
 		nameLower := strings.ToLower(svc.Name)
 
 		// Skip if this is a known Microsoft service (whitelist)
-		if MicrosoftServiceWhitelist[nameLower] {
+		if d.rules.MicrosoftServiceWhitelist[nameLower] {
 			continue
 		}
 
@@ -890,7 +885,7 @@ func (d *Detector) DetectServiceNameTyposquatting(services []types.ServiceInfo) 
 			continue
 		}
 
-		for _, systemSvc := range SystemServices {
+		for _, systemSvc := range d.rules.SystemServices {
 			// Skip exact match
 			if nameLower == systemSvc {
 				continue
@@ -941,7 +936,7 @@ func (d *Detector) DetectServicePathAnomalies(services []types.ServiceInfo) []ty
 
 		// Skip known Microsoft paths (whitelist)
 		isMicrosoftPath := false
-		for _, msPath := range MicrosoftPathPrefixes {
+		for _, msPath := range d.rules.MicrosoftPathPrefixes {
 			if strings.Contains(pathLower, msPath) {
 				isMicrosoftPath = true
 				break
@@ -953,12 +948,12 @@ func (d *Detector) DetectServicePathAnomalies(services []types.ServiceInfo) []ty
 
 		// Skip if it's a known Microsoft service running from system paths
 		nameLower := strings.ToLower(svc.Name)
-		if MicrosoftServiceWhitelist[nameLower] {
+		if d.rules.MicrosoftServiceWhitelist[nameLower] {
 			continue
 		}
 
 		// Check for dangerous paths
-		for _, dangerPath := range DangerousPaths {
+		for _, dangerPath := range d.rules.DangerousPaths {
 			if strings.Contains(pathLower, dangerPath) {
 				detection := types.Detection{
 					ID:          fmt.Sprintf("svc-path-%s-%d", svc.Name, time.Now().UnixNano()),
@@ -1023,7 +1018,7 @@ func (d *Detector) DetectUnsignedCriticalProcesses(processes []types.ProcessInfo
 		pathLower := strings.ToLower(proc.Path)
 
 		// Check if this is a critical process
-		expectedPath, isCritical := CriticalProcesses[nameLower]
+		expectedPath, isCritical := d.rules.CriticalProcesses[nameLower]
 		if !isCritical {
 			continue
 		}
@@ -1085,7 +1080,7 @@ func (d *Detector) DetectSuspiciousDomains(connections []types.NetworkConnection
 		var severity string = types.SeverityMedium
 
 		// Check high-risk TLDs
-		for _, tld := range HighRiskTLDs {
+		for _, tld := range d.rules.HighRiskTLDs {
 			if strings.HasSuffix(domainLower, "."+tld) {
 				reason = fmt.Sprintf("High-risk TLD: .%s", tld)
 				severity = types.SeverityHigh
@@ -1113,7 +1108,7 @@ func (d *Detector) DetectSuspiciousDomains(connections []types.NetworkConnection
 
 		// Check for malicious keywords
 		if reason == "" {
-			for _, keyword := range MaliciousKeywords {
+			for _, keyword := range d.rules.MaliciousKeywords {
 				if strings.Contains(domainLower, keyword) {
 					reason = fmt.Sprintf("Malicious keyword: %s", keyword)
 					severity = types.SeverityHigh
@@ -1167,7 +1162,7 @@ func (d *Detector) DetectEncodedCommands(processes []types.ProcessInfo) []types.
 
 		cmdLower := strings.ToLower(proc.CommandLine)
 
-		for _, pattern := range EncodedCommandPatterns {
+		for _, pattern := range d.rules.EncodedCommandPatterns {
 			if strings.Contains(cmdLower, pattern) {
 				procCopy := proc
 				detection := types.Detection{
