@@ -454,6 +454,12 @@ func (m ScanningModel) renderStage() string {
 		}
 	}
 
+	// Safety: cap each stage line to stageW to prevent any overflow
+	stageCap := lipgloss.NewStyle().MaxWidth(m.stageW)
+	for y := 0; y < m.stageH; y++ {
+		lines[y] = stageCap.Render(lines[y])
+	}
+
 	return strings.Join(lines, "\n")
 }
 

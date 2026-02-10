@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -223,8 +224,46 @@ func (m AppModel) View() string {
 		content = m.results.View()
 	}
 
-	frame := FrameStyle.Width(m.width - 2).Height(m.height - 2)
-	return frame.Render(content)
+	w := m.width
+	h := m.height
+	if w < 40 {
+		w = 80
+	}
+	if h < 10 {
+		h = 20
+	}
+
+	// Content area: inside border(2 cols) + horizontal padding(2 cols)
+	cw := w - 4
+	ch := h - 2
+
+	// Hard-crop content to exact frame dimensions — no lipgloss wrapping
+	srcLines := strings.Split(content, "\n")
+	capStyle := lipgloss.NewStyle().MaxWidth(cw)
+	cropped := make([]string, ch)
+	for i := 0; i < ch; i++ {
+		if i < len(srcLines) {
+			cropped[i] = capStyle.Render(srcLines[i])
+		}
+		// Right-pad to exact content width so every row is identical width
+		if vis := lipgloss.Width(cropped[i]); vis < cw {
+			cropped[i] += strings.Repeat(" ", cw-vis)
+		}
+	}
+
+	// Build frame manually — guarantees exactly h lines × w visual chars
+	borderFg := lipgloss.NewStyle().Foreground(ColorBorder)
+	hBar := strings.Repeat("─", w-2)
+	vBar := borderFg.Render("│")
+
+	out := make([]string, 0, h)
+	out = append(out, borderFg.Render("╭"+hBar+"╮"))
+	for _, line := range cropped {
+		out = append(out, vBar+" "+line+" "+vBar)
+	}
+	out = append(out, borderFg.Render("╰"+hBar+"╯"))
+
+	return strings.Join(out, "\n")
 }
 
 // startScan runs the scan in a goroutine and sends a scanDoneMsg when complete.
