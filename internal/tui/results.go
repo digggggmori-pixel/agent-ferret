@@ -46,7 +46,7 @@ type ResultsModel struct {
 
 // Fixed layout constants
 const (
-	resultHeaderLines = 6 // title + sep + score/CTA + badges/filter + help + sep
+	resultHeaderLines = 7 // title + sep + score/CTA + blank + badges/filter + help + sep
 	resultDetailLines = 7 // separator + detail panel (6 lines)
 	resultFooterLines = 0 // help moved into header
 )
@@ -80,12 +80,12 @@ func (m ResultsModel) Update(msg tea.Msg) (ResultsModel, tea.Cmd) {
 	case tea.KeyMsg:
 		filtered := m.filteredDetections()
 		switch msg.String() {
-		case "up", "k":
+		case "up", "k", "K":
 			if m.selected > 0 {
 				m.selected--
 				m.ensureVisible()
 			}
-		case "down", "j":
+		case "down", "j", "J":
 			if m.selected < len(filtered)-1 {
 				m.selected++
 				m.ensureVisible()
@@ -106,7 +106,7 @@ func (m ResultsModel) Update(msg tea.Msg) (ResultsModel, tea.Cmd) {
 			m.filter = "low"
 			m.selected = 0
 			m.listTop = 0
-		case "a":
+		case "a", "A":
 			m.filter = ""
 			m.selected = 0
 			m.listTop = 0
@@ -205,18 +205,21 @@ func (m ResultsModel) View() string {
 		m.scoreProg.ViewAs(float64(score)/100.0),
 		lipgloss.NewStyle().Foreground(scoreColor).Bold(true).Render(scoreLabel))
 	cta := lipgloss.NewStyle().
-		Background(ColorAccent).
-		Foreground(lipgloss.Color("#0c0c14")).
+		Background(lipgloss.Color("#f59e0b")).
+		Foreground(lipgloss.Color("#000000")).
 		Bold(true).
-		Padding(0, 1).
-		Render("D  Deep Analysis")
+		Padding(0, 2).
+		Render("▶ D  Full Analysis")
 	ctaSpacer := w - lipgloss.Width(scoreStr) - lipgloss.Width(cta) - 1
 	if ctaSpacer < 1 {
 		ctaSpacer = 1
 	}
 	lines = append(lines, scoreStr+strings.Repeat(" ", ctaSpacer)+cta)
 
-	// Line 4: Severity badges + scroll/filter info
+	// Line 4: Blank
+	lines = append(lines, "")
+
+	// Line 5: Severity badges + scroll/filter info
 	summary := m.result.Summary.Detections
 	badgeStr := m.renderSeveritySummary(summary)
 	detections := m.filteredDetections()
@@ -239,10 +242,10 @@ func (m ResultsModel) View() string {
 	}
 	lines = append(lines, badgeStr+strings.Repeat(" ", badgeSpacer)+rightStr)
 
-	// Line 5: Help shortcuts
+	// Line 6: Help shortcuts
 	lines = append(lines, HintStyle.Render("  ↑↓ Navigate  1-4 Filter  A All  E Export  D Analyze  R Rescan  Q Quit"))
 
-	// Line 6: Separator
+	// Line 7: Separator
 	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
 
 	// ── Detection list section ──

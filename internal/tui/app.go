@@ -127,7 +127,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "q", "Q", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
 
@@ -147,7 +147,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan), tea.ClearScreen)
 			}
 
-		case "r":
+		case "r", "R":
 			if m.page == pageResults {
 				// Rescan
 				m.progressChan = make(chan scan.Progress, 16)
@@ -160,12 +160,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan), tea.ClearScreen)
 			}
 
-		case "e":
+		case "e", "E":
 			if m.page == pageResults && m.lastResult != nil {
 				cmds = append(cmds, m.exportJSON())
 			}
 
-		case "d":
+		case "d", "D":
 			if m.page == pageResults {
 				cmds = append(cmds, openBrowser(AnalyzeURL))
 			}
