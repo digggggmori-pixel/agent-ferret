@@ -48,8 +48,11 @@ func EvaluateCondition(cond *ConditionNode, selections map[string]bool, filters 
 	case OpAndNot:
 		// Include must be true AND Exclude must be false
 		// This handles "selection and not filter" patterns
-		includeResult := getResult(cond.Include, selections, filters)
-		excludeResult := getResult(cond.Exclude, selections, filters)
+		if cond.Include == nil || cond.Exclude == nil {
+			return false
+		}
+		includeResult := EvaluateCondition(cond.Include, selections, filters)
+		excludeResult := EvaluateCondition(cond.Exclude, selections, filters)
 		return includeResult && !excludeResult
 
 	default:
@@ -191,8 +194,8 @@ func ParseConditionString(condition string) ConditionNode {
 		if len(parts) == 2 {
 			return ConditionNode{
 				Op:      OpAndNot,
-				Include: strings.TrimSpace(parts[0]),
-				Exclude: strings.TrimSpace(parts[1]),
+				Include: &ConditionNode{Op: OpSingle, Selection: strings.TrimSpace(parts[0])},
+				Exclude: &ConditionNode{Op: OpSingle, Selection: strings.TrimSpace(parts[1])},
 			}
 		}
 	}

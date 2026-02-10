@@ -70,8 +70,8 @@ type ConditionNode struct {
 	Selection string          `json:"selection,omitempty"`
 	Pattern   string          `json:"pattern,omitempty"`
 	Operands  []ConditionNode `json:"operands,omitempty"`
-	Include   string          `json:"include,omitempty"`
-	Exclude   string          `json:"exclude,omitempty"`
+	Include   *ConditionNode  `json:"include,omitempty"`
+	Exclude   *ConditionNode  `json:"exclude,omitempty"`
 }
 
 // UnmarshalJSON handles both object and string forms of ConditionNode.
