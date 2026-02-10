@@ -149,20 +149,24 @@ func (m ScanningModel) Update(msg tea.Msg) (ScanningModel, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// Fixed overhead lines outside of stage area:
+// header(1) + separator(1) + blank(1) + step(1) + bar(1) + blank(1) + [stage] + blank(1) + steps(1) + det(1) = 9
+const scanOverhead = 9
+
 func (m *ScanningModel) updateStageDimensions() {
-	m.stageW = m.width - 6
+	m.stageW = m.width - 4
 	if m.stageW > 70 {
 		m.stageW = 70
 	}
-	if m.stageW < 40 {
-		m.stageW = 40
+	if m.stageW < 30 {
+		m.stageW = 30
 	}
-	m.stageH = m.height - 16
+	m.stageH = m.height - scanOverhead
 	if m.stageH > 14 {
 		m.stageH = 14
 	}
-	if m.stageH < 6 {
-		m.stageH = 6
+	if m.stageH < 4 {
+		m.stageH = 4
 	}
 }
 
@@ -262,15 +266,21 @@ func max(a, b int) int {
 	return b
 }
 
+// View builds a fixed-height output that never exceeds m.height lines.
 func (m ScanningModel) View() string {
 	w := m.width
 	if w < 40 {
 		w = 80
 	}
+	h := m.height
+	if h < 20 {
+		h = 20
+	}
 
-	var b strings.Builder
+	// Build output as fixed-height line array
+	lines := make([]string, 0, h)
 
-	// Header: SCANNING + elapsed on the right
+	// Line 1: Header
 	elapsed := formatDuration(time.Since(m.startTime))
 	left := TitleStyle.Render("  SCANNING")
 	right := HintStyle.Render("Elapsed: " + elapsed + "  ")
@@ -278,16 +288,19 @@ func (m ScanningModel) View() string {
 	if spacerW < 1 {
 		spacerW = 1
 	}
-	b.WriteString(left + strings.Repeat(" ", spacerW) + right)
-	b.WriteString("\n")
-	b.WriteString(SeparatorStyle.Render(strings.Repeat("─", w)))
-	b.WriteString("\n\n")
+	lines = append(lines, left+strings.Repeat(" ", spacerW)+right)
 
-	// Step info + progress bar
+	// Line 2: Separator
+	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
+
+	// Line 3: Blank
+	lines = append(lines, "")
+
+	// Line 4: Step info
 	stepInfo := fmt.Sprintf("  Step %d/%d: %s", m.progress.Step, m.progress.Total, m.progress.StepName)
-	b.WriteString(lipgloss.NewStyle().Foreground(ColorText).Render(stepInfo))
-	b.WriteString("\n")
+	lines = append(lines, lipgloss.NewStyle().Foreground(ColorText).Render(stepInfo))
 
+	// Line 5: Progress bar
 	barWidth := w - 16
 	if barWidth < 20 {
 		barWidth = 20
@@ -300,27 +313,36 @@ func (m ScanningModel) View() string {
 	if pct > 1 {
 		pct = 1
 	}
-	bar := "  " + m.progressBar.ViewAs(pct) + fmt.Sprintf("  %d%%", m.progress.Percent)
-	b.WriteString(bar)
-	b.WriteString("\n\n")
+	lines = append(lines, "  "+m.progressBar.ViewAs(pct)+fmt.Sprintf("  %d%%", m.progress.Percent))
 
-	// Scan stage with ferret
-	stage := m.renderStage()
-	stageBox := StageStyle.Render(stage)
-	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, stageBox))
-	b.WriteString("\n\n")
+	// Line 6: Blank
+	lines = append(lines, "")
 
-	// Step indicators with names
+	// Lines 7..7+stageH-1: Stage content (no border wrapping)
+	stageLines := strings.Split(m.renderStage(), "\n")
+	lines = append(lines, stageLines...)
+
+	// Blank after stage
+	lines = append(lines, "")
+
+	// Step indicators
 	steps := m.renderStepIndicators()
-	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, steps))
-	b.WriteString("\n")
+	lines = append(lines, lipgloss.PlaceHorizontal(w, lipgloss.Center, steps))
 
 	// Detection count
 	detLine := m.renderDetectionCount()
-	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, detLine))
-	b.WriteString("\n")
+	lines = append(lines, lipgloss.PlaceHorizontal(w, lipgloss.Center, detLine))
 
-	return b.String()
+	// Pad to exact height (screen never shifts)
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	// Truncate if somehow too tall
+	if len(lines) > h {
+		lines = lines[:h]
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (m ScanningModel) renderStage() string {
@@ -383,6 +405,10 @@ func (m ScanningModel) renderStage() string {
 	}
 	if fy+ph > m.stageH {
 		fy = m.stageH - ph
+	}
+	// Ensure fy doesn't go negative after clamp
+	if fy < 0 {
+		fy = 0
 	}
 
 	ferretLines := strings.Split(ferretArt, "\n")
