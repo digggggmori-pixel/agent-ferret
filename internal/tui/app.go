@@ -134,6 +134,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Start scan
 				m.page = pageScanning
 				m.scanning = NewScanningModel()
+				m.scanning.width = m.width - 4
+				m.scanning.height = m.height - 2
+				m.scanning.updateStageDimensions()
 				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan))
 			}
 
@@ -144,6 +147,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.scanner = scan.NewServiceWithChannel(context.Background(), m.ruleStore, m.progressChan)
 				m.page = pageScanning
 				m.scanning = NewScanningModel()
+				m.scanning.width = m.width - 4
+				m.scanning.height = m.height - 2
+				m.scanning.updateStageDimensions()
 				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan))
 			}
 
@@ -171,8 +177,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.result != nil {
 			m.results.duration = time.Duration(msg.result.ScanDurationMs) * time.Millisecond
 		}
-		m.results.width = m.width
-		m.results.height = m.height
+		m.results.width = m.width - 4
+		m.results.height = m.height - 2
+		m.results.initViewport()
 		m.page = pageResults
 	}
 
