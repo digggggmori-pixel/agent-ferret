@@ -12,13 +12,14 @@ import (
 func main() {
 	// Initialize rule store and load rules from external file
 	rs := rulestore.NewRuleStore()
+	var loadErr string
 	if err := rs.Load(); err != nil {
 		logger.Error("Failed to load rules: %v", err)
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		loadErr = err.Error()
 	}
 
 	// Launch TUI
-	if err := tui.Run(rs); err != nil {
+	if err := tui.RunWithError(rs, loadErr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

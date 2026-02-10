@@ -259,7 +259,15 @@ func (m AppModel) exportJSON() tea.Cmd {
 
 // Run starts the Bubble Tea program.
 func Run(rs *rulestore.RuleStore) error {
+	return RunWithError(rs, "")
+}
+
+// RunWithError starts the Bubble Tea program with an optional startup error to display.
+func RunWithError(rs *rulestore.RuleStore, loadErr string) error {
 	model := NewAppModel(rs)
+	if loadErr != "" {
+		model.home.errorMsg = loadErr
+	}
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	_, err := p.Run()
 	return err

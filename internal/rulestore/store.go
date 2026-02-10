@@ -50,7 +50,14 @@ func (rs *RuleStore) Load() error {
 	}
 
 	if path == "" {
-		return fmt.Errorf("rules file not found (searched: %s) — place rules.json next to ferret.exe", candidates[0])
+		searchedPaths := ""
+		for i, c := range candidates {
+			if i > 0 {
+				searchedPaths += ", "
+			}
+			searchedPaths += c
+		}
+		return fmt.Errorf("rules.json not found. Searched: [%s]", searchedPaths)
 	}
 
 	bundle, err := LoadBundleFromFile(path)
