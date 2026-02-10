@@ -333,6 +333,12 @@ func (m ScanningModel) View() string {
 	detLine := m.renderDetectionCount()
 	lines = append(lines, lipgloss.PlaceHorizontal(w, lipgloss.Center, detLine))
 
+	// Cap each line to prevent wrapping on Windows terminals
+	capStyle := lipgloss.NewStyle().MaxWidth(w)
+	for i, line := range lines {
+		lines[i] = capStyle.Render(line)
+	}
+
 	// Pad to exact height (screen never shifts)
 	for len(lines) < h {
 		lines = append(lines, "")

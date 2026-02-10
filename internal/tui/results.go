@@ -254,6 +254,12 @@ func (m ResultsModel) View() string {
 	help := "↑↓ Navigate  1-4 Filter  A All  E Export  R Rescan  Q Quit"
 	lines = append(lines, HintStyle.Render(scrollInfo+exportInfo+help))
 
+	// Cap each line to prevent wrapping on Windows terminals
+	capStyle := lipgloss.NewStyle().MaxWidth(w)
+	for i, line := range lines {
+		lines[i] = capStyle.Render(line)
+	}
+
 	// Pad to exact height
 	for len(lines) < h {
 		lines = append(lines, "")
@@ -283,9 +289,11 @@ func (m ResultsModel) renderList(detections []types.Detection, w int) []string {
 		return lines
 	}
 
-	descWidth := w - 22
-	if descWidth < 20 {
-		descWidth = 20
+	// Line format: prefix(3) + badge(8) + space(1) + content
+	// Badge has Padding(0,1) = 6ch content + 2ch padding = 8 visual chars
+	contentWidth := w - 12 // 3 + 8 + 1 = 12 chars overhead
+	if contentWidth < 20 {
+		contentWidth = 20
 	}
 
 	for i := 0; i < m.listHeight; i++ {
@@ -305,17 +313,17 @@ func (m ResultsModel) renderList(detections []types.Detection, w int) []string {
 		}
 		badge := SeverityStyle(d.Severity).Render(fmt.Sprintf(" %-4s ", sevShort))
 
-		// Description
-		desc := Truncate(d.Description, descWidth)
+		// Truncate combined type + description to fit in available width
+		content := Truncate(d.Type+": "+d.Description, contentWidth)
 
 		if isSelected {
 			// Selected row: accent indicator + highlighted text
 			indicator := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(" ▸ ")
-			text := lipgloss.NewStyle().Foreground(ColorAccent).Render(d.Type + ": " + desc)
+			text := lipgloss.NewStyle().Foreground(ColorAccent).Render(content)
 			lines[i] = indicator + badge + " " + text
 		} else {
 			// Normal row
-			text := lipgloss.NewStyle().Foreground(ColorText).Render(d.Type + ": " + desc)
+			text := lipgloss.NewStyle().Foreground(ColorText).Render(content)
 			lines[i] = "   " + badge + " " + text
 		}
 	}
