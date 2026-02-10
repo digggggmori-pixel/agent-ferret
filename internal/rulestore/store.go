@@ -27,16 +27,30 @@ func NewRuleStore() *RuleStore {
 	}
 }
 
-// Load attempts to load rules.json from the exe directory.
+// Load attempts to load rules.json from the exe directory or working directory.
 // Returns an error if the file is missing or invalid.
 func (rs *RuleStore) Load() error {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 
-	path := filepath.Join(rs.rulesDir, rulesFileName)
+	// Try exe directory first, then working directory
+	candidates := []string{
+		filepath.Join(rs.rulesDir, rulesFileName),
+	}
+	if wd, err := os.Getwd(); err == nil && wd != rs.rulesDir {
+		candidates = append(candidates, filepath.Join(wd, rulesFileName))
+	}
 
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("rules file not found: %s — place rules.json next to ferret.exe", path)
+	var path string
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			path = c
+			break
+		}
+	}
+
+	if path == "" {
+		return fmt.Errorf("rules file not found (searched: %s) — place rules.json next to ferret.exe", candidates[0])
 	}
 
 	bundle, err := LoadBundleFromFile(path)
@@ -45,7 +59,7 @@ func (rs *RuleStore) Load() error {
 	}
 
 	rs.bundle = bundle
-	logger.Info("Rules loaded: version=%s, sigma=%d rules", bundle.Version, bundle.Sigma.TotalRules())
+	logger.Info("Rules loaded: version=%s, sigma=%d rules, path=%s", bundle.Version, bundle.Sigma.TotalRules(), path)
 	return nil
 }
 
