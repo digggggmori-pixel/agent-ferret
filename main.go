@@ -1,36 +1,25 @@
 package main
 
 import (
-	"embed"
+	"fmt"
+	"os"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
+	"github.com/digggggmori-pixel/agent-ferret/internal/rulestore"
+	"github.com/digggggmori-pixel/agent-ferret/internal/tui"
 )
 
-//go:embed all:frontend/dist
-var assets embed.FS
-
 func main() {
-	app := NewApp()
+	// Initialize rule store and load rules from external file
+	rs := rulestore.NewRuleStore()
+	if err := rs.Load(); err != nil {
+		logger.Error("Failed to load rules: %v", err)
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
 
-	err := wails.Run(&options.App{
-		Title:    "Ferret - BRIQA Security Scanner",
-		Width:    900,
-		Height:   700,
-		MinWidth: 800,
-		MinHeight: 600,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		OnStartup:  app.startup,
-		OnShutdown: app.shutdown,
-		Bind: []interface{}{
-			app,
-		},
-	})
-
-	if err != nil {
-		println("Error:", err.Error())
+	// Launch TUI
+	if err := tui.Run(rs); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }

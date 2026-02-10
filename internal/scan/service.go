@@ -1,5 +1,4 @@
-// Package scan provides the scan service that bridges Wails UI with collectors/detectors.
-// Refactored from cmd/main.go runScan() - CLI output replaced with Wails event emission.
+// Package scan provides the scan service that orchestrates collectors and detectors.
 package scan
 
 import (
@@ -13,14 +12,14 @@ import (
 	"github.com/digggggmori-pixel/agent-ferret/internal/sigma"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 	"github.com/google/uuid"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Service manages the scan lifecycle
 type Service struct {
-	ctx       context.Context
-	config    Config
-	ruleStore *rulestore.RuleStore
+	ctx        context.Context
+	config     Config
+	ruleStore  *rulestore.RuleStore
+	progressCh chan Progress
 }
 
 // Progress represents scan progress sent to the frontend via events
@@ -33,12 +32,22 @@ type Progress struct {
 	Done     bool   `json:"done"`
 }
 
-// NewService creates a new scan service
+// NewService creates a new scan service (no progress channel).
 func NewService(ctx context.Context, rs *rulestore.RuleStore) *Service {
 	return &Service{
 		ctx:       ctx,
 		config:    DefaultConfig(),
 		ruleStore: rs,
+	}
+}
+
+// NewServiceWithChannel creates a new scan service with a progress channel for TUI.
+func NewServiceWithChannel(ctx context.Context, rs *rulestore.RuleStore, ch chan Progress) *Service {
+	return &Service{
+		ctx:        ctx,
+		config:     DefaultConfig(),
+		ruleStore:  rs,
+		progressCh: ch,
 	}
 }
 
@@ -52,16 +61,18 @@ func (s *Service) GetHostInfo() types.HostInfo {
 	return collector.GetHostInfo()
 }
 
-// emitProgress sends a progress update to the frontend
+// emitProgress sends a progress update via channel (if set).
 func (s *Service) emitProgress(step int, name string, percent int, detail string) {
-	wailsRuntime.EventsEmit(s.ctx, "scan:progress", Progress{
-		Step:     step,
-		Total:    8,
-		StepName: name,
-		Percent:  percent,
-		Detail:   detail,
-		Done:     false,
-	})
+	if s.progressCh != nil {
+		s.progressCh <- Progress{
+			Step:     step,
+			Total:    8,
+			StepName: name,
+			Percent:  percent,
+			Detail:   detail,
+			Done:     false,
+		}
+	}
 }
 
 // Execute runs the full 8-step scan pipeline.
@@ -224,14 +235,16 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	result.ScanDurationMs = time.Since(startTime).Milliseconds()
 
 	// Emit completion
-	wailsRuntime.EventsEmit(s.ctx, "scan:progress", Progress{
-		Step:     8,
-		Total:    8,
-		StepName: "Scan complete",
-		Percent:  100,
-		Detail:   fmt.Sprintf("%d detections, %.1fs elapsed", len(result.Detections), time.Since(startTime).Seconds()),
-		Done:     true,
-	})
+	if s.progressCh != nil {
+		s.progressCh <- Progress{
+			Step:     8,
+			Total:    8,
+			StepName: "Scan complete",
+			Percent:  100,
+			Detail:   fmt.Sprintf("%d detections, %.1fs elapsed", len(result.Detections), time.Since(startTime).Seconds()),
+			Done:     true,
+		}
+	}
 
 	return result, nil
 }
