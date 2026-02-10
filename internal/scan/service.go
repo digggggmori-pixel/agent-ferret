@@ -160,22 +160,22 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	s.emitProgress(6, "Sigma rule matching...", 62, "")
 	sigmaEngine := bundle.Sigma
 	if sigmaEngine != nil {
-		// Live process matching
-		liveProcessMatches := sigma.ScanLiveProcesses(sigmaEngine, processes)
-		for _, match := range liveProcessMatches {
-			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_process"))
+		// Live process matching (with process context)
+		liveProcessResults := sigma.ScanLiveProcesses(sigmaEngine, processes)
+		for _, r := range liveProcessResults {
+			result.Detections = append(result.Detections, sigma.ConvertProcessSigmaMatch(r))
 		}
 
-		// Live network matching
+		// Live network matching (with network context)
 		processMap := sigma.BuildProcessMap(processes)
-		liveNetworkMatches := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
-		for _, match := range liveNetworkMatches {
-			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_network"))
+		liveNetworkResults := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
+		for _, r := range liveNetworkResults {
+			result.Detections = append(result.Detections, sigma.ConvertNetworkSigmaMatch(r))
 		}
 
 		s.emitProgress(6, "Sigma live matching complete", 75,
 			fmt.Sprintf("%d rules, process %d + network %d",
-				sigmaEngine.TotalRules(), len(liveProcessMatches), len(liveNetworkMatches)))
+				sigmaEngine.TotalRules(), len(liveProcessResults), len(liveNetworkResults)))
 	}
 
 	// ── Step 7: Event log Sigma scan ──
@@ -225,6 +225,8 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 			result.Summary.Detections.Medium++
 		case types.SeverityLow:
 			result.Summary.Detections.Low++
+		case types.SeverityInfo:
+			result.Summary.Detections.Informational++
 		}
 	}
 

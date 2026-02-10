@@ -364,20 +364,20 @@ func runScan() {
 	logger.Info("Sigma engine ready: %d rules loaded", sigmaEngine.TotalRules())
 	out.PrintDetail("Loaded %d Sigma rules", sigmaEngine.TotalRules())
 
-	// Live process Sigma matching
-	liveProcessMatches := sigma.ScanLiveProcesses(sigmaEngine, processes)
-	for _, match := range liveProcessMatches {
-		result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_process"))
+	// Live process Sigma matching (with process context)
+	liveProcessResults := sigma.ScanLiveProcesses(sigmaEngine, processes)
+	for _, r := range liveProcessResults {
+		result.Detections = append(result.Detections, sigma.ConvertProcessSigmaMatch(r))
 	}
-	out.PrintDetectorResult("Live Process Sigma (process_creation rules)", len(liveProcessMatches))
+	out.PrintDetectorResult("Live Process Sigma (process_creation rules)", len(liveProcessResults))
 
-	// Live network Sigma matching
+	// Live network Sigma matching (with network context)
 	processMap := sigma.BuildProcessMap(processes)
-	liveNetworkMatches := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
-	for _, match := range liveNetworkMatches {
-		result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_network"))
+	liveNetworkResults := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
+	for _, r := range liveNetworkResults {
+		result.Detections = append(result.Detections, sigma.ConvertNetworkSigmaMatch(r))
 	}
-	out.PrintDetectorResult("Live Network Sigma (network_connection rules)", len(liveNetworkMatches))
+	out.PrintDetectorResult("Live Network Sigma (network_connection rules)", len(liveNetworkResults))
 
 	out.PrintDone(time.Since(stepStart))
 
@@ -456,11 +456,14 @@ func runScan() {
 			result.Summary.Detections.Medium++
 		case types.SeverityLow:
 			result.Summary.Detections.Low++
+		case types.SeverityInfo:
+			result.Summary.Detections.Informational++
 		}
 	}
-	logger.Info("Detection counts - Critical: %d, High: %d, Medium: %d, Low: %d",
+	logger.Info("Detection counts - Critical: %d, High: %d, Medium: %d, Low: %d, Info: %d",
 		result.Summary.Detections.Critical, result.Summary.Detections.High,
-		result.Summary.Detections.Medium, result.Summary.Detections.Low)
+		result.Summary.Detections.Medium, result.Summary.Detections.Low,
+		result.Summary.Detections.Informational)
 
 	// Deduplicate
 	originalCount := len(result.Detections)

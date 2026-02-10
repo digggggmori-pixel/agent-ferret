@@ -105,6 +105,8 @@ func GenerateRecommendation(d *types.Detection) string {
 		return "Worth noting. This could be normal activity, but verify if anything seems unfamiliar."
 	case types.SeverityLow:
 		return "Low risk. Most likely normal activity, noted for your reference."
+	case types.SeverityInfo:
+		return "Informational finding. Normal system activity recorded for context."
 	default:
 		return "Review this finding for additional context."
 	}

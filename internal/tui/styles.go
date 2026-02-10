@@ -20,10 +20,11 @@ var (
 	ColorAccentDim = lipgloss.Color("#2d6a5e")
 
 	// Severity (softer tones)
-	ColorCritical = lipgloss.Color("#ef4444")
-	ColorHigh     = lipgloss.Color("#f59e0b")
-	ColorMedium   = lipgloss.Color("#eab308")
-	ColorLow      = lipgloss.Color("#22c55e")
+	ColorCritical      = lipgloss.Color("#ef4444")
+	ColorHigh          = lipgloss.Color("#f59e0b")
+	ColorMedium        = lipgloss.Color("#eab308")
+	ColorLow           = lipgloss.Color("#22c55e")
+	ColorInformational = lipgloss.Color("#06b6d4")
 
 	// Semantic
 	ColorSuccess = lipgloss.Color("#22c55e")
@@ -90,6 +91,11 @@ var (
 			Background(ColorLow).
 			Padding(0, 1)
 
+	InfoStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#000000")).
+			Background(ColorInformational).
+			Padding(0, 1)
+
 	// Detection list item
 	DetectionStyle = lipgloss.NewStyle().
 			Foreground(ColorText)
@@ -149,6 +155,8 @@ func SeverityStyle(severity string) lipgloss.Style {
 		return MediumStyle
 	case "low":
 		return LowStyle
+	case "informational":
+		return InfoStyle
 	default:
 		return lipgloss.NewStyle().Foreground(ColorTextDim)
 	}

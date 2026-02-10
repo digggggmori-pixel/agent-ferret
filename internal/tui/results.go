@@ -127,6 +127,10 @@ func (m ResultsModel) Update(msg tea.Msg) (ResultsModel, tea.Cmd) {
 				m.filter = "low"
 				m.selected = 0
 				m.listTop = 0
+			case "5":
+				m.filter = "informational"
+				m.selected = 0
+				m.listTop = 0
 			case "a", "A":
 				m.filter = ""
 				m.selected = 0
@@ -269,7 +273,7 @@ func (m ResultsModel) View() string {
 	lines = append(lines, badgeStr+strings.Repeat(" ", badgeSpacer)+rightStr)
 
 	// Line 6: Help shortcuts
-	lines = append(lines, HintStyle.Render("  ↑↓ Navigate  Enter Detail  1-4 Filter  E Export  D Analyze  R Rescan  Q Quit"))
+	lines = append(lines, HintStyle.Render("  ↑↓ Navigate  Enter Detail  1-5 Filter  E Export  D Analyze  R Rescan  Q Quit"))
 
 	// Line 7: Separator
 	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
@@ -684,6 +688,7 @@ func (m ResultsModel) renderSeveritySummary(s types.DetectionCount) string {
 		m.renderSummaryBadge("HIGH", s.High, "high"),
 		m.renderSummaryBadge("MED", s.Medium, "medium"),
 		m.renderSummaryBadge("LOW", s.Low, "low"),
+		m.renderSummaryBadge("INFO", s.Informational, "informational"),
 	}
 	return "  " + strings.Join(parts, "  ")
 }

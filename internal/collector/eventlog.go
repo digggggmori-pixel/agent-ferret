@@ -322,12 +322,13 @@ func convertSigmaMatchToDetection(match *sigma.SigmaMatch, entry *types.EventLog
 		Timestamp:   entry.Timestamp,
 		Description: match.RuleName,
 		MITRE: &types.MITREMapping{
-			Tactics:    match.MITRE.Tactics,
+			Tactics:    types.NormalizeTactics(match.MITRE.Tactics),
 			Techniques: match.MITRE.Techniques,
 		},
 		SigmaRules: []string{match.RuleID},
 		Details: map[string]interface{}{
 			"rule_id":     match.RuleID,
+			"rule_name":   match.RuleName,
 			"description": match.Description,
 			"category":    match.Category,
 			"channel":     match.Channel,

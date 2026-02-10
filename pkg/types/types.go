@@ -1,7 +1,10 @@
 // Package types defines the core data structures for Agent Lite
 package types
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ProcessInfo represents a running process
 type ProcessInfo struct {
@@ -98,10 +101,11 @@ type ScanSummary struct {
 
 // DetectionCount represents detection counts by severity
 type DetectionCount struct {
-	Critical int `json:"critical"`
-	High     int `json:"high"`
-	Medium   int `json:"medium"`
-	Low      int `json:"low"`
+	Critical      int `json:"critical"`
+	High          int `json:"high"`
+	Medium        int `json:"medium"`
+	Low           int `json:"low"`
+	Informational int `json:"informational"`
 }
 
 // IOCCollection represents collected Indicators of Compromise
@@ -135,7 +139,7 @@ const (
 	SeverityHigh     = "high"
 	SeverityMedium   = "medium"
 	SeverityLow      = "low"
-	SeverityInfo     = "info"
+	SeverityInfo     = "informational"
 )
 
 // Detection type constants
@@ -154,3 +158,28 @@ const (
 	DetectionTypeSuspiciousDomain = "suspicious_domain"
 	DetectionTypeEncodedCommand  = "encoded_command"
 )
+
+// NormalizeTactic converts snake_case MITRE tactic names to Title Case.
+// e.g. "defense_evasion" → "Defense Evasion", "command_and_control" → "Command and Control"
+// Already Title-Cased values pass through unchanged.
+func NormalizeTactic(s string) string {
+	if !strings.Contains(s, "_") {
+		return s
+	}
+	words := strings.Split(s, "_")
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// NormalizeTactics normalizes a slice of MITRE tactic names.
+func NormalizeTactics(tactics []string) []string {
+	out := make([]string, len(tactics))
+	for i, t := range tactics {
+		out[i] = NormalizeTactic(t)
+	}
+	return out
+}
