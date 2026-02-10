@@ -159,11 +159,15 @@ const (
 	DetectionTypeEncodedCommand  = "encoded_command"
 )
 
-// NormalizeTactic converts snake_case MITRE tactic names to Title Case.
-// e.g. "defense_evasion" → "Defense Evasion", "command_and_control" → "Command and Control"
+// NormalizeTactic converts MITRE tactic names to Title Case.
+// e.g. "defense_evasion" → "Defense Evasion", "persistence" → "Persistence"
 // Already Title-Cased values pass through unchanged.
 func NormalizeTactic(s string) string {
-	if !strings.Contains(s, "_") {
+	if len(s) == 0 {
+		return s
+	}
+	// Already starts with uppercase — assume correct
+	if s[0] >= 'A' && s[0] <= 'Z' {
 		return s
 	}
 	words := strings.Split(s, "_")
