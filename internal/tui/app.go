@@ -110,8 +110,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		// Propagate content dimensions to all child models
-		cw := m.width - 4  // frame border (2) + padding (2)
-		ch := m.height - 2 // frame border (2)
+		// Frame is (w-1)×(h-1) with border(2)+padding(2), so content = (w-5)×(h-3)
+		cw := m.width - 5
+		ch := m.height - 3
 		m.home.width = cw
 		m.home.height = ch
 		m.scanning.width = cw
@@ -135,10 +136,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Start scan
 				m.page = pageScanning
 				m.scanning = NewScanningModel()
-				m.scanning.width = m.width - 4
-				m.scanning.height = m.height - 2
+				m.scanning.width = m.width - 5
+				m.scanning.height = m.height - 3
 				m.scanning.updateStageDimensions()
-				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan))
+				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan), tea.ClearScreen)
 			}
 
 		case "r":
@@ -148,10 +149,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.scanner = scan.NewServiceWithChannel(context.Background(), m.ruleStore, m.progressChan)
 				m.page = pageScanning
 				m.scanning = NewScanningModel()
-				m.scanning.width = m.width - 4
-				m.scanning.height = m.height - 2
+				m.scanning.width = m.width - 5
+				m.scanning.height = m.height - 3
 				m.scanning.updateStageDimensions()
-				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan))
+				cmds = append(cmds, m.startScan(), listenProgress(m.progressChan), tea.ClearScreen)
 			}
 
 		case "e":
@@ -178,8 +179,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.result != nil {
 			m.results.duration = time.Duration(msg.result.ScanDurationMs) * time.Millisecond
 		}
-		m.results.width = m.width - 4
-		m.results.height = m.height - 2
+		m.results.width = m.width - 5
+		m.results.height = m.height - 3
 		m.results.initViewport()
 		m.page = pageResults
 	}
@@ -233,9 +234,12 @@ func (m AppModel) View() string {
 		h = 20
 	}
 
-	// Content area: inside border(2 cols) + horizontal padding(2 cols)
-	cw := w - 4
-	ch := h - 2
+	// Frame is 1 char narrower and 1 line shorter than terminal to prevent
+	// edge-of-screen wrapping/scrolling on Windows terminals.
+	fw := w - 1 // frame outer width  (1 char right margin)
+	fh := h - 1 // frame outer height (1 line bottom margin)
+	cw := fw - 4 // content width  (border 2 + padding 2)
+	ch := fh - 2 // content height (border 2)
 
 	// Hard-crop content to exact frame dimensions — no lipgloss wrapping
 	srcLines := strings.Split(content, "\n")
@@ -251,12 +255,12 @@ func (m AppModel) View() string {
 		}
 	}
 
-	// Build frame manually — guarantees exactly h lines × w visual chars
+	// Build frame manually — guarantees exactly fh lines × fw visual chars
 	borderFg := lipgloss.NewStyle().Foreground(ColorBorder)
-	hBar := strings.Repeat("─", w-2)
+	hBar := strings.Repeat("─", fw-2)
 	vBar := borderFg.Render("│")
 
-	out := make([]string, 0, h)
+	out := make([]string, 0, fh)
 	out = append(out, borderFg.Render("╭"+hBar+"╮"))
 	for _, line := range cropped {
 		out = append(out, vBar+" "+line+" "+vBar)

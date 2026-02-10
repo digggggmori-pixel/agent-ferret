@@ -333,8 +333,11 @@ func renderPixels(pixels []pixelSpec) string {
 		grid[p.y][p.x] = p.color
 	}
 
-	// Render using half-block: pair rows (0,1), (2,3), etc.
-	// ▀ = upper half: fg = top pixel, bg = bottom pixel
+	// Render using background-colored spaces.
+	// Each pair of pixel rows (0,1), (2,3), etc. becomes one terminal row.
+	// Uses space + background color instead of ▀/▄ half-blocks to avoid
+	// East Asian Ambiguous width issues on CJK terminals (▀▄ may render
+	// as 2 cells instead of 1, breaking layout).
 	var lines []string
 	for y := 0; y < h; y += 2 {
 		var line strings.Builder
@@ -348,21 +351,17 @@ func renderPixels(pixels []pixelSpec) string {
 			if top == "" && bottom == "" {
 				line.WriteRune(' ')
 			} else if top != "" && bottom != "" {
-				// Both pixels: ▀ with fg=top, bg=bottom
-				style := lipgloss.NewStyle().
-					Foreground(lipgloss.Color(top)).
-					Background(lipgloss.Color(bottom))
-				line.WriteString(style.Render("▀"))
+				// Both pixels: show top color as background
+				style := lipgloss.NewStyle().Background(lipgloss.Color(top))
+				line.WriteString(style.Render(" "))
 			} else if top != "" {
-				// Only top pixel: ▀ with fg=top
-				style := lipgloss.NewStyle().
-					Foreground(lipgloss.Color(top))
-				line.WriteString(style.Render("▀"))
+				// Only top pixel
+				style := lipgloss.NewStyle().Background(lipgloss.Color(top))
+				line.WriteString(style.Render(" "))
 			} else {
-				// Only bottom pixel: ▄ with fg=bottom
-				style := lipgloss.NewStyle().
-					Foreground(lipgloss.Color(bottom))
-				line.WriteString(style.Render("▄"))
+				// Only bottom pixel
+				style := lipgloss.NewStyle().Background(lipgloss.Color(bottom))
+				line.WriteString(style.Render(" "))
 			}
 		}
 		lines = append(lines, line.String())
