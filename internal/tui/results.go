@@ -234,8 +234,7 @@ func (m ResultsModel) View() string {
 	listLines := m.renderList(detections, w)
 	lines = append(lines, listLines...)
 
-	// ── Detail panel section ──
-	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
+	// ── Detail panel section (separator is inside renderDetailPanel) ──
 	detailLines := m.renderDetailPanel(detections, w)
 	lines = append(lines, detailLines...)
 
@@ -333,14 +332,16 @@ func (m ResultsModel) renderList(detections []types.Detection, w int) []string {
 
 // renderDetailPanel renders the detail panel for the selected detection.
 // Always returns exactly resultDetailLines lines.
+// Line 0 is the separator; lines 1-8 are detail content.
 func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []string {
 	lines := make([]string, resultDetailLines)
-	for i := range lines {
+	lines[0] = SeparatorStyle.Render(strings.Repeat("─", w))
+	for i := 1; i < resultDetailLines; i++ {
 		lines[i] = ""
 	}
 
 	if len(detections) == 0 || m.selected >= len(detections) {
-		lines[1] = HintStyle.Render("  Select a detection to view details")
+		lines[2] = HintStyle.Render("  Select a detection to view details")
 		return lines
 	}
 
@@ -350,27 +351,27 @@ func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []s
 		contentW = 30
 	}
 
-	lineIdx := 0
+	lineIdx := 1 // start after separator
 
-	// Line 0: Type + Severity header
+	// Type + Severity header
 	sevBadge := SeverityStyle(d.Severity).Render(fmt.Sprintf(" %s ", strings.ToUpper(d.Severity)))
 	typeText := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(d.Type)
 	lines[lineIdx] = "  " + sevBadge + "  " + typeText
 	lineIdx++
 
-	// Line 1: Full description
+	// Full description
 	if d.Description != "" && lineIdx < resultDetailLines {
 		lines[lineIdx] = "  " + lipgloss.NewStyle().Foreground(ColorText).Render(Truncate(d.Description, contentW))
 		lineIdx++
 	}
 
-	// Line 2: User description (explanation)
+	// User description (explanation)
 	if d.UserDescription != "" && lineIdx < resultDetailLines {
 		lines[lineIdx] = "  " + lipgloss.NewStyle().Foreground(ColorTextDim).Render(Truncate(d.UserDescription, contentW))
 		lineIdx++
 	}
 
-	// Line 3: Recommendation
+	// Recommendation
 	if d.Recommendation != "" && lineIdx < resultDetailLines {
 		recLabel := lipgloss.NewStyle().Foreground(ColorAccent).Render("Rec:")
 		recText := lipgloss.NewStyle().Foreground(ColorText).Render(" " + Truncate(d.Recommendation, contentW-5))
@@ -378,7 +379,7 @@ func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []s
 		lineIdx++
 	}
 
-	// Line 4: MITRE
+	// MITRE
 	if d.MITRE != nil && len(d.MITRE.Techniques) > 0 && lineIdx < resultDetailLines {
 		mitreLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("MITRE: ")
 		techniques := strings.Join(d.MITRE.Techniques, ", ")
@@ -386,7 +387,7 @@ func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []s
 		lineIdx++
 	}
 
-	// Line 5: Process info
+	// Process info
 	if d.Process != nil && lineIdx < resultDetailLines {
 		procLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("Process: ")
 		procInfo := fmt.Sprintf("%s (PID:%d)", d.Process.Name, d.Process.PID)
@@ -397,7 +398,7 @@ func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []s
 		lineIdx++
 	}
 
-	// Line 6: Network info
+	// Network info
 	if d.Network != nil && lineIdx < resultDetailLines {
 		netLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("Net: ")
 		netInfo := fmt.Sprintf("%s:%d → %s:%d (%s)",
@@ -408,7 +409,7 @@ func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []s
 		lineIdx++
 	}
 
-	// Line 7: Sigma rules
+	// Sigma rules
 	if len(d.SigmaRules) > 0 && lineIdx < resultDetailLines {
 		sigLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("Sigma: ")
 		lines[lineIdx] = "  " + sigLabel + lipgloss.NewStyle().Foreground(ColorText).Render(Truncate(strings.Join(d.SigmaRules, ", "), contentW-7))
