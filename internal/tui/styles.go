@@ -2,27 +2,32 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// ── Color Palette ──
+// ── Color Palette (muted, professional, 2-accent system) ──
 
 var (
-	// Neon cyberpunk accent colors
-	ColorCyan    = lipgloss.Color("#00ffff")
-	ColorPink    = lipgloss.Color("#ff69b4")
-	ColorGreen   = lipgloss.Color("#39ff14")
-	ColorRed     = lipgloss.Color("#ff3333")
-	ColorYellow  = lipgloss.Color("#ffff00")
-	ColorOrange  = lipgloss.Color("#ff8c00")
-	ColorWhite   = lipgloss.Color("#ffffff")
-	ColorGray    = lipgloss.Color("#666666")
-	ColorDimGray = lipgloss.Color("#444444")
-	ColorDark    = lipgloss.Color("#1a1a2e")
-	ColorBG      = lipgloss.Color("#0a0a1a")
+	// Background surfaces
+	ColorBG      = lipgloss.Color("#0c0c14")
+	ColorSurface = lipgloss.Color("#161624")
+	ColorBorder  = lipgloss.Color("#2a2a3d")
 
-	// Severity colors
-	ColorCritical = lipgloss.Color("#ff3333")
-	ColorHigh     = lipgloss.Color("#ff8c00")
-	ColorMedium   = lipgloss.Color("#ffff00")
-	ColorLow      = lipgloss.Color("#39ff14")
+	// Text hierarchy
+	ColorText      = lipgloss.Color("#c8c8d4")
+	ColorTextDim   = lipgloss.Color("#6b6b7b")
+	ColorTextMuted = lipgloss.Color("#3e3e50")
+
+	// Single accent color
+	ColorAccent    = lipgloss.Color("#5eead4")
+	ColorAccentDim = lipgloss.Color("#2d6a5e")
+
+	// Severity (softer tones)
+	ColorCritical = lipgloss.Color("#ef4444")
+	ColorHigh     = lipgloss.Color("#f59e0b")
+	ColorMedium   = lipgloss.Color("#eab308")
+	ColorLow      = lipgloss.Color("#22c55e")
+
+	// Semantic
+	ColorSuccess = lipgloss.Color("#22c55e")
+	ColorError   = lipgloss.Color("#ef4444")
 )
 
 // ── Reusable Styles ──
@@ -30,37 +35,37 @@ var (
 var (
 	// Main border frame
 	FrameStyle = lipgloss.NewStyle().
-			Border(lipgloss.DoubleBorder()).
-			BorderForeground(ColorCyan).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorBorder).
 			Padding(0, 1)
 
 	// Title banner
 	TitleStyle = lipgloss.NewStyle().
-			Foreground(ColorCyan).
+			Foreground(ColorAccent).
 			Bold(true)
 
 	// Subtitle
 	SubtitleStyle = lipgloss.NewStyle().
-			Foreground(ColorGray)
+			Foreground(ColorTextDim)
 
 	// Info box
 	InfoBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ColorDimGray).
-			Padding(0, 1)
+			BorderForeground(ColorBorder).
+			Padding(1, 2)
 
-	// Button
+	// Active button (reverse video)
 	ButtonStyle = lipgloss.NewStyle().
-			Foreground(ColorGreen).
-			Bold(true)
+			Foreground(ColorBG).
+			Background(ColorAccent).
+			Bold(true).
+			Padding(0, 3)
 
-	// Progress bar filled
-	ProgressFilled = lipgloss.NewStyle().
-			Foreground(ColorCyan)
-
-	// Progress bar empty
-	ProgressEmpty = lipgloss.NewStyle().
-			Foreground(ColorDimGray)
+	// Disabled button
+	ButtonDisabledStyle = lipgloss.NewStyle().
+				Foreground(ColorTextMuted).
+				Background(ColorSurface).
+				Padding(0, 3)
 
 	// Severity badge styles
 	CriticalStyle = lipgloss.NewStyle().
@@ -87,26 +92,50 @@ var (
 
 	// Detection list item
 	DetectionStyle = lipgloss.NewStyle().
-			Foreground(ColorWhite)
+			Foreground(ColorText)
+
+	// Selected detection
+	DetectionSelectedStyle = lipgloss.NewStyle().
+				Foreground(ColorAccent)
 
 	// Hint / help text
 	HintStyle = lipgloss.NewStyle().
-			Foreground(ColorGray)
+			Foreground(ColorTextDim)
 
 	// Scan stage box
 	StageStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(ColorDimGray)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorBorder)
 
 	// Step indicator styles
-	StepDone    = lipgloss.NewStyle().Foreground(ColorGreen)
-	StepActive  = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
-	StepPending = lipgloss.NewStyle().Foreground(ColorDimGray)
+	StepDone    = lipgloss.NewStyle().Foreground(ColorTextDim)
+	StepActive  = lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
+	StepPending = lipgloss.NewStyle().Foreground(ColorTextMuted)
 
-	// Alert popup
+	// Alert / error
 	AlertStyle = lipgloss.NewStyle().
-			Foreground(ColorRed).
+			Foreground(ColorError).
 			Bold(true)
+
+	// Module badge
+	BadgeStyle = lipgloss.NewStyle().
+			Foreground(ColorAccent).
+			Background(ColorAccentDim).
+			Padding(0, 1)
+
+	// Separator line
+	SeparatorStyle = lipgloss.NewStyle().
+			Foreground(ColorBorder)
+
+	// Label (right-aligned in info box)
+	LabelStyle = lipgloss.NewStyle().
+			Foreground(ColorTextDim).
+			Width(8).
+			Align(lipgloss.Right)
+
+	// Value (info box)
+	ValueStyle = lipgloss.NewStyle().
+			Foreground(ColorText)
 )
 
 // SeverityStyle returns the appropriate style for a severity level.
@@ -121,26 +150,18 @@ func SeverityStyle(severity string) lipgloss.Style {
 	case "low":
 		return LowStyle
 	default:
-		return lipgloss.NewStyle()
+		return lipgloss.NewStyle().Foreground(ColorTextDim)
 	}
 }
 
-// RenderProgressBar renders a text progress bar of a given width.
-func RenderProgressBar(percent, width int) string {
-	filled := width * percent / 100
-	if filled > width {
-		filled = width
+// Truncate truncates a string to maxLen runes, adding "..." if needed.
+func Truncate(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
 	}
-	empty := width - filled
-	bar := ProgressFilled.Render(repeatChar("█", filled)) +
-		ProgressEmpty.Render(repeatChar("░", empty))
-	return bar
-}
-
-func repeatChar(ch string, n int) string {
-	s := ""
-	for i := 0; i < n; i++ {
-		s += ch
+	if maxLen <= 3 {
+		return string(runes[:maxLen])
 	}
-	return s
+	return string(runes[:maxLen-3]) + "..."
 }

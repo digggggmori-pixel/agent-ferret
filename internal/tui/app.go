@@ -108,6 +108,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Propagate content dimensions to all child models
+		cw := m.width - 4  // frame border (2) + padding (2)
+		ch := m.height - 2 // frame border (2)
+		m.home.width = cw
+		m.home.height = ch
+		m.scanning.width = cw
+		m.scanning.height = ch
+		m.results.width = cw
+		m.results.height = ch
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -207,7 +216,7 @@ func (m AppModel) View() string {
 		content = m.results.View()
 	}
 
-	frame := FrameStyle.Width(m.width - 4).Height(m.height - 2)
+	frame := FrameStyle.Width(m.width - 2).Height(m.height - 2)
 	return frame.Render(content)
 }
 
@@ -283,5 +292,5 @@ func TitleBanner() string {
  ██╔══╝  ██╔══╝  ██╔══██╗██╔══██╗██╔══╝     ██║
  ██║     ███████╗██║  ██║██║  ██║███████╗   ██║
  ╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝`
-	return lipgloss.NewStyle().Foreground(ColorCyan).Render(banner)
+	return lipgloss.NewStyle().Foreground(ColorAccent).Render(banner)
 }

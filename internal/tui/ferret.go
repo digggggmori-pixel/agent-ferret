@@ -266,15 +266,29 @@ func GetPosePixels(pose string) []pixelSpec {
 // to render 2 vertical pixels per character cell.
 // This gives us high-res pixel art in the terminal.
 
+// Pose cache: avoid re-rendering identical pixel art every 100ms tick.
+var (
+	poseCache        = make(map[string]string)
+	poseFlippedCache = make(map[string]string)
+)
+
 // RenderPose renders a ferret pose as a string using half-block characters.
 // The result can be placed in a lipgloss layout.
 func RenderPose(pose string) string {
+	if cached, ok := poseCache[pose]; ok {
+		return cached
+	}
 	pixels := GetPosePixels(pose)
-	return renderPixels(pixels)
+	rendered := renderPixels(pixels)
+	poseCache[pose] = rendered
+	return rendered
 }
 
 // RenderPoseFlipped renders a ferret pose horizontally flipped.
 func RenderPoseFlipped(pose string) string {
+	if cached, ok := poseFlippedCache[pose]; ok {
+		return cached
+	}
 	pixels := GetPosePixels(pose)
 	// Find max X to flip
 	maxX := 0
@@ -287,7 +301,9 @@ func RenderPoseFlipped(pose string) string {
 	for i, p := range pixels {
 		flipped[i] = pixelSpec{x: maxX - p.x, y: p.y, color: p.color}
 	}
-	return renderPixels(flipped)
+	rendered := renderPixels(flipped)
+	poseFlippedCache[pose] = rendered
+	return rendered
 }
 
 func renderPixels(pixels []pixelSpec) string {
@@ -382,7 +398,7 @@ func SpeechBubble(text string) string {
 	mid := fmt.Sprintf("│ %s │", text)
 	bot := "╰" + strings.Repeat("─", w) + "╯"
 	pointer := strings.Repeat(" ", 3) + "╰──"
-	return lipgloss.NewStyle().Foreground(ColorCyan).Render(
+	return lipgloss.NewStyle().Foreground(ColorAccent).Render(
 		strings.Join([]string{top, mid, bot, pointer}, "\n"),
 	)
 }

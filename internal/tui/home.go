@@ -38,13 +38,10 @@ func (m HomeModel) Init() tea.Cmd {
 }
 
 func (m HomeModel) Update(msg tea.Msg) (HomeModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+	switch msg.(type) {
 	case tickMsg:
 		m.tickCount++
-		if m.tickCount%6 == 0 { // ~600ms cycle
+		if m.tickCount%6 == 0 {
 			m.tailFrame = 1 - m.tailFrame
 		}
 	}
@@ -54,7 +51,7 @@ func (m HomeModel) Update(msg tea.Msg) (HomeModel, tea.Cmd) {
 func (m HomeModel) View() string {
 	w := m.width
 	if w < 40 {
-		w = 60
+		w = 80
 	}
 
 	var b strings.Builder
@@ -67,24 +64,36 @@ func (m HomeModel) View() string {
 	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, subtitle))
 	b.WriteString("\n\n")
 
-	// Ferret mascot (idle pose)
-	ferret := RenderPose(PoseIdle)
+	// Ferret mascot (subtle idle animation)
+	pose := PoseIdle
+	if m.tailFrame == 1 {
+		pose = PoseSniff
+	}
+	ferret := RenderPose(pose)
 	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, ferret))
 	b.WriteString("\n\n")
 
-	// Host info box
+	// Host info box — responsive width
+	boxWidth := w * 2 / 3
+	if boxWidth > 56 {
+		boxWidth = 56
+	}
+	if boxWidth < 36 {
+		boxWidth = 36
+	}
+
 	adminStr := "No"
-	adminColor := ColorRed
+	adminColor := ColorError
 	if m.isAdmin {
 		adminStr = "Yes"
-		adminColor = ColorGreen
+		adminColor = ColorSuccess
 	}
 
 	rulesStr := "Not loaded"
-	rulesColor := ColorRed
+	rulesColor := ColorError
 	if m.rulesLoaded {
 		rulesStr = fmt.Sprintf("%s (%d sigma)", m.ruleVersion, m.sigmaCount)
-		rulesColor = ColorGreen
+		rulesColor = ColorSuccess
 	}
 
 	ip := "N/A"
@@ -92,31 +101,26 @@ func (m HomeModel) View() string {
 		ip = m.ipAddresses[0]
 	}
 
-	info := fmt.Sprintf(
-		"  Host:  %s\n"+
-			"  OS:    %s\n"+
-			"  IP:    %s\n"+
-			"  Admin: %s\n"+
-			"  Rules: %s",
-		lipgloss.NewStyle().Foreground(ColorWhite).Render(m.hostName),
-		lipgloss.NewStyle().Foreground(ColorWhite).Render(m.osVersion),
-		lipgloss.NewStyle().Foreground(ColorWhite).Render(ip),
-		lipgloss.NewStyle().Foreground(adminColor).Render(adminStr),
-		lipgloss.NewStyle().Foreground(rulesColor).Render(rulesStr),
-	)
+	info := strings.Join([]string{
+		LabelStyle.Render("Host") + "  " + ValueStyle.Render(m.hostName),
+		LabelStyle.Render("OS") + "  " + ValueStyle.Render(m.osVersion),
+		LabelStyle.Render("IP") + "  " + ValueStyle.Render(ip),
+		LabelStyle.Render("Admin") + "  " + lipgloss.NewStyle().Foreground(adminColor).Render(adminStr),
+		LabelStyle.Render("Rules") + "  " + lipgloss.NewStyle().Foreground(rulesColor).Render(rulesStr),
+	}, "\n")
 
-	infoBox := InfoBoxStyle.Width(42).Render(info)
+	infoBox := InfoBoxStyle.Width(boxWidth).Render(info)
 	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, infoBox))
 	b.WriteString("\n\n")
 
-	// Scan modules indicator
-	modules := fmt.Sprintf("Scan: %s  %s  %s  %s  %s  %s",
-		lipgloss.NewStyle().Foreground(ColorCyan).Render("PROC"),
-		lipgloss.NewStyle().Foreground(ColorCyan).Render("NET"),
-		lipgloss.NewStyle().Foreground(ColorCyan).Render("SVC"),
-		lipgloss.NewStyle().Foreground(ColorCyan).Render("REG"),
-		lipgloss.NewStyle().Foreground(ColorCyan).Render("SIGMA"),
-		lipgloss.NewStyle().Foreground(ColorCyan).Render("LOGS"),
+	// Module badges
+	modules := lipgloss.JoinHorizontal(lipgloss.Center,
+		BadgeStyle.Render("PROC"), " ",
+		BadgeStyle.Render("NET"), " ",
+		BadgeStyle.Render("SVC"), " ",
+		BadgeStyle.Render("REG"), " ",
+		BadgeStyle.Render("SIGMA"), " ",
+		BadgeStyle.Render("LOGS"),
 	)
 	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, modules))
 	b.WriteString("\n\n")
@@ -124,30 +128,30 @@ func (m HomeModel) View() string {
 	// Error message
 	if m.errorMsg != "" {
 		errBox := lipgloss.NewStyle().
-			Foreground(ColorRed).
+			Foreground(ColorError).
 			Bold(true).
 			Width(w - 8).
-			Render(m.errorMsg)
+			Render("[!] " + m.errorMsg)
 		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, errBox))
 		b.WriteString("\n\n")
 	} else if !m.rulesLoaded {
 		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center,
-			AlertStyle.Render("WARNING: rules.json not found — place it next to ferret.exe")))
+			AlertStyle.Render("[!] rules.json not found")))
 		b.WriteString("\n\n")
 	}
 
 	// Start button
 	if m.rulesLoaded {
-		btn := ButtonStyle.Render("[ ▶  START SCAN ]")
+		btn := ButtonStyle.Render("START SCAN")
 		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, btn))
 	} else {
-		btn := lipgloss.NewStyle().Foreground(ColorDimGray).Render("[ ▶  START SCAN ]  (rules required)")
+		btn := ButtonDisabledStyle.Render("START SCAN")
 		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, btn))
 	}
 	b.WriteString("\n\n")
 
 	// Hint
-	hint := HintStyle.Render("Press ENTER to start  •  Q to quit")
+	hint := HintStyle.Render("ENTER start  •  Q quit")
 	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, hint))
 
 	return b.String()
