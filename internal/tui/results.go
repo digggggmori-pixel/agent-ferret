@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -22,10 +21,9 @@ type ResultsModel struct {
 	hostName string
 
 	// selection & scrolling
-	selected int
-	expanded bool
-	vp       viewport.Model
-	vpReady  bool
+	selected  int
+	listTop   int // first visible item index
+	listHeight int // visible item count
 
 	// filtering
 	filter string // "", "critical", "high", "medium", "low"
@@ -41,7 +39,17 @@ type ResultsModel struct {
 
 	// score progress bar
 	scoreProg progress.Model
+
+	// viewport initialized flag
+	vpReady bool
 }
+
+// Fixed layout constants
+const (
+	resultHeaderLines = 8  // header + score + badges + separator
+	resultDetailLines = 8  // detail panel
+	resultFooterLines = 2  // separator + help
+)
 
 func NewResultsModel() ResultsModel {
 	sp := progress.New(
@@ -60,108 +68,73 @@ func (m ResultsModel) Init() tea.Cmd {
 }
 
 func (m ResultsModel) Update(msg tea.Msg) (ResultsModel, tea.Cmd) {
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.initViewport()
+		m.recalcLayout()
 
 	case tickMsg:
 		m.tickCount++
 
 	case tea.KeyMsg:
+		filtered := m.filteredDetections()
 		switch msg.String() {
 		case "up", "k":
 			if m.selected > 0 {
 				m.selected--
-				m.expanded = false
-				m.updateViewportContent()
+				m.ensureVisible()
 			}
 		case "down", "j":
-			filtered := m.filteredDetections()
 			if m.selected < len(filtered)-1 {
 				m.selected++
-				m.expanded = false
-				m.updateViewportContent()
+				m.ensureVisible()
 			}
-		case "enter":
-			m.expanded = !m.expanded
-			m.updateViewportContent()
 		case "1":
 			m.filter = "critical"
 			m.selected = 0
-			m.expanded = false
-			m.updateViewportContent()
+			m.listTop = 0
 		case "2":
 			m.filter = "high"
 			m.selected = 0
-			m.expanded = false
-			m.updateViewportContent()
+			m.listTop = 0
 		case "3":
 			m.filter = "medium"
 			m.selected = 0
-			m.expanded = false
-			m.updateViewportContent()
+			m.listTop = 0
 		case "4":
 			m.filter = "low"
 			m.selected = 0
-			m.expanded = false
-			m.updateViewportContent()
+			m.listTop = 0
 		case "a":
 			m.filter = ""
 			m.selected = 0
-			m.expanded = false
-			m.updateViewportContent()
+			m.listTop = 0
 		}
 	case exportDoneMsg:
 		m.exportPath = string(msg)
 	}
 
-	// Forward to viewport for scroll
-	if m.vpReady {
-		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
-
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 func (m *ResultsModel) initViewport() {
-	headerHeight := 12
-	footerHeight := 4
-	vpHeight := m.height - headerHeight - footerHeight
-	if vpHeight < 5 {
-		vpHeight = 5
-	}
-	vpWidth := m.width - 4
-	if vpWidth < 20 {
-		vpWidth = 20
-	}
-	m.vp = viewport.New(vpWidth, vpHeight)
-	m.vp.Style = lipgloss.NewStyle()
+	m.recalcLayout()
 	m.vpReady = true
-	m.updateViewportContent()
 }
 
-func (m *ResultsModel) updateViewportContent() {
-	if !m.vpReady {
-		return
+func (m *ResultsModel) recalcLayout() {
+	m.listHeight = m.height - resultHeaderLines - resultDetailLines - resultFooterLines
+	if m.listHeight < 3 {
+		m.listHeight = 3
 	}
-	content := m.renderDetectionList()
-	m.vp.SetContent(content)
+}
 
-	// Scroll to keep selected item visible
-	// Each item is ~2-3 lines (1 main + optional MITRE + optional expanded)
-	targetLine := m.selected * 2
-	if m.vp.YOffset > targetLine {
-		m.vp.SetYOffset(targetLine)
-	} else if targetLine >= m.vp.YOffset+m.vp.Height-2 {
-		m.vp.SetYOffset(targetLine - m.vp.Height + 3)
+func (m *ResultsModel) ensureVisible() {
+	if m.selected < m.listTop {
+		m.listTop = m.selected
+	} else if m.selected >= m.listTop+m.listHeight {
+		m.listTop = m.selected - m.listHeight + 1
 	}
 }
 
@@ -181,31 +154,41 @@ func (m ResultsModel) filteredDetections() []types.Detection {
 	return filtered
 }
 
+// View builds the results screen as a fixed-height line array.
 func (m ResultsModel) View() string {
 	w := m.width
 	if w < 40 {
 		w = 80
+	}
+	h := m.height
+	if h < 20 {
+		h = 20
 	}
 
 	if m.result == nil {
 		return m.renderErrorView(w)
 	}
 
-	var b strings.Builder
+	lines := make([]string, 0, h)
 
-	// Header
+	// ── Header section ──
+
+	// Line 1: Title + info
 	left := TitleStyle.Render("  RESULTS")
 	info := HintStyle.Render(fmt.Sprintf("Duration: %s  Host: %s  ", formatDuration(m.duration), m.hostName))
 	spacerW := w - lipgloss.Width(left) - lipgloss.Width(info)
 	if spacerW < 1 {
 		spacerW = 1
 	}
-	b.WriteString(left + strings.Repeat(" ", spacerW) + info)
-	b.WriteString("\n")
-	b.WriteString(SeparatorStyle.Render(strings.Repeat("─", w)))
-	b.WriteString("\n\n")
+	lines = append(lines, left+strings.Repeat(" ", spacerW)+info)
 
-	// Threat score
+	// Line 2: Separator
+	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
+
+	// Line 3: Blank
+	lines = append(lines, "")
+
+	// Line 4: Threat score
 	score := m.calculateThreatScore()
 	scoreLabel := "SAFE"
 	scoreColor := ColorSuccess
@@ -219,58 +202,212 @@ func (m ResultsModel) View() string {
 		scoreLabel = "CAUTION"
 		scoreColor = ColorMedium
 	}
-
 	m.scoreProg.Width = 20
-	scoreLine := fmt.Sprintf("  Threat Score: %d/100  %s  %s",
+	lines = append(lines, fmt.Sprintf("  Threat Score: %d/100  %s  %s",
 		score,
 		m.scoreProg.ViewAs(float64(score)/100.0),
 		lipgloss.NewStyle().Foreground(scoreColor).Bold(true).Render(scoreLabel),
-	)
-	b.WriteString(scoreLine)
-	b.WriteString("\n\n")
+	))
 
-	// Severity summary with filter indicators
+	// Line 5: Blank
+	lines = append(lines, "")
+
+	// Line 6: Severity badges
 	summary := m.result.Summary.Detections
-	b.WriteString(m.renderSeveritySummary(summary))
-	b.WriteString("\n")
-	b.WriteString(SeparatorStyle.Render("  " + strings.Repeat("─", w-4)))
-	b.WriteString("\n")
+	lines = append(lines, m.renderSeveritySummary(summary))
 
-	// Filter indicator
+	// Line 7: Separator
+	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
+
+	// Line 8: Filter indicator or blank
 	if m.filter != "" {
-		b.WriteString(fmt.Sprintf("  Filter: %s  ",
-			lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(strings.ToUpper(m.filter))))
-		b.WriteString(HintStyle.Render("(A = show all)"))
-		b.WriteString("\n")
+		lines = append(lines, fmt.Sprintf("  Filter: %s  %s",
+			lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(strings.ToUpper(m.filter)),
+			HintStyle.Render("(A = all)")))
+	} else {
+		detections := m.filteredDetections()
+		lines = append(lines, HintStyle.Render(fmt.Sprintf("  %d detections", len(detections))))
 	}
 
-	// Detection list via viewport
-	if m.vpReady {
-		b.WriteString(m.vp.View())
-	}
-	b.WriteString("\n")
-
-	// Export status
-	if m.exportPath != "" {
-		b.WriteString(lipgloss.NewStyle().Foreground(ColorSuccess).Render(
-			fmt.Sprintf("  Exported: %s", m.exportPath)))
-		b.WriteString("\n")
-	}
-
-	// Footer
-	b.WriteString(SeparatorStyle.Render(strings.Repeat("─", w)))
-	b.WriteString("\n")
-
-	// Scroll info + help
-	scrollInfo := ""
+	// ── Detection list section ──
 	detections := m.filteredDetections()
-	if len(detections) > 0 {
-		scrollInfo = HintStyle.Render(fmt.Sprintf("  %d/%d  ", m.selected+1, len(detections)))
-	}
-	help := HintStyle.Render("↑↓ Select  ENTER Detail  1-4 Filter  A All  E Export  R Rescan  Q Quit")
-	b.WriteString(scrollInfo + help)
+	listLines := m.renderList(detections, w)
+	lines = append(lines, listLines...)
 
-	return b.String()
+	// ── Detail panel section ──
+	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
+	detailLines := m.renderDetailPanel(detections, w)
+	lines = append(lines, detailLines...)
+
+	// ── Footer section ──
+	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
+
+	// Footer: scroll info + help
+	scrollInfo := ""
+	if len(detections) > 0 {
+		scrollInfo = fmt.Sprintf("  %d/%d  ", m.selected+1, len(detections))
+	}
+	exportInfo := ""
+	if m.exportPath != "" {
+		exportInfo = lipgloss.NewStyle().Foreground(ColorSuccess).Render("  Exported: "+m.exportPath) + "  "
+	}
+	help := "↑↓ Navigate  1-4 Filter  A All  E Export  R Rescan  Q Quit"
+	lines = append(lines, HintStyle.Render(scrollInfo+exportInfo+help))
+
+	// Pad to exact height
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	if len(lines) > h {
+		lines = lines[:h]
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderList renders the detection list with exactly listHeight lines.
+func (m ResultsModel) renderList(detections []types.Detection, w int) []string {
+	lines := make([]string, m.listHeight)
+
+	if len(detections) == 0 {
+		for i := range lines {
+			lines[i] = ""
+		}
+		msg := lipgloss.NewStyle().Foreground(ColorSuccess).Render("  No threats detected!")
+		if m.filter != "" {
+			msg = HintStyle.Render("  No detections with this severity")
+		}
+		if m.listHeight > 1 {
+			lines[1] = msg
+		}
+		return lines
+	}
+
+	descWidth := w - 22
+	if descWidth < 20 {
+		descWidth = 20
+	}
+
+	for i := 0; i < m.listHeight; i++ {
+		idx := m.listTop + i
+		if idx >= len(detections) {
+			lines[i] = ""
+			continue
+		}
+
+		d := detections[idx]
+		isSelected := (idx == m.selected)
+
+		// Severity badge (short)
+		sevShort := strings.ToUpper(d.Severity)
+		if len(sevShort) > 4 {
+			sevShort = sevShort[:4]
+		}
+		badge := SeverityStyle(d.Severity).Render(fmt.Sprintf(" %-4s ", sevShort))
+
+		// Description
+		desc := Truncate(d.Description, descWidth)
+
+		if isSelected {
+			// Selected row: accent indicator + highlighted text
+			indicator := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(" ▸ ")
+			text := lipgloss.NewStyle().Foreground(ColorAccent).Render(d.Type + ": " + desc)
+			lines[i] = indicator + badge + " " + text
+		} else {
+			// Normal row
+			text := lipgloss.NewStyle().Foreground(ColorText).Render(d.Type + ": " + desc)
+			lines[i] = "   " + badge + " " + text
+		}
+	}
+
+	return lines
+}
+
+// renderDetailPanel renders the detail panel for the selected detection.
+// Always returns exactly resultDetailLines lines.
+func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []string {
+	lines := make([]string, resultDetailLines)
+	for i := range lines {
+		lines[i] = ""
+	}
+
+	if len(detections) == 0 || m.selected >= len(detections) {
+		lines[1] = HintStyle.Render("  Select a detection to view details")
+		return lines
+	}
+
+	d := detections[m.selected]
+	contentW := w - 6
+	if contentW < 30 {
+		contentW = 30
+	}
+
+	lineIdx := 0
+
+	// Line 0: Type + Severity header
+	sevBadge := SeverityStyle(d.Severity).Render(fmt.Sprintf(" %s ", strings.ToUpper(d.Severity)))
+	typeText := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(d.Type)
+	lines[lineIdx] = "  " + sevBadge + "  " + typeText
+	lineIdx++
+
+	// Line 1: Full description
+	if d.Description != "" && lineIdx < resultDetailLines {
+		lines[lineIdx] = "  " + lipgloss.NewStyle().Foreground(ColorText).Render(Truncate(d.Description, contentW))
+		lineIdx++
+	}
+
+	// Line 2: User description (explanation)
+	if d.UserDescription != "" && lineIdx < resultDetailLines {
+		lines[lineIdx] = "  " + lipgloss.NewStyle().Foreground(ColorTextDim).Render(Truncate(d.UserDescription, contentW))
+		lineIdx++
+	}
+
+	// Line 3: Recommendation
+	if d.Recommendation != "" && lineIdx < resultDetailLines {
+		recLabel := lipgloss.NewStyle().Foreground(ColorAccent).Render("Rec:")
+		recText := lipgloss.NewStyle().Foreground(ColorText).Render(" " + Truncate(d.Recommendation, contentW-5))
+		lines[lineIdx] = "  " + recLabel + recText
+		lineIdx++
+	}
+
+	// Line 4: MITRE
+	if d.MITRE != nil && len(d.MITRE.Techniques) > 0 && lineIdx < resultDetailLines {
+		mitreLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("MITRE: ")
+		techniques := strings.Join(d.MITRE.Techniques, ", ")
+		lines[lineIdx] = "  " + mitreLabel + lipgloss.NewStyle().Foreground(ColorText).Render(Truncate(techniques, contentW-7))
+		lineIdx++
+	}
+
+	// Line 5: Process info
+	if d.Process != nil && lineIdx < resultDetailLines {
+		procLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("Process: ")
+		procInfo := fmt.Sprintf("%s (PID:%d)", d.Process.Name, d.Process.PID)
+		if d.Process.Path != "" {
+			procInfo += "  " + d.Process.Path
+		}
+		lines[lineIdx] = "  " + procLabel + lipgloss.NewStyle().Foreground(ColorText).Render(Truncate(procInfo, contentW-9))
+		lineIdx++
+	}
+
+	// Line 6: Network info
+	if d.Network != nil && lineIdx < resultDetailLines {
+		netLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("Net: ")
+		netInfo := fmt.Sprintf("%s:%d → %s:%d (%s)",
+			d.Network.LocalAddr, d.Network.LocalPort,
+			d.Network.RemoteAddr, d.Network.RemotePort,
+			d.Network.ProcessName)
+		lines[lineIdx] = "  " + netLabel + lipgloss.NewStyle().Foreground(ColorText).Render(Truncate(netInfo, contentW-5))
+		lineIdx++
+	}
+
+	// Line 7: Sigma rules
+	if len(d.SigmaRules) > 0 && lineIdx < resultDetailLines {
+		sigLabel := lipgloss.NewStyle().Foreground(ColorTextDim).Render("Sigma: ")
+		lines[lineIdx] = "  " + sigLabel + lipgloss.NewStyle().Foreground(ColorText).Render(Truncate(strings.Join(d.SigmaRules, ", "), contentW-7))
+		lineIdx++
+	}
+
+	return lines
 }
 
 func (m ResultsModel) renderErrorView(w int) string {
@@ -293,9 +430,9 @@ func (m ResultsModel) renderErrorView(w int) string {
 
 func (m ResultsModel) renderSeveritySummary(s types.DetectionCount) string {
 	parts := []string{
-		m.renderSummaryBadge("CRITICAL", s.Critical, "critical"),
+		m.renderSummaryBadge("CRIT", s.Critical, "critical"),
 		m.renderSummaryBadge("HIGH", s.High, "high"),
-		m.renderSummaryBadge("MEDIUM", s.Medium, "medium"),
+		m.renderSummaryBadge("MED", s.Medium, "medium"),
 		m.renderSummaryBadge("LOW", s.Low, "low"),
 	}
 	return "  " + strings.Join(parts, "  ")
@@ -303,80 +440,11 @@ func (m ResultsModel) renderSeveritySummary(s types.DetectionCount) string {
 
 func (m ResultsModel) renderSummaryBadge(label string, count int, severity string) string {
 	style := SeverityStyle(severity)
-	countStr := fmt.Sprintf(" %s: %d ", label, count)
+	countStr := fmt.Sprintf(" %s:%d ", label, count)
 	if m.filter == severity {
 		return style.Underline(true).Render(countStr)
 	}
 	return style.Render(countStr)
-}
-
-func (m ResultsModel) renderDetectionList() string {
-	detections := m.filteredDetections()
-	if len(detections) == 0 {
-		if m.filter != "" {
-			return lipgloss.PlaceHorizontal(m.width, lipgloss.Center,
-				HintStyle.Render("No detections with this severity"))
-		}
-		return lipgloss.PlaceHorizontal(m.width, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(ColorSuccess).Render("No threats detected!"))
-	}
-
-	var b strings.Builder
-	for i, d := range detections {
-		isSelected := (i == m.selected)
-		b.WriteString(m.renderDetection(d, isSelected))
-		b.WriteString("\n")
-	}
-	return b.String()
-}
-
-func (m ResultsModel) renderDetection(d types.Detection, isSelected bool) string {
-	descWidth := m.width - 24
-	if descWidth < 30 {
-		descWidth = 30
-	}
-
-	badge := SeverityStyle(d.Severity).Render(fmt.Sprintf(" %-8s", strings.ToUpper(d.Severity)))
-	desc := Truncate(d.Description, descWidth)
-
-	var line string
-	if isSelected {
-		// Selected: accent arrow + accent text
-		indicator := lipgloss.NewStyle().Foreground(ColorAccent).Render("")
-		descText := DetectionSelectedStyle.Render(d.Type + ": " + desc)
-		line = fmt.Sprintf(" %s %s %s", indicator, badge, descText)
-
-		// Show MITRE only for selected
-		if d.MITRE != nil && len(d.MITRE.Techniques) > 0 {
-			mitre := HintStyle.Render("     MITRE: " + strings.Join(d.MITRE.Techniques, ", "))
-			line += "\n" + mitre
-		}
-
-		// Expanded detail view
-		if m.expanded {
-			if d.UserDescription != "" {
-				detail := lipgloss.NewStyle().
-					Foreground(ColorText).
-					Width(m.width - 10).
-					PaddingLeft(5).
-					Render(d.UserDescription)
-				line += "\n" + detail
-			}
-			if d.Recommendation != "" {
-				rec := lipgloss.NewStyle().
-					Foreground(ColorAccent).
-					Width(m.width - 10).
-					PaddingLeft(5).
-					Render("Rec: " + d.Recommendation)
-				line += "\n" + rec
-			}
-		}
-	} else {
-		descText := DetectionStyle.Render(d.Type + ": " + desc)
-		line = fmt.Sprintf("   %s %s", badge, descText)
-	}
-
-	return line
 }
 
 func (m ResultsModel) calculateThreatScore() int {
@@ -389,6 +457,13 @@ func (m ResultsModel) calculateThreatScore() int {
 		score = 100
 	}
 	return score
+}
+
+func min4(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // exportDoneMsg is sent when JSON export completes
