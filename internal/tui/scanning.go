@@ -72,14 +72,19 @@ type ScanningModel struct {
 
 func NewScanningModel() ScanningModel {
 	return ScanningModel{
-		stageW:    52,
-		stageH:    10,
-		posX:      5,
-		posY:      4,
-		targetX:   5,
-		targetY:   4,
-		facingR:   true,
-		phase:     roamIdle,
+		stageW:  52,
+		stageH:  10,
+		posX:    5,
+		posY:    4,
+		targetX: 5,
+		targetY: 4,
+		facingR: true,
+		phase:   roamIdle,
+		progress: scan.Progress{
+			Step:     0,
+			Total:    8,
+			StepName: "Initializing...",
+		},
 		startTime: time.Now(),
 	}
 }

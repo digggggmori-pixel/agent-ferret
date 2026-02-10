@@ -31,6 +31,9 @@ type ResultsModel struct {
 
 	// export status
 	exportPath string
+
+	// error from scan
+	errMsg string
 }
 
 func NewResultsModel() ResultsModel {
@@ -111,7 +114,21 @@ func (m ResultsModel) View() string {
 	}
 
 	if m.result == nil {
-		return "No results available"
+		var b strings.Builder
+		b.WriteString("\n\n")
+		errText := "Scan failed"
+		if m.errMsg != "" {
+			errText = m.errMsg
+		}
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center,
+			AlertStyle.Render("ERROR: "+errText)))
+		b.WriteString("\n\n")
+		ferret := RenderPose(PoseSleep)
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, ferret))
+		b.WriteString("\n\n")
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center,
+			HintStyle.Render("Press R to retry  •  Q to quit")))
+		return b.String()
 	}
 
 	var b strings.Builder

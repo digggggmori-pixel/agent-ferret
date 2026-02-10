@@ -36,6 +36,7 @@ type detectionMsg int
 
 type scanDoneMsg struct {
 	result *types.ScanResult
+	err    string
 }
 
 // ── Main App Model ──
@@ -116,6 +117,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			if m.page == pageHome {
+				if !m.ruleStore.IsLoaded() {
+					// Can't scan without rules
+					m.home.errorMsg = "rules.json not found! Place it next to ferret.exe"
+					break
+				}
 				// Start scan
 				m.page = pageScanning
 				m.scanning = NewScanningModel()
@@ -151,6 +157,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastResult = msg.result
 		m.results = NewResultsModel()
 		m.results.result = msg.result
+		m.results.errMsg = msg.err
 		m.results.hostName = m.home.hostName
 		if msg.result != nil {
 			m.results.duration = time.Duration(msg.result.ScanDurationMs) * time.Millisecond
@@ -210,7 +217,7 @@ func (m AppModel) startScan() tea.Cmd {
 	return func() tea.Msg {
 		result, err := scanner.Execute()
 		if err != nil {
-			return scanDoneMsg{result: nil}
+			return scanDoneMsg{result: nil, err: err.Error()}
 		}
 		return scanDoneMsg{result: result}
 	}

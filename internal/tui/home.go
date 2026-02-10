@@ -22,6 +22,9 @@ type HomeModel struct {
 	// animation
 	tailFrame int // 0 or 1
 	tickCount int
+
+	// error message (shown when scan can't start)
+	errorMsg string
 }
 
 func NewHomeModel() HomeModel {
@@ -118,9 +121,25 @@ func (m HomeModel) View() string {
 	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, modules))
 	b.WriteString("\n\n")
 
+	// Error message
+	if m.errorMsg != "" {
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center,
+			AlertStyle.Render(m.errorMsg)))
+		b.WriteString("\n\n")
+	} else if !m.rulesLoaded {
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center,
+			AlertStyle.Render("WARNING: rules.json not found — place it next to ferret.exe")))
+		b.WriteString("\n\n")
+	}
+
 	// Start button
-	btn := ButtonStyle.Render("[ ▶  START SCAN ]")
-	b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, btn))
+	if m.rulesLoaded {
+		btn := ButtonStyle.Render("[ ▶  START SCAN ]")
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, btn))
+	} else {
+		btn := lipgloss.NewStyle().Foreground(ColorDimGray).Render("[ ▶  START SCAN ]  (rules required)")
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, btn))
+	}
 	b.WriteString("\n\n")
 
 	// Hint
