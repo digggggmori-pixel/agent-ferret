@@ -46,9 +46,9 @@ type ResultsModel struct {
 
 // Fixed layout constants
 const (
-	resultHeaderLines = 8  // title + sep + blank + score + blank + badges + sep + filter
-	resultDetailLines = 9  // separator + detail panel (8 lines)
-	resultFooterLines = 2  // separator + help
+	resultHeaderLines = 6 // title + sep + score/CTA + badges/filter + help + sep
+	resultDetailLines = 7 // separator + detail panel (6 lines)
+	resultFooterLines = 0 // help moved into header
 )
 
 func NewResultsModel() ResultsModel {
@@ -125,8 +125,8 @@ func (m *ResultsModel) initViewport() {
 
 func (m *ResultsModel) recalcLayout() {
 	m.listHeight = m.height - resultHeaderLines - resultDetailLines - resultFooterLines
-	if m.listHeight < 3 {
-		m.listHeight = 3
+	if m.listHeight < 1 {
+		m.listHeight = 1
 	}
 }
 
@@ -161,8 +161,8 @@ func (m ResultsModel) View() string {
 		w = 80
 	}
 	h := m.height
-	if h < 20 {
-		h = 20
+	if h < 12 {
+		h = 12
 	}
 
 	if m.result == nil {
@@ -171,7 +171,7 @@ func (m ResultsModel) View() string {
 
 	lines := make([]string, 0, h)
 
-	// ── Header section ──
+	// ── Header section (6 lines) ──
 
 	// Line 1: Title + info
 	left := TitleStyle.Render("  RESULTS")
@@ -185,10 +185,7 @@ func (m ResultsModel) View() string {
 	// Line 2: Separator
 	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
 
-	// Line 3: Blank
-	lines = append(lines, "")
-
-	// Line 4: Threat score
+	// Line 3: Threat score + CTA
 	score := m.calculateThreatScore()
 	scoreLabel := "SAFE"
 	scoreColor := ColorSuccess
@@ -203,55 +200,58 @@ func (m ResultsModel) View() string {
 		scoreColor = ColorMedium
 	}
 	m.scoreProg.Width = 20
-	lines = append(lines, fmt.Sprintf("  Threat Score: %d/100  %s  %s",
+	scoreStr := fmt.Sprintf("  Threat Score: %d/100  %s  %s",
 		score,
 		m.scoreProg.ViewAs(float64(score)/100.0),
-		lipgloss.NewStyle().Foreground(scoreColor).Bold(true).Render(scoreLabel),
-	))
+		lipgloss.NewStyle().Foreground(scoreColor).Bold(true).Render(scoreLabel))
+	cta := lipgloss.NewStyle().
+		Background(ColorAccent).
+		Foreground(lipgloss.Color("#0c0c14")).
+		Bold(true).
+		Padding(0, 1).
+		Render("D  Deep Analysis")
+	ctaSpacer := w - lipgloss.Width(scoreStr) - lipgloss.Width(cta) - 1
+	if ctaSpacer < 1 {
+		ctaSpacer = 1
+	}
+	lines = append(lines, scoreStr+strings.Repeat(" ", ctaSpacer)+cta)
 
-	// Line 5: Blank
-	lines = append(lines, "")
-
-	// Line 6: Severity badges
+	// Line 4: Severity badges + scroll/filter info
 	summary := m.result.Summary.Detections
-	lines = append(lines, m.renderSeveritySummary(summary))
+	badgeStr := m.renderSeveritySummary(summary)
+	detections := m.filteredDetections()
+	var rightParts []string
+	if len(detections) > 0 {
+		rightParts = append(rightParts, fmt.Sprintf("%d/%d", m.selected+1, len(detections)))
+	}
+	if m.filter != "" {
+		rightParts = append(rightParts, lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(strings.ToUpper(m.filter)))
+	} else {
+		rightParts = append(rightParts, HintStyle.Render(fmt.Sprintf("%d detections", len(detections))))
+	}
+	if m.exportPath != "" {
+		rightParts = append(rightParts, lipgloss.NewStyle().Foreground(ColorSuccess).Render("Exported"))
+	}
+	rightStr := strings.Join(rightParts, "  ") + "  "
+	badgeSpacer := w - lipgloss.Width(badgeStr) - lipgloss.Width(rightStr)
+	if badgeSpacer < 1 {
+		badgeSpacer = 1
+	}
+	lines = append(lines, badgeStr+strings.Repeat(" ", badgeSpacer)+rightStr)
 
-	// Line 7: Separator
+	// Line 5: Help shortcuts
+	lines = append(lines, HintStyle.Render("  ↑↓ Navigate  1-4 Filter  A All  E Export  D Analyze  R Rescan  Q Quit"))
+
+	// Line 6: Separator
 	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
 
-	// Line 8: Filter indicator or blank
-	if m.filter != "" {
-		lines = append(lines, fmt.Sprintf("  Filter: %s  %s",
-			lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(strings.ToUpper(m.filter)),
-			HintStyle.Render("(A = all)")))
-	} else {
-		detections := m.filteredDetections()
-		lines = append(lines, HintStyle.Render(fmt.Sprintf("  %d detections", len(detections))))
-	}
-
 	// ── Detection list section ──
-	detections := m.filteredDetections()
 	listLines := m.renderList(detections, w)
 	lines = append(lines, listLines...)
 
 	// ── Detail panel section (separator is inside renderDetailPanel) ──
 	detailLines := m.renderDetailPanel(detections, w)
 	lines = append(lines, detailLines...)
-
-	// ── Footer section ──
-	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
-
-	// Footer: scroll info + help
-	scrollInfo := ""
-	if len(detections) > 0 {
-		scrollInfo = fmt.Sprintf("  %d/%d  ", m.selected+1, len(detections))
-	}
-	exportInfo := ""
-	if m.exportPath != "" {
-		exportInfo = lipgloss.NewStyle().Foreground(ColorSuccess).Render("  Exported: "+m.exportPath) + "  "
-	}
-	help := "↑↓ Navigate  1-4 Filter  A All  E Export  R Rescan  Q Quit"
-	lines = append(lines, HintStyle.Render(scrollInfo+exportInfo+help))
 
 	// Cap each line to prevent wrapping on Windows terminals
 	capStyle := lipgloss.NewStyle().MaxWidth(w)
@@ -332,7 +332,7 @@ func (m ResultsModel) renderList(detections []types.Detection, w int) []string {
 
 // renderDetailPanel renders the detail panel for the selected detection.
 // Always returns exactly resultDetailLines lines.
-// Line 0 is the separator; lines 1-8 are detail content.
+// Line 0 is the separator; lines 1-6 are detail content.
 func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []string {
 	lines := make([]string, resultDetailLines)
 	lines[0] = SeparatorStyle.Render(strings.Repeat("─", w))
@@ -341,7 +341,9 @@ func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []s
 	}
 
 	if len(detections) == 0 || m.selected >= len(detections) {
-		lines[2] = HintStyle.Render("  Select a detection to view details")
+		if resultDetailLines > 2 {
+			lines[2] = HintStyle.Render("  Select a detection to view details")
+		}
 		return lines
 	}
 

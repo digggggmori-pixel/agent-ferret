@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -16,6 +18,9 @@ import (
 	"github.com/digggggmori-pixel/agent-ferret/internal/scan"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 )
+
+// AnalyzeURL is the BRIQA deep analysis page.
+const AnalyzeURL = "https://app.briqa.io/analyze"
 
 // ── Page enum ──
 
@@ -158,6 +163,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e":
 			if m.page == pageResults && m.lastResult != nil {
 				cmds = append(cmds, m.exportJSON())
+			}
+
+		case "d":
+			if m.page == pageResults {
+				cmds = append(cmds, openBrowser(AnalyzeURL))
 			}
 		}
 
@@ -330,6 +340,23 @@ func RunWithError(rs *rulestore.RuleStore, loadErr string) error {
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
+}
+
+// openBrowser opens the given URL in the default browser.
+func openBrowser(url string) tea.Cmd {
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "windows":
+			cmd = exec.Command("cmd", "/c", "start", url)
+		case "darwin":
+			cmd = exec.Command("open", url)
+		default:
+			cmd = exec.Command("xdg-open", url)
+		}
+		_ = cmd.Start()
+		return nil
+	}
 }
 
 // ── Title Banner ──
