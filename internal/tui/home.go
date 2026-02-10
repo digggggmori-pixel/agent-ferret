@@ -123,8 +123,12 @@ func (m HomeModel) View() string {
 
 	// Error message
 	if m.errorMsg != "" {
-		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center,
-			AlertStyle.Render(m.errorMsg)))
+		errBox := lipgloss.NewStyle().
+			Foreground(ColorRed).
+			Bold(true).
+			Width(w - 8).
+			Render(m.errorMsg)
+		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center, errBox))
 		b.WriteString("\n\n")
 	} else if !m.rulesLoaded {
 		b.WriteString(lipgloss.PlaceHorizontal(w, lipgloss.Center,

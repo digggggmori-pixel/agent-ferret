@@ -113,9 +113,19 @@ func LoadBundleFromFile(path string) (*RuleBundle, error) {
 
 // LoadBundleFromBytes parses a rule bundle from raw JSON bytes
 func LoadBundleFromBytes(data []byte) (*RuleBundle, error) {
+	// Strip UTF-8 BOM if present (common on Windows)
+	if len(data) >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF {
+		data = data[3:]
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("rules file is empty (0 bytes)")
+	}
+
 	var bf BundleFile
 	if err := json.Unmarshal(data, &bf); err != nil {
-		return nil, fmt.Errorf("failed to parse rules bundle: %w", err)
+		preview := data[:min(len(data), 80)]
+		return nil, fmt.Errorf("JSON parse error (%d bytes, starts: %q): %w", len(data), preview, err)
 	}
 
 	bundle := &RuleBundle{
