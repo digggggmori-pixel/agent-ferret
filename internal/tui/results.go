@@ -42,6 +42,10 @@ type ResultsModel struct {
 
 	// viewport initialized flag
 	vpReady bool
+
+	// expanded detail view
+	detailExpanded bool
+	detailScroll   int
 }
 
 // Fixed layout constants
@@ -79,37 +83,55 @@ func (m ResultsModel) Update(msg tea.Msg) (ResultsModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		filtered := m.filteredDetections()
-		switch msg.String() {
-		case "up", "k", "K":
-			if m.selected > 0 {
-				m.selected--
-				m.ensureVisible()
+		if m.detailExpanded {
+			switch msg.String() {
+			case "esc", "backspace":
+				m.detailExpanded = false
+			case "up", "k", "K":
+				if m.detailScroll > 0 {
+					m.detailScroll--
+				}
+			case "down", "j", "J":
+				m.detailScroll++
 			}
-		case "down", "j", "J":
-			if m.selected < len(filtered)-1 {
-				m.selected++
-				m.ensureVisible()
+		} else {
+			switch msg.String() {
+			case "enter":
+				if len(filtered) > 0 {
+					m.detailExpanded = true
+					m.detailScroll = 0
+				}
+			case "up", "k", "K":
+				if m.selected > 0 {
+					m.selected--
+					m.ensureVisible()
+				}
+			case "down", "j", "J":
+				if m.selected < len(filtered)-1 {
+					m.selected++
+					m.ensureVisible()
+				}
+			case "1":
+				m.filter = "critical"
+				m.selected = 0
+				m.listTop = 0
+			case "2":
+				m.filter = "high"
+				m.selected = 0
+				m.listTop = 0
+			case "3":
+				m.filter = "medium"
+				m.selected = 0
+				m.listTop = 0
+			case "4":
+				m.filter = "low"
+				m.selected = 0
+				m.listTop = 0
+			case "a", "A":
+				m.filter = ""
+				m.selected = 0
+				m.listTop = 0
 			}
-		case "1":
-			m.filter = "critical"
-			m.selected = 0
-			m.listTop = 0
-		case "2":
-			m.filter = "high"
-			m.selected = 0
-			m.listTop = 0
-		case "3":
-			m.filter = "medium"
-			m.selected = 0
-			m.listTop = 0
-		case "4":
-			m.filter = "low"
-			m.selected = 0
-			m.listTop = 0
-		case "a", "A":
-			m.filter = ""
-			m.selected = 0
-			m.listTop = 0
 		}
 	case exportDoneMsg:
 		m.exportPath = string(msg)
@@ -169,9 +191,13 @@ func (m ResultsModel) View() string {
 		return m.renderErrorView(w)
 	}
 
+	if m.detailExpanded {
+		return m.renderExpandedDetail(w, h)
+	}
+
 	lines := make([]string, 0, h)
 
-	// ── Header section (6 lines) ──
+	// ── Header section (7 lines) ──
 
 	// Line 1: Title + info
 	left := TitleStyle.Render("  RESULTS")
@@ -243,7 +269,7 @@ func (m ResultsModel) View() string {
 	lines = append(lines, badgeStr+strings.Repeat(" ", badgeSpacer)+rightStr)
 
 	// Line 6: Help shortcuts
-	lines = append(lines, HintStyle.Render("  ↑↓ Navigate  1-4 Filter  A All  E Export  D Analyze  R Rescan  Q Quit"))
+	lines = append(lines, HintStyle.Render("  ↑↓ Navigate  Enter Detail  1-4 Filter  E Export  D Analyze  R Rescan  Q Quit"))
 
 	// Line 7: Separator
 	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
@@ -421,6 +447,216 @@ func (m ResultsModel) renderDetailPanel(detections []types.Detection, w int) []s
 		lineIdx++
 	}
 
+	return lines
+}
+
+// renderExpandedDetail renders a full-screen scrollable detail view for the selected detection.
+func (m ResultsModel) renderExpandedDetail(w, h int) string {
+	detections := m.filteredDetections()
+	if m.selected >= len(detections) {
+		return ""
+	}
+
+	d := detections[m.selected]
+	contentW := w - 6
+	if contentW < 20 {
+		contentW = 20
+	}
+
+	lines := make([]string, 0, h)
+
+	// Header (2 lines)
+	left := TitleStyle.Render("  DETAIL")
+	hint := HintStyle.Render("ESC Back  ↑↓ Scroll  ")
+	spacer := w - lipgloss.Width(left) - lipgloss.Width(hint)
+	if spacer < 1 {
+		spacer = 1
+	}
+	lines = append(lines, left+strings.Repeat(" ", spacer)+hint)
+	lines = append(lines, SeparatorStyle.Render(strings.Repeat("─", w)))
+
+	// Build scrollable content lines
+	labelStyle := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
+	textStyle := lipgloss.NewStyle().Foreground(ColorText)
+	dimStyle := lipgloss.NewStyle().Foreground(ColorTextDim)
+	sepLine := "  " + dimStyle.Render(strings.Repeat("─", 20))
+
+	var content []string
+
+	// Severity + Type header
+	sevBadge := SeverityStyle(d.Severity).Render(fmt.Sprintf(" %s ", strings.ToUpper(d.Severity)))
+	typeText := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(d.Type)
+	content = append(content, "")
+	content = append(content, "  "+sevBadge+"  "+typeText)
+	if d.Confidence > 0 {
+		content = append(content, "  "+dimStyle.Render(fmt.Sprintf("Confidence: %.0f%%", d.Confidence*100)))
+	}
+	content = append(content, "")
+
+	// Helper to add a section with word-wrapped text
+	addSection := func(label, text string) {
+		content = append(content, "  "+labelStyle.Render(label))
+		content = append(content, sepLine)
+		for _, line := range wordWrap(text, contentW) {
+			content = append(content, "  "+textStyle.Render(line))
+		}
+		content = append(content, "")
+	}
+
+	if d.Description != "" {
+		addSection("Description", d.Description)
+	}
+	if d.UserDescription != "" {
+		addSection("Explanation", d.UserDescription)
+	}
+	if d.Recommendation != "" {
+		addSection("Recommendation", d.Recommendation)
+	}
+
+	// MITRE ATT&CK
+	if d.MITRE != nil {
+		if len(d.MITRE.Techniques) > 0 || len(d.MITRE.Tactics) > 0 {
+			content = append(content, "  "+labelStyle.Render("MITRE ATT&CK"))
+			content = append(content, sepLine)
+			if len(d.MITRE.Tactics) > 0 {
+				content = append(content, "  "+dimStyle.Render("Tactics: ")+textStyle.Render(strings.Join(d.MITRE.Tactics, ", ")))
+			}
+			if len(d.MITRE.Techniques) > 0 {
+				content = append(content, "  "+dimStyle.Render("Techniques: ")+textStyle.Render(strings.Join(d.MITRE.Techniques, ", ")))
+			}
+			content = append(content, "")
+		}
+	}
+
+	// Process info
+	if d.Process != nil {
+		content = append(content, "  "+labelStyle.Render("Process"))
+		content = append(content, sepLine)
+		content = append(content, "  "+textStyle.Render(fmt.Sprintf("%s (PID: %d, PPID: %d)", d.Process.Name, d.Process.PID, d.Process.PPID)))
+		if d.Process.Path != "" {
+			for _, line := range wordWrap(d.Process.Path, contentW) {
+				content = append(content, "  "+textStyle.Render(line))
+			}
+		}
+		if d.Process.CommandLine != "" {
+			content = append(content, "  "+dimStyle.Render("CMD: "))
+			for _, line := range wordWrap(d.Process.CommandLine, contentW) {
+				content = append(content, "    "+textStyle.Render(line))
+			}
+		}
+		if d.Process.User != "" {
+			content = append(content, "  "+dimStyle.Render("User: ")+textStyle.Render(d.Process.User))
+		}
+		if d.Process.ParentName != "" {
+			parent := d.Process.ParentName
+			if d.Process.ParentPath != "" {
+				parent += "  " + d.Process.ParentPath
+			}
+			content = append(content, "  "+dimStyle.Render("Parent: ")+textStyle.Render(parent))
+		}
+		content = append(content, "")
+	}
+
+	// Network info
+	if d.Network != nil {
+		content = append(content, "  "+labelStyle.Render("Network"))
+		content = append(content, sepLine)
+		content = append(content, "  "+textStyle.Render(fmt.Sprintf("%s:%d → %s:%d",
+			d.Network.LocalAddr, d.Network.LocalPort,
+			d.Network.RemoteAddr, d.Network.RemotePort)))
+		content = append(content, "  "+dimStyle.Render("Process: ")+textStyle.Render(fmt.Sprintf("%s (PID: %d)", d.Network.ProcessName, d.Network.OwningPID)))
+		content = append(content, "  "+dimStyle.Render("Protocol: ")+textStyle.Render(d.Network.Protocol)+"  "+dimStyle.Render("State: ")+textStyle.Render(d.Network.State))
+		content = append(content, "")
+	}
+
+	// Registry info
+	if d.Registry != nil {
+		content = append(content, "  "+labelStyle.Render("Registry"))
+		content = append(content, sepLine)
+		for _, line := range wordWrap(d.Registry.Key, contentW) {
+			content = append(content, "  "+textStyle.Render(line))
+		}
+		if d.Registry.ValueName != "" {
+			content = append(content, "  "+dimStyle.Render("Value: ")+textStyle.Render(d.Registry.ValueName))
+		}
+		if d.Registry.ValueData != "" {
+			for _, line := range wordWrap(d.Registry.ValueData, contentW) {
+				content = append(content, "  "+dimStyle.Render("Data: ")+textStyle.Render(line))
+			}
+		}
+		content = append(content, "")
+	}
+
+	// Sigma rules
+	if len(d.SigmaRules) > 0 {
+		content = append(content, "  "+labelStyle.Render("Sigma Rules"))
+		content = append(content, sepLine)
+		for _, rule := range d.SigmaRules {
+			content = append(content, "  "+textStyle.Render("- "+rule))
+		}
+		content = append(content, "")
+	}
+
+	// Scroll the content into the view area
+	viewHeight := h - 2 // subtract header (2 lines)
+	maxScroll := len(content) - viewHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.detailScroll > maxScroll {
+		m.detailScroll = maxScroll
+	}
+
+	start := m.detailScroll
+	for i := 0; i < viewHeight; i++ {
+		idx := start + i
+		if idx < len(content) {
+			lines = append(lines, content[idx])
+		} else {
+			lines = append(lines, "")
+		}
+	}
+
+	// Cap width
+	capStyle := lipgloss.NewStyle().MaxWidth(w)
+	for i, line := range lines {
+		lines[i] = capStyle.Render(line)
+	}
+
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	if len(lines) > h {
+		lines = lines[:h]
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// wordWrap splits text into lines that fit within maxWidth runes.
+func wordWrap(s string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{s}
+	}
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	var lines []string
+	current := words[0]
+	currentLen := len([]rune(current))
+	for _, word := range words[1:] {
+		wordLen := len([]rune(word))
+		if currentLen+1+wordLen > maxWidth {
+			lines = append(lines, current)
+			current = word
+			currentLen = wordLen
+		} else {
+			current += " " + word
+			currentLen += 1 + wordLen
+		}
+	}
+	lines = append(lines, current)
 	return lines
 }
 
