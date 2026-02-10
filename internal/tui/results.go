@@ -46,8 +46,8 @@ type ResultsModel struct {
 
 // Fixed layout constants
 const (
-	resultHeaderLines = 8  // header + score + badges + separator
-	resultDetailLines = 8  // detail panel
+	resultHeaderLines = 8  // title + sep + blank + score + blank + badges + sep + filter
+	resultDetailLines = 9  // separator + detail panel (8 lines)
 	resultFooterLines = 2  // separator + help
 )
 
