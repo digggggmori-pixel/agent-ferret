@@ -471,7 +471,7 @@ func mergeMultiRuleMatches(group []rawSigmaMatch) types.Detection {
 		Severity:    best.match.Severity,
 		Confidence:  0.85,
 		Timestamp:   best.entry.Timestamp,
-		Description: fmt.Sprintf("%s (+%d more rules)", best.match.RuleName, len(group)-1),
+		Description: fmt.Sprintf("%s (+%d more rules)", best.match.RuleName, len(seenRules)-1),
 		MITRE: &types.MITREMapping{
 			Tactics:    types.NormalizeTactics(tactics),
 			Techniques: techniques,
@@ -485,7 +485,7 @@ func mergeMultiRuleMatches(group []rawSigmaMatch) types.Detection {
 			"channel":       best.match.Channel,
 			"event_id":      best.match.EventID,
 			"matched_rules": matchedRules,
-			"rules_count":   len(group),
+			"rules_count":   len(seenRules),
 		},
 	}
 }
