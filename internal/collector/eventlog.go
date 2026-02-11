@@ -4,6 +4,7 @@ package collector
 import (
 	"encoding/xml"
 	"fmt"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -46,6 +47,12 @@ var (
 	procEvtClose               = wevtapi.NewProc("EvtClose")
 	procEvtGetEventMetadataProperty = wevtapi.NewProc("EvtGetEventMetadataProperty")
 )
+
+// rawSigmaMatch holds a sigma match paired with its source event for aggregation
+type rawSigmaMatch struct {
+	match *sigma.SigmaMatch
+	entry *types.EventLogEntry
+}
 
 // EventLogCollector collects and scans Windows Event Logs
 type EventLogCollector struct {
@@ -211,7 +218,7 @@ func (c *EventLogCollector) scanChannel(channel string) ([]types.Detection, erro
 	defer evtClose(handle)
 	logger.Debug("Channel %s: query handle obtained", channel)
 
-	var detections []types.Detection
+	var rawMatches []rawSigmaMatch
 	startTime := time.Now()
 	var count int64
 
@@ -226,7 +233,7 @@ func (c *EventLogCollector) scanChannel(channel string) ([]types.Detection, erro
 			if err == syscall.Errno(ERROR_NO_MORE_ITEMS) {
 				break
 			}
-			return detections, fmt.Errorf("failed to get events: %w", err)
+			return nil, fmt.Errorf("failed to get events: %w", err)
 		}
 
 		// Process each event
@@ -250,11 +257,11 @@ func (c *EventLogCollector) scanChannel(channel string) ([]types.Detection, erro
 			// Convert to Sigma event
 			sigmaEvent := c.convertToSigmaEvent(entry, channel)
 
-			// Match against Sigma rules
+			// Match against Sigma rules — collect raw matches for aggregation
 			if c.sigmaEngine != nil {
 				matches := c.sigmaEngine.Match(sigmaEvent)
 				for _, match := range matches {
-					detections = append(detections, convertSigmaMatchToDetection(match, entry))
+					rawMatches = append(rawMatches, rawSigmaMatch{match: match, entry: entry})
 					c.totalMatches++
 				}
 			}
@@ -270,7 +277,7 @@ func (c *EventLogCollector) scanChannel(channel string) ([]types.Detection, erro
 				Channel:   channel,
 				Current:   count,
 				Total:     0, // We don't know total upfront
-				Matches:   len(detections),
+				Matches:   len(rawMatches),
 				StartTime: startTime,
 				ElapsedMs: time.Since(startTime).Milliseconds(),
 			})
@@ -287,11 +294,63 @@ func (c *EventLogCollector) scanChannel(channel string) ([]types.Detection, erro
 			Channel:   channel,
 			Current:   count,
 			Total:     count,
-			Matches:   len(detections),
+			Matches:   len(rawMatches),
 			StartTime: startTime,
 			ElapsedMs: time.Since(startTime).Milliseconds(),
 		})
 	}
+
+	// === Fix 4: Merge multi-rule matches on same event ===
+	// Group by channel+eventID+timestamp (truncated to second)
+	type eventKey struct {
+		Channel   string
+		EventID   uint32
+		Timestamp string
+	}
+
+	eventGroups := make(map[eventKey][]rawSigmaMatch)
+	for _, rm := range rawMatches {
+		key := eventKey{
+			Channel:   rm.entry.Channel,
+			EventID:   rm.entry.EventID,
+			Timestamp: rm.entry.Timestamp.Truncate(time.Second).Format(time.RFC3339),
+		}
+		eventGroups[key] = append(eventGroups[key], rm)
+	}
+
+	// Convert event groups to detections
+	var mergedDetections []types.Detection
+	for _, group := range eventGroups {
+		if len(group) == 1 {
+			mergedDetections = append(mergedDetections, convertSigmaMatchToDetection(group[0].match, group[0].entry))
+		} else {
+			// Multiple rules matched same event — merge into single detection
+			mergedDetections = append(mergedDetections, mergeMultiRuleMatches(group))
+		}
+	}
+
+	// === Fix 3: Aggregate by rule ID ===
+	// Group detections by their sigma rule set
+	ruleGroups := make(map[string][]types.Detection)
+	for _, d := range mergedDetections {
+		// Use sorted sigma rules as grouping key
+		key := strings.Join(d.SigmaRules, "+")
+		ruleGroups[key] = append(ruleGroups[key], d)
+	}
+
+	// Convert rule groups to final detections
+	var detections []types.Detection
+	for _, group := range ruleGroups {
+		if len(group) == 1 {
+			detections = append(detections, group[0])
+		} else {
+			// Same rule(s) matched multiple events — aggregate
+			detections = append(detections, aggregateRuleDetections(group))
+		}
+	}
+
+	logger.Debug("Channel %s aggregation: %d raw matches → %d event-merged → %d rule-aggregated",
+		channel, len(rawMatches), len(mergedDetections), len(detections))
 
 	return detections, nil
 }
@@ -335,6 +394,157 @@ func convertSigmaMatchToDetection(match *sigma.SigmaMatch, entry *types.EventLog
 			"event_id":    match.EventID,
 			"tags":        match.Tags,
 		},
+	}
+}
+
+// severityRank returns a numeric rank for severity comparison (higher = more severe)
+func severityRank(sev string) int {
+	switch sev {
+	case types.SeverityCritical:
+		return 4
+	case types.SeverityHigh:
+		return 3
+	case types.SeverityMedium:
+		return 2
+	case types.SeverityLow:
+		return 1
+	case types.SeverityInfo:
+		return 0
+	default:
+		return -1
+	}
+}
+
+// mergeMultiRuleMatches merges multiple sigma rule matches from a single event
+// into one Detection (Fix 4: PowerShell ScriptBlock multi-match)
+func mergeMultiRuleMatches(group []rawSigmaMatch) types.Detection {
+	// Find the highest severity match
+	bestIdx := 0
+	for i := 1; i < len(group); i++ {
+		if severityRank(group[i].match.Severity) > severityRank(group[bestIdx].match.Severity) {
+			bestIdx = i
+		}
+	}
+
+	best := group[bestIdx]
+
+	// Collect all rule IDs and build matched_rules list
+	var ruleIDs []string
+	var matchedRules []map[string]interface{}
+	seenRules := make(map[string]bool)
+
+	for _, rm := range group {
+		if !seenRules[rm.match.RuleID] {
+			seenRules[rm.match.RuleID] = true
+			ruleIDs = append(ruleIDs, rm.match.RuleID)
+			matchedRules = append(matchedRules, map[string]interface{}{
+				"name":     rm.match.RuleName,
+				"severity": rm.match.Severity,
+				"rule_id":  rm.match.RuleID,
+			})
+		}
+	}
+	sort.Strings(ruleIDs)
+
+	// Merge MITRE mappings
+	tacticsSet := make(map[string]bool)
+	techniquesSet := make(map[string]bool)
+	for _, rm := range group {
+		for _, t := range rm.match.MITRE.Tactics {
+			tacticsSet[t] = true
+		}
+		for _, t := range rm.match.MITRE.Techniques {
+			techniquesSet[t] = true
+		}
+	}
+	var tactics, techniques []string
+	for t := range tacticsSet {
+		tactics = append(tactics, t)
+	}
+	for t := range techniquesSet {
+		techniques = append(techniques, t)
+	}
+
+	return types.Detection{
+		ID:          fmt.Sprintf("sigma-multi-%s-%d", best.match.RuleID[:8], best.entry.Timestamp.UnixNano()),
+		Type:        types.DetectionTypeSigma,
+		Severity:    best.match.Severity,
+		Confidence:  0.85,
+		Timestamp:   best.entry.Timestamp,
+		Description: fmt.Sprintf("%s (+%d more rules)", best.match.RuleName, len(group)-1),
+		MITRE: &types.MITREMapping{
+			Tactics:    types.NormalizeTactics(tactics),
+			Techniques: techniques,
+		},
+		SigmaRules: ruleIDs,
+		Details: map[string]interface{}{
+			"rule_id":       best.match.RuleID,
+			"rule_name":     best.match.RuleName,
+			"description":   best.match.Description,
+			"category":      best.match.Category,
+			"channel":       best.match.Channel,
+			"event_id":      best.match.EventID,
+			"matched_rules": matchedRules,
+			"rules_count":   len(group),
+		},
+	}
+}
+
+// aggregateRuleDetections aggregates multiple detections from the same rule(s)
+// into a single detection with event count (Fix 3: event log sigma aggregation)
+func aggregateRuleDetections(group []types.Detection) types.Detection {
+	first := group[0]
+
+	// Find time range
+	firstSeen := first.Timestamp
+	lastSeen := first.Timestamp
+	for _, d := range group[1:] {
+		if d.Timestamp.Before(firstSeen) {
+			firstSeen = d.Timestamp
+		}
+		if d.Timestamp.After(lastSeen) {
+			lastSeen = d.Timestamp
+		}
+	}
+
+	// Use highest severity from the group
+	bestSeverity := first.Severity
+	for _, d := range group[1:] {
+		if severityRank(d.Severity) > severityRank(bestSeverity) {
+			bestSeverity = d.Severity
+		}
+	}
+
+	// Build aggregated description
+	desc := first.Description
+	// Strip any existing count suffix for clean aggregation
+	if idx := strings.Index(desc, " (×"); idx > 0 {
+		desc = desc[:idx]
+	}
+	if idx := strings.Index(desc, " (+"); idx > 0 {
+		desc = desc[:idx]
+	}
+	desc = fmt.Sprintf("%s (×%d events)", desc, len(group))
+
+	// Copy details from first detection, add aggregation info
+	details := make(map[string]interface{})
+	for k, v := range first.Details {
+		details[k] = v
+	}
+	details["event_count"] = len(group)
+	details["first_seen"] = firstSeen.Format(time.RFC3339)
+	details["last_seen"] = lastSeen.Format(time.RFC3339)
+
+	return types.Detection{
+		ID:          first.ID,
+		Type:        first.Type,
+		Severity:    bestSeverity,
+		Confidence:  first.Confidence,
+		Timestamp:   firstSeen,
+		Description: desc,
+		MITRE:       first.MITRE,
+		SigmaRules:  first.SigmaRules,
+		Details:     details,
 	}
 }
 

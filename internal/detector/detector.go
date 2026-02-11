@@ -267,7 +267,7 @@ func (d *Detector) DetectSuspiciousPorts(connections []types.NetworkConnection) 
 			if description, suspicious := d.rules.SuspiciousPorts[conn.RemotePort]; suspicious {
 				connCopy := conn
 				detection := types.Detection{
-					ID:          fmt.Sprintf("port-%d-%d", conn.OwningPID, time.Now().UnixNano()),
+					ID:          fmt.Sprintf("port-%d-%d-%d", conn.RemotePort, conn.OwningPID, time.Now().UnixNano()),
 					Type:        types.DetectionTypePort,
 					Severity:    determinPortSeverity(conn.RemotePort),
 					Confidence:  0.75,
@@ -294,10 +294,10 @@ func (d *Detector) DetectSuspiciousPorts(connections []types.NetworkConnection) 
 
 				connCopy := conn
 				detection := types.Detection{
-					ID:          fmt.Sprintf("listen-%d-%d", conn.OwningPID, time.Now().UnixNano()),
+					ID:          fmt.Sprintf("listen-%d-%d-%d", conn.LocalPort, conn.OwningPID, time.Now().UnixNano()),
 					Type:        types.DetectionTypePort,
-					Severity:    types.SeverityMedium,
-					Confidence:  0.6,
+					Severity:    types.SeverityLow,
+					Confidence:  0.5,
 					Timestamp:   time.Now(),
 					Description: fmt.Sprintf("Listening on suspicious port %d (%s)", conn.LocalPort, description),
 					Network:     &connCopy,
