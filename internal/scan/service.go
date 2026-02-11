@@ -208,11 +208,6 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	// Deduplicate FIRST, then count (fixes severity count mismatch bug)
 	result.Detections = deduplicateDetections(result.Detections)
 
-	// Filter out informational detections unless explicitly included
-	if !s.config.IncludeInformational {
-		result.Detections = filterInformational(result.Detections)
-	}
-
 	// Enrich with user-friendly descriptions
 	for i := range result.Detections {
 		result.Detections[i].UserDescription = detector.GenerateUserDescription(&result.Detections[i])
@@ -269,16 +264,5 @@ func deduplicateDetections(detections []types.Detection) []types.Detection {
 		}
 	}
 
-	return result
-}
-
-// filterInformational removes informational severity detections to reduce noise
-func filterInformational(detections []types.Detection) []types.Detection {
-	result := make([]types.Detection, 0, len(detections))
-	for _, d := range detections {
-		if d.Severity != types.SeverityInfo {
-			result = append(result, d)
-		}
-	}
 	return result
 }
