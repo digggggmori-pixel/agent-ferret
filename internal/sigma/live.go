@@ -2,12 +2,25 @@
 package sigma
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 )
+
+// ProcessSigmaResult pairs a sigma match with the source process that triggered it.
+type ProcessSigmaResult struct {
+	Match   *SigmaMatch
+	Process types.ProcessInfo
+}
+
+// NetworkSigmaResult pairs a sigma match with the source connection that triggered it.
+type NetworkSigmaResult struct {
+	Match      *SigmaMatch
+	Connection types.NetworkConnection
+}
 
 // ProcessToSigmaEvent converts live process info to Sigma event format
 // This enables Sigma process_creation rules to match against live processes
@@ -98,23 +111,27 @@ func NetworkToSigmaEvent(conn types.NetworkConnection, processPath string) *Sigm
 	}
 }
 
-// ScanLiveProcesses scans live processes against Sigma rules
-func ScanLiveProcesses(engine *Engine, processes []types.ProcessInfo) []*SigmaMatch {
-	var matches []*SigmaMatch
+// ScanLiveProcesses scans live processes against Sigma rules.
+// Returns results paired with the source process for context enrichment.
+func ScanLiveProcesses(engine *Engine, processes []types.ProcessInfo) []ProcessSigmaResult {
+	var results []ProcessSigmaResult
 
 	for _, proc := range processes {
 		event := ProcessToSigmaEvent(proc)
 		procMatches := engine.Match(event)
-		matches = append(matches, procMatches...)
+		for _, m := range procMatches {
+			results = append(results, ProcessSigmaResult{Match: m, Process: proc})
+		}
 	}
 
-	return matches
+	return results
 }
 
-// ScanLiveNetwork scans live network connections against Sigma rules
-// processMap provides PID to process path mapping for enrichment
-func ScanLiveNetwork(engine *Engine, connections []types.NetworkConnection, processMap map[uint32]string) []*SigmaMatch {
-	var matches []*SigmaMatch
+// ScanLiveNetwork scans live network connections against Sigma rules.
+// processMap provides PID to process path mapping for enrichment.
+// Returns results paired with the source connection for context enrichment.
+func ScanLiveNetwork(engine *Engine, connections []types.NetworkConnection, processMap map[uint32]string) []NetworkSigmaResult {
+	var results []NetworkSigmaResult
 
 	for _, conn := range connections {
 		processPath := ""
@@ -124,27 +141,29 @@ func ScanLiveNetwork(engine *Engine, connections []types.NetworkConnection, proc
 
 		event := NetworkToSigmaEvent(conn, processPath)
 		connMatches := engine.Match(event)
-		matches = append(matches, connMatches...)
+		for _, m := range connMatches {
+			results = append(results, NetworkSigmaResult{Match: m, Connection: conn})
+		}
 	}
 
-	return matches
+	return results
 }
 
-// ConvertSigmaMatchToDetection converts a SigmaMatch to a types.Detection
-func ConvertSigmaMatchToDetection(match *SigmaMatch, source string) types.Detection {
+// baseSigmaDetection builds the common Detection fields for a live sigma match.
+func baseSigmaDetection(match *SigmaMatch, source string) types.Detection {
 	desc := match.Description
 	if desc == "" {
 		desc = match.RuleName
 	}
 	return types.Detection{
-		ID:          match.RuleID,
+		ID:          fmt.Sprintf("sigma-%s-%d", match.RuleID[:8], match.Timestamp.UnixNano()),
 		Type:        types.DetectionTypeSigma,
 		Severity:    match.Severity,
-		Confidence:  0.85, // Live data has good confidence
+		Confidence:  0.85,
 		Timestamp:   match.Timestamp,
 		Description: desc,
 		MITRE: &types.MITREMapping{
-			Tactics:    match.MITRE.Tactics,
+			Tactics:    types.NormalizeTactics(match.MITRE.Tactics),
 			Techniques: match.MITRE.Techniques,
 		},
 		SigmaRules: []string{match.RuleID},
@@ -157,6 +176,46 @@ func ConvertSigmaMatchToDetection(match *SigmaMatch, source string) types.Detect
 			"tags":        match.Tags,
 		},
 	}
+}
+
+// ConvertSigmaMatchToDetection converts a SigmaMatch to a types.Detection (no context).
+func ConvertSigmaMatchToDetection(match *SigmaMatch, source string) types.Detection {
+	return baseSigmaDetection(match, source)
+}
+
+// ConvertProcessSigmaMatch converts a sigma match with its source process context.
+func ConvertProcessSigmaMatch(result ProcessSigmaResult) types.Detection {
+	d := baseSigmaDetection(result.Match, "live_process")
+	proc := result.Process
+	d.Process = &types.ProcessInfo{
+		PID:        proc.PID,
+		PPID:       proc.PPID,
+		Name:       proc.Name,
+		Path:       proc.Path,
+		CommandLine: proc.CommandLine,
+		CreateTime: proc.CreateTime,
+		User:       proc.User,
+		ParentName: proc.ParentName,
+		ParentPath: proc.ParentPath,
+	}
+	return d
+}
+
+// ConvertNetworkSigmaMatch converts a sigma match with its source network context.
+func ConvertNetworkSigmaMatch(result NetworkSigmaResult) types.Detection {
+	d := baseSigmaDetection(result.Match, "live_network")
+	conn := result.Connection
+	d.Network = &types.NetworkConnection{
+		Protocol:    conn.Protocol,
+		LocalAddr:   conn.LocalAddr,
+		LocalPort:   conn.LocalPort,
+		RemoteAddr:  conn.RemoteAddr,
+		RemotePort:  conn.RemotePort,
+		State:       conn.State,
+		OwningPID:   conn.OwningPID,
+		ProcessName: conn.ProcessName,
+	}
+	return d
 }
 
 // BuildProcessMap creates a PID to process path mapping

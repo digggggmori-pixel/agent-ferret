@@ -2,6 +2,7 @@
 package sigma
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -69,8 +70,29 @@ type ConditionNode struct {
 	Selection string          `json:"selection,omitempty"`
 	Pattern   string          `json:"pattern,omitempty"`
 	Operands  []ConditionNode `json:"operands,omitempty"`
-	Include   string          `json:"include,omitempty"`
-	Exclude   string          `json:"exclude,omitempty"`
+	Include   *ConditionNode  `json:"include,omitempty"`
+	Exclude   *ConditionNode  `json:"exclude,omitempty"`
+}
+
+// UnmarshalJSON handles both object and string forms of ConditionNode.
+// String operands like "selection1" are converted to {op:"single", selection:"<name>"}.
+func (c *ConditionNode) UnmarshalJSON(data []byte) error {
+	// Try string first (e.g. "selection1" in operands array)
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		c.Op = OpSingle
+		c.Selection = s
+		return nil
+	}
+
+	// Otherwise parse as object (use alias to avoid infinite recursion)
+	type Alias ConditionNode
+	var a Alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*c = ConditionNode(a)
+	return nil
 }
 
 // MITREMapping represents MITRE ATT&CK mapping

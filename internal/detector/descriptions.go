@@ -28,6 +28,9 @@ func GenerateUserDescription(d *types.Detection) string {
 
 	case types.DetectionTypePort:
 		if d.Network != nil {
+			if d.Network.State == "LISTEN" {
+				return fmt.Sprintf("Listening on suspicious port %d. This port is commonly associated with hacking tools or unauthorized remote access.", d.Network.LocalPort)
+			}
 			return fmt.Sprintf("Outbound connection detected on port %d. This port is commonly associated with hacking tools or command-and-control servers.", d.Network.RemotePort)
 		}
 		return "A connection to a suspicious port was detected."
@@ -105,6 +108,8 @@ func GenerateRecommendation(d *types.Detection) string {
 		return "Worth noting. This could be normal activity, but verify if anything seems unfamiliar."
 	case types.SeverityLow:
 		return "Low risk. Most likely normal activity, noted for your reference."
+	case types.SeverityInfo:
+		return "Informational finding. Normal system activity recorded for context."
 	default:
 		return "Review this finding for additional context."
 	}

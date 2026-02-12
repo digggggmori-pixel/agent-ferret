@@ -1,5 +1,4 @@
-// Package scan provides the scan service that bridges Wails UI with collectors/detectors.
-// Refactored from cmd/main.go runScan() - CLI output replaced with Wails event emission.
+// Package scan provides the scan service that orchestrates collectors and detectors.
 package scan
 
 import (
@@ -9,20 +8,21 @@ import (
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/collector"
 	"github.com/digggggmori-pixel/agent-ferret/internal/detector"
+	"github.com/digggggmori-pixel/agent-ferret/internal/rulestore"
 	"github.com/digggggmori-pixel/agent-ferret/internal/sigma"
-	"github.com/digggggmori-pixel/agent-ferret/internal/sigma/rules"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
 	"github.com/google/uuid"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Service manages the scan lifecycle
 type Service struct {
-	ctx    context.Context
-	config Config
+	ctx        context.Context
+	config     Config
+	ruleStore  *rulestore.RuleStore
+	progressCh chan Progress
 }
 
-// Progress represents scan progress sent to the frontend via events
+// Progress represents scan progress sent via channel
 type Progress struct {
 	Step     int    `json:"step"`
 	Total    int    `json:"total"`
@@ -32,11 +32,22 @@ type Progress struct {
 	Done     bool   `json:"done"`
 }
 
-// NewService creates a new scan service
-func NewService(ctx context.Context) *Service {
+// NewService creates a new scan service (no progress channel).
+func NewService(ctx context.Context, rs *rulestore.RuleStore) *Service {
 	return &Service{
-		ctx:    ctx,
-		config: DefaultConfig(),
+		ctx:       ctx,
+		config:    DefaultConfig(),
+		ruleStore: rs,
+	}
+}
+
+// NewServiceWithChannel creates a new scan service with a progress channel for TUI.
+func NewServiceWithChannel(ctx context.Context, rs *rulestore.RuleStore, ch chan Progress) *Service {
+	return &Service{
+		ctx:        ctx,
+		config:     DefaultConfig(),
+		ruleStore:  rs,
+		progressCh: ch,
 	}
 }
 
@@ -50,16 +61,18 @@ func (s *Service) GetHostInfo() types.HostInfo {
 	return collector.GetHostInfo()
 }
 
-// emitProgress sends a progress update to the frontend
+// emitProgress sends a progress update via channel (if set).
 func (s *Service) emitProgress(step int, name string, percent int, detail string) {
-	wailsRuntime.EventsEmit(s.ctx, "scan:progress", Progress{
-		Step:     step,
-		Total:    8,
-		StepName: name,
-		Percent:  percent,
-		Detail:   detail,
-		Done:     false,
-	})
+	if s.progressCh != nil {
+		s.progressCh <- Progress{
+			Step:     step,
+			Total:    8,
+			StepName: name,
+			Percent:  percent,
+			Detail:   detail,
+			Done:     false,
+		}
+	}
 }
 
 // Execute runs the full 8-step scan pipeline.
@@ -80,8 +93,14 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 		Detections:   make([]types.Detection, 0),
 	}
 
-	// Initialize detector
-	det := detector.New()
+	// Get rule bundle
+	bundle := s.ruleStore.GetBundle()
+	if bundle == nil {
+		return nil, fmt.Errorf("rules not loaded: place rules.json next to ferret.exe")
+	}
+
+	// Initialize detector with loaded rules
+	det := detector.New(bundle.Detection)
 
 	// ── Step 1: Collect processes ──
 	s.emitProgress(1, "Collecting processes...", 0, "")
@@ -139,26 +158,24 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 
 	// ── Step 6: Live Sigma matching ──
 	s.emitProgress(6, "Sigma rule matching...", 62, "")
-	sigmaEngine, err := sigma.NewEngineWithRules(rules.EmbeddedRules)
-	if err == nil {
-		// Live process matching
-		liveProcessMatches := sigma.ScanLiveProcesses(sigmaEngine, processes)
-		for _, match := range liveProcessMatches {
-			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_process"))
+	sigmaEngine := bundle.Sigma
+	if sigmaEngine != nil {
+		// Live process matching (with process context)
+		liveProcessResults := sigma.ScanLiveProcesses(sigmaEngine, processes)
+		for _, r := range liveProcessResults {
+			result.Detections = append(result.Detections, sigma.ConvertProcessSigmaMatch(r))
 		}
 
-		// Live network matching
+		// Live network matching (with network context)
 		processMap := sigma.BuildProcessMap(processes)
-		liveNetworkMatches := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
-		for _, match := range liveNetworkMatches {
-			result.Detections = append(result.Detections, sigma.ConvertSigmaMatchToDetection(match, "live_network"))
+		liveNetworkResults := sigma.ScanLiveNetwork(sigmaEngine, connections, processMap)
+		for _, r := range liveNetworkResults {
+			result.Detections = append(result.Detections, sigma.ConvertNetworkSigmaMatch(r))
 		}
 
 		s.emitProgress(6, "Sigma live matching complete", 75,
 			fmt.Sprintf("%d rules, process %d + network %d",
-				sigmaEngine.TotalRules(), len(liveProcessMatches), len(liveNetworkMatches)))
-	} else {
-		s.emitProgress(6, "Sigma engine init failed", 75, err.Error())
+				sigmaEngine.TotalRules(), len(liveProcessResults), len(liveNetworkResults)))
 	}
 
 	// ── Step 7: Event log Sigma scan ──
@@ -208,6 +225,8 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 			result.Summary.Detections.Medium++
 		case types.SeverityLow:
 			result.Summary.Detections.Low++
+		case types.SeverityInfo:
+			result.Summary.Detections.Informational++
 		}
 	}
 
@@ -218,14 +237,16 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	result.ScanDurationMs = time.Since(startTime).Milliseconds()
 
 	// Emit completion
-	wailsRuntime.EventsEmit(s.ctx, "scan:progress", Progress{
-		Step:     8,
-		Total:    8,
-		StepName: "Scan complete",
-		Percent:  100,
-		Detail:   fmt.Sprintf("%d detections, %.1fs elapsed", len(result.Detections), time.Since(startTime).Seconds()),
-		Done:     true,
-	})
+	if s.progressCh != nil {
+		s.progressCh <- Progress{
+			Step:     8,
+			Total:    8,
+			StepName: "Scan complete",
+			Percent:  100,
+			Detail:   fmt.Sprintf("%d detections, %.1fs elapsed", len(result.Detections), time.Since(startTime).Seconds()),
+			Done:     true,
+		}
+	}
 
 	return result, nil
 }
