@@ -22,7 +22,7 @@ type Service struct {
 	progressCh chan Progress
 }
 
-// Progress represents scan progress sent to the frontend via events
+// Progress represents scan progress sent via channel
 type Progress struct {
 	Step     int    `json:"step"`
 	Total    int    `json:"total"`

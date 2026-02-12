@@ -15,10 +15,3 @@ rules.json
 
 # Go
 /build/
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-
-# Wails (auto-generated on build, mock used in dev)
-# frontend/wailsjs/  -- keep mock for dev
