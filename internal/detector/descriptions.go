@@ -92,6 +92,164 @@ func GenerateUserDescription(d *types.Detection) string {
 	case types.DetectionTypeEncodedCommand:
 		return "An encoded or obfuscated command was detected. Attackers use encoding to hide malicious commands from security tools."
 
+	case types.DetectionTypeSuspiciousStartup:
+		if name, ok := d.Details["file_name"]; ok {
+			return fmt.Sprintf("File '%s' was found in a startup folder. Programs in this folder run automatically when you log in.", name)
+		}
+		return "A suspicious file was found in a startup folder. Programs placed here run automatically at login."
+
+	case types.DetectionTypeSuspiciousPowerShell:
+		if desc, ok := d.Details["pattern"]; ok {
+			return fmt.Sprintf("A suspicious PowerShell command matching '%s' was found in command history. This pattern is commonly used by attackers.", desc)
+		}
+		return "A suspicious PowerShell command was found in command history."
+
+	case types.DetectionTypeSuspiciousDNS:
+		if domain, ok := d.Details["domain"]; ok {
+			return fmt.Sprintf("Domain '%s' was found in the DNS cache. This domain has suspicious characteristics that may indicate malware communication.", domain)
+		}
+		return "A suspicious domain was found in the DNS cache."
+
+	case types.DetectionTypeSuspiciousAccount:
+		if reason, ok := d.Details["reason"]; ok {
+			switch reason {
+			case "hidden_account":
+				return fmt.Sprintf("A hidden user account '%s' was detected. Attackers create hidden accounts to maintain persistent access.", d.Details["account_name"])
+			case "brute_force_attempt":
+				return fmt.Sprintf("Account '%s' has many failed login attempts, which may indicate a brute-force attack.", d.Details["account_name"])
+			case "default_account_enabled":
+				return fmt.Sprintf("The default '%s' account is enabled. Default accounts are common attack targets and should be disabled.", d.Details["account_name"])
+			case "non_expiring_password":
+				return fmt.Sprintf("Admin account '%s' has a password that never expires. This weakens security posture.", d.Details["account_name"])
+			}
+		}
+		return "A suspicious user account configuration was detected."
+
+	case types.DetectionTypeAntivirusIssue:
+		if reason, ok := d.Details["reason"]; ok {
+			switch reason {
+			case "no_av_installed":
+				return "No antivirus software was detected on this system. Your computer is unprotected against malware."
+			case "av_disabled":
+				return fmt.Sprintf("Antivirus '%s' is disabled. Your computer is not actively protected. Attackers often disable antivirus before deploying malware.", d.Details["product_name"])
+			case "av_outdated":
+				return fmt.Sprintf("Antivirus '%s' definitions are out of date. New threats may not be detected.", d.Details["product_name"])
+			}
+		}
+		return "An issue with antivirus protection was detected."
+
+	case types.DetectionTypeSuspiciousTask:
+		if name, ok := d.Details["task_name"]; ok {
+			return fmt.Sprintf("Scheduled task '%s' has suspicious characteristics. Attackers use scheduled tasks to maintain persistence and execute commands.", name)
+		}
+		return "A suspicious scheduled task was detected."
+
+	// Phase 2 detection types
+
+	case types.DetectionTypePrefetchAnomaly:
+		if exe, ok := d.Details["executable"]; ok {
+			if reason, ok2 := d.Details["reason"]; ok2 {
+				switch reason {
+				case "lolbin_history":
+					return fmt.Sprintf("Windows Prefetch shows '%s' was executed on this system. This is a tool commonly abused by attackers.", exe)
+				case "recent_first_execution":
+					return fmt.Sprintf("A program '%s' was recently executed for the first time. This may indicate a newly introduced tool.", exe)
+				}
+			}
+		}
+		return "A suspicious entry was found in Windows Prefetch, indicating past program execution."
+
+	case types.DetectionTypeShimcacheAnomaly:
+		if reason, ok := d.Details["reason"]; ok {
+			switch reason {
+			case "lolbin_unusual_path":
+				if path, ok2 := d.Details["path"]; ok2 {
+					return fmt.Sprintf("Shimcache records a system tool executed from an unusual location: %s. This may indicate a copied or disguised tool.", path)
+				}
+			case "suspicious_path":
+				if path, ok2 := d.Details["path"]; ok2 {
+					return fmt.Sprintf("Shimcache records a program that existed at a suspicious location: %s. Even if deleted, this indicates past activity.", path)
+				}
+			}
+		}
+		return "A suspicious entry was found in the Application Compatibility Cache, indicating past program presence."
+
+	case types.DetectionTypeAmcacheAnomaly:
+		if reason, ok := d.Details["reason"]; ok {
+			switch reason {
+			case "lolbin_history":
+				if name, ok2 := d.Details["name"]; ok2 {
+					return fmt.Sprintf("Amcache records tool '%s' was executed from a non-standard location. This may indicate attacker tool usage.", name)
+				}
+			case "unsigned_suspicious_path":
+				if name, ok2 := d.Details["name"]; ok2 {
+					return fmt.Sprintf("An unsigned program '%s' was executed from a suspicious location according to Amcache records.", name)
+				}
+			}
+		}
+		return "A suspicious entry was found in Amcache, indicating past program execution."
+
+	case types.DetectionTypeDLLAnomaly:
+		if reason, ok := d.Details["reason"]; ok {
+			switch reason {
+			case "suspicious_dll_path":
+				if modName, ok2 := d.Details["module_name"]; ok2 {
+					if procName, ok3 := d.Details["process_name"]; ok3 {
+						return fmt.Sprintf("DLL '%s' is loaded from a suspicious location into process '%s'. Malware often places DLLs in temp/download folders.", modName, procName)
+					}
+				}
+			case "dll_typosquatting":
+				if modName, ok2 := d.Details["module_name"]; ok2 {
+					if knownDLL, ok3 := d.Details["known_dll"]; ok3 {
+						return fmt.Sprintf("DLL '%s' has a name very similar to system DLL '%s' but is loaded from a non-system path. This is a common DLL hijacking technique.", modName, knownDLL)
+					}
+				}
+			}
+		}
+		return "A suspicious DLL module was detected loaded in a process."
+
+	case types.DetectionTypeWMIPersistence:
+		if consType, ok := d.Details["consumer_type"]; ok {
+			if consName, ok2 := d.Details["consumer_name"]; ok2 {
+				return fmt.Sprintf("A WMI event subscription '%s' (%s type) was found. WMI persistence allows code to execute automatically in response to system events. This technique is commonly used by advanced malware.", consName, consType)
+			}
+		}
+		return "A WMI event subscription was found. This is a persistence mechanism that allows automatic code execution."
+
+	case types.DetectionTypeSuspiciousBrowsing:
+		if reason, ok := d.Details["reason"]; ok {
+			switch reason {
+			case "suspicious_url":
+				if url, ok2 := d.Details["url"]; ok2 {
+					return fmt.Sprintf("Browser history contains a visit to a suspicious site: %s. This type of site is sometimes used for hosting malicious payloads.", url)
+				}
+			case "dangerous_download":
+				if url, ok2 := d.Details["url"]; ok2 {
+					return fmt.Sprintf("Browser history shows a potentially dangerous file was downloaded: %s", url)
+				}
+			case "high_risk_tld":
+				if domain, ok2 := d.Details["domain"]; ok2 {
+					return fmt.Sprintf("Browser history contains a visit to a high-risk domain: %s", domain)
+				}
+			}
+		}
+		return "Suspicious browsing activity was detected in browser history."
+
+	case types.DetectionTypeSuspiciousUSB:
+		if reason, ok := d.Details["reason"]; ok {
+			switch reason {
+			case "recent_usb":
+				if name, ok2 := d.Details["friendly_name"]; ok2 {
+					return fmt.Sprintf("USB storage device '%s' was connected recently. USB devices can be used to introduce malware or exfiltrate data.", name)
+				}
+			case "usb_audit":
+				if name, ok2 := d.Details["friendly_name"]; ok2 {
+					return fmt.Sprintf("USB storage device '%s' has been connected to this computer. Recorded for audit purposes.", name)
+				}
+			}
+		}
+		return "USB device activity was recorded."
+
 	default:
 		return d.Description
 	}
