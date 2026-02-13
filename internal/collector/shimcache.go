@@ -98,7 +98,7 @@ func parseWin10Shimcache(data []byte) []types.ShimcacheEntry {
 		if offset+4 > len(data) {
 			break
 		}
-		cacheEntrySize := int(binary.LittleEndian.Uint32(data[offset : offset+4]))
+		_ = binary.LittleEndian.Uint32(data[offset : offset+4]) // cache entry size (skip)
 		offset += 4
 
 		// Path size in bytes
