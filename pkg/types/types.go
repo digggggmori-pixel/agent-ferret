@@ -48,6 +48,149 @@ type RegistryEntry struct {
 	ValueType string `json:"value_type"`
 }
 
+// StartupEntry represents a file in the startup folder
+type StartupEntry struct {
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	Size       int64     `json:"size"`
+	CreatedAt  time.Time `json:"created_at"`
+	ModifiedAt time.Time `json:"modified_at"`
+	IsHidden   bool      `json:"is_hidden"`
+	Scope      string    `json:"scope"` // "user" or "common"
+	User       string    `json:"user,omitempty"`
+}
+
+// PowerShellHistoryEntry represents a line from PowerShell history
+type PowerShellHistoryEntry struct {
+	User       string `json:"user"`
+	Command    string `json:"command"`
+	LineNumber int    `json:"line_number"`
+	FilePath   string `json:"file_path"`
+}
+
+// DNSCacheEntry represents a cached DNS record
+type DNSCacheEntry struct {
+	Name       string `json:"name"`
+	Type       uint16 `json:"type"`
+	TTL        uint32 `json:"ttl"`
+	DataLength uint16 `json:"data_length"`
+	Section    string `json:"section"`
+}
+
+// UserAccountInfo represents a Windows user account
+type UserAccountInfo struct {
+	Name        string        `json:"name"`
+	FullName    string        `json:"full_name,omitempty"`
+	Comment     string        `json:"comment,omitempty"`
+	Flags       uint32        `json:"flags"`
+	IsAdmin     bool          `json:"is_admin"`
+	IsDisabled  bool          `json:"is_disabled"`
+	IsLocked    bool          `json:"is_locked"`
+	PasswordAge time.Duration `json:"password_age"`
+	LastLogon   time.Time     `json:"last_logon"`
+	NumLogons   uint32        `json:"num_logons"`
+	BadPWCount  uint32        `json:"bad_pw_count"`
+}
+
+// AntivirusInfo represents an installed antivirus product
+type AntivirusInfo struct {
+	ProductName string `json:"product_name"`
+	InstanceGUID string `json:"instance_guid,omitempty"`
+	ProductState uint32 `json:"product_state"`
+	IsEnabled   bool   `json:"is_enabled"`
+	IsUpToDate  bool   `json:"is_up_to_date"`
+	PathToExe   string `json:"path_to_exe,omitempty"`
+}
+
+// ScheduledTaskInfo represents a Windows scheduled task
+type ScheduledTaskInfo struct {
+	Name        string    `json:"name"`
+	Path        string    `json:"path"`
+	State       string    `json:"state"`
+	LastRunTime time.Time `json:"last_run_time,omitempty"`
+	NextRunTime time.Time `json:"next_run_time,omitempty"`
+	ActionPath  string    `json:"action_path,omitempty"`
+	ActionArgs  string    `json:"action_args,omitempty"`
+	Principal   string    `json:"principal,omitempty"`
+	Author      string    `json:"author,omitempty"`
+	Description string    `json:"description,omitempty"`
+	IsHidden    bool      `json:"is_hidden"`
+}
+
+// PrefetchInfo represents a parsed Windows Prefetch file
+type PrefetchInfo struct {
+	ExecutableName string      `json:"executable_name"`
+	PrefetchPath   string      `json:"prefetch_path"`
+	RunCount       uint32      `json:"run_count"`
+	LastRunTimes   []time.Time `json:"last_run_times"`
+	FilesLoaded    []string    `json:"files_loaded,omitempty"`
+	FileSize       int64       `json:"file_size"`
+}
+
+// ShimcacheEntry represents a Shimcache (AppCompatCache) entry
+type ShimcacheEntry struct {
+	Order        int       `json:"order"`
+	Path         string    `json:"path"`
+	LastModified time.Time `json:"last_modified"`
+	DataSize     uint32    `json:"data_size"`
+}
+
+// AmcacheEntry represents an Amcache entry
+type AmcacheEntry struct {
+	Path        string    `json:"path"`
+	Name        string    `json:"name"`
+	Publisher   string    `json:"publisher,omitempty"`
+	Version     string    `json:"version,omitempty"`
+	SHA1        string    `json:"sha1,omitempty"`
+	BinaryType  string    `json:"binary_type,omitempty"`
+	ProductName string    `json:"product_name,omitempty"`
+	LinkDate    time.Time `json:"link_date,omitempty"`
+	Size        int64     `json:"size"`
+}
+
+// DLLModuleInfo represents a loaded DLL module in a process
+type DLLModuleInfo struct {
+	ProcessPID  uint32 `json:"process_pid"`
+	ProcessName string `json:"process_name"`
+	ModuleName  string `json:"module_name"`
+	ModulePath  string `json:"module_path"`
+	BaseAddress uint64 `json:"base_address"`
+	Size        uint32 `json:"size"`
+}
+
+// WMIPersistenceInfo represents a WMI event subscription persistence
+type WMIPersistenceInfo struct {
+	FilterName   string `json:"filter_name"`
+	FilterQuery  string `json:"filter_query"`
+	ConsumerName string `json:"consumer_name"`
+	ConsumerType string `json:"consumer_type"`
+	ConsumerData string `json:"consumer_data"`
+	BindingPath  string `json:"binding_path,omitempty"`
+	CreatorSID   string `json:"creator_sid,omitempty"`
+}
+
+// BrowserHistoryEntry represents a browser history entry
+type BrowserHistoryEntry struct {
+	Browser    string    `json:"browser"`
+	URL        string    `json:"url"`
+	Title      string    `json:"title"`
+	VisitCount int       `json:"visit_count"`
+	LastVisited time.Time `json:"last_visited"`
+	User       string    `json:"user"`
+}
+
+// USBDeviceInfo represents a USB device connection history entry
+type USBDeviceInfo struct {
+	DeviceID     string    `json:"device_id"`
+	SerialNumber string    `json:"serial_number"`
+	FriendlyName string    `json:"friendly_name"`
+	VendorID     string    `json:"vendor_id,omitempty"`
+	ProductID    string    `json:"product_id,omitempty"`
+	FirstInstall time.Time `json:"first_install"`
+	LastConnect  time.Time `json:"last_connect"`
+	DriveLetter  string    `json:"drive_letter,omitempty"`
+}
+
 // EventLogEntry represents a Windows event log entry
 type EventLogEntry struct {
 	Channel   string                 `json:"channel"`
@@ -157,6 +300,23 @@ const (
 	DetectionTypeUnsignedProcess = "unsigned_critical_process"
 	DetectionTypeSuspiciousDomain = "suspicious_domain"
 	DetectionTypeEncodedCommand  = "encoded_command"
+
+	// Phase 1 detection types
+	DetectionTypeSuspiciousStartup    = "suspicious_startup"
+	DetectionTypeSuspiciousPowerShell = "suspicious_powershell"
+	DetectionTypeSuspiciousDNS        = "suspicious_dns_cache"
+	DetectionTypeSuspiciousAccount    = "suspicious_account"
+	DetectionTypeAntivirusIssue       = "antivirus_issue"
+	DetectionTypeSuspiciousTask       = "suspicious_scheduled_task"
+
+	// Phase 2 detection types
+	DetectionTypePrefetchAnomaly  = "prefetch_anomaly"
+	DetectionTypeShimcacheAnomaly = "shimcache_anomaly"
+	DetectionTypeAmcacheAnomaly   = "amcache_anomaly"
+	DetectionTypeDLLAnomaly       = "dll_anomaly"
+	DetectionTypeWMIPersistence   = "wmi_persistence"
+	DetectionTypeSuspiciousBrowsing = "suspicious_browsing"
+	DetectionTypeSuspiciousUSB    = "suspicious_usb"
 )
 
 // NormalizeTactic converts MITRE tactic names to Title Case.

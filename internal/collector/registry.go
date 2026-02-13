@@ -44,6 +44,52 @@ var PersistenceKeys = []RegistryKeyDef{
 	// Shell extensions
 	{Hive: registry.LOCAL_MACHINE, Path: `SOFTWARE\Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad`, Category: "ShellServiceObject"},
 	{Hive: registry.CURRENT_USER, Path: `SOFTWARE\Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad`, Category: "ShellServiceObject"},
+
+	// ── Phase 1 추가 (16키) ──
+
+	// AppInit_DLLs — DLL injection into all user-mode processes
+	{Hive: registry.LOCAL_MACHINE, Path: `SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows`, Category: "AppInitDLLs"},
+
+	// Logon script
+	{Hive: registry.CURRENT_USER, Path: `Environment`, Category: "LogonScript"},
+
+	// Print Monitors — malicious print monitor DLL
+	{Hive: registry.LOCAL_MACHINE, Path: `SYSTEM\CurrentControlSet\Control\Print\Monitors`, Category: "PrintMonitors"},
+
+	// LSA Authentication Packages
+	{Hive: registry.LOCAL_MACHINE, Path: `SYSTEM\CurrentControlSet\Control\Lsa`, Category: "LSA"},
+
+	// Time Providers — DLL hijacking via time service
+	{Hive: registry.LOCAL_MACHINE, Path: `SYSTEM\CurrentControlSet\Services\W32Time\TimeProviders`, Category: "TimeProviders"},
+
+	// Active Setup — runs StubPath on user logon
+	{Hive: registry.LOCAL_MACHINE, Path: `SOFTWARE\Microsoft\Active Setup\Installed Components`, Category: "ActiveSetup"},
+
+	// Shell Folders / User Shell Folders — startup path redirection
+	{Hive: registry.LOCAL_MACHINE, Path: `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders`, Category: "ShellFolders"},
+	{Hive: registry.CURRENT_USER, Path: `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders`, Category: "ShellFolders"},
+
+	// BootExecute — pre-boot execution
+	{Hive: registry.LOCAL_MACHINE, Path: `SYSTEM\CurrentControlSet\Control\Session Manager`, Category: "BootExecute"},
+
+	// KnownDLLs — DLL hijacking
+	{Hive: registry.LOCAL_MACHINE, Path: `SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs`, Category: "KnownDLLs"},
+
+	// Terminal Server Client — RDP connection history
+	{Hive: registry.CURRENT_USER, Path: `SOFTWARE\Microsoft\Terminal Server Client\Servers`, Category: "RDPHistory"},
+
+	// USBSTOR — USB device history
+	{Hive: registry.LOCAL_MACHINE, Path: `SYSTEM\CurrentControlSet\Enum\USBSTOR`, Category: "USBSTOR"},
+
+	// Network profiles
+	{Hive: registry.LOCAL_MACHINE, Path: `SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles`, Category: "NetworkProfiles"},
+
+	// User typed paths/URLs/RunMRU
+	{Hive: registry.CURRENT_USER, Path: `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\TypedPaths`, Category: "UserInput"},
+	{Hive: registry.CURRENT_USER, Path: `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RunMRU`, Category: "UserInput"},
+
+	// BAM — Background Activity Moderator (Win10 1709+)
+	{Hive: registry.LOCAL_MACHINE, Path: `SYSTEM\CurrentControlSet\Services\bam\State\UserSettings`, Category: "BAM"},
 }
 
 // RegistryKeyDef defines a registry key to scan
@@ -147,8 +193,13 @@ func (c *RegistryCollector) collectKey(keyDef RegistryKeyDef) ([]types.RegistryE
 		entries = append(entries, entry)
 	}
 
-	// For some keys like Services and IFEO, we need to enumerate subkeys
-	if keyDef.Category == "Services" || keyDef.Category == "IFEO" {
+	// For some keys we need to enumerate subkeys
+	subkeyCategories := map[string]bool{
+		"Services": true, "IFEO": true, "PrintMonitors": true,
+		"TimeProviders": true, "ActiveSetup": true, "RDPHistory": true,
+		"USBSTOR": true, "NetworkProfiles": true, "BAM": true,
+	}
+	if subkeyCategories[keyDef.Category] {
 		subkeyEntries, _ := c.collectSubkeys(keyDef)
 		entries = append(entries, subkeyEntries...)
 	}
@@ -211,6 +262,97 @@ func (c *RegistryCollector) collectSubkeys(keyDef RegistryKeyDef) ([]types.Regis
 					ValueType: "REG_SZ",
 				}
 				entries = append(entries, entry)
+			}
+		}
+
+		// For Print Monitors, get Driver
+		if keyDef.Category == "PrintMonitors" {
+			if driver, _, err := subkey.GetStringValue("Driver"); err == nil {
+				entries = append(entries, types.RegistryEntry{
+					Key: fullPath + "\\" + subkeyName, ValueName: "Driver",
+					ValueData: driver, ValueType: "REG_SZ",
+				})
+			}
+		}
+
+		// For TimeProviders, get DllName + Enabled
+		if keyDef.Category == "TimeProviders" {
+			if dll, _, err := subkey.GetStringValue("DllName"); err == nil {
+				entries = append(entries, types.RegistryEntry{
+					Key: fullPath + "\\" + subkeyName, ValueName: "DllName",
+					ValueData: dll, ValueType: "REG_SZ",
+				})
+			}
+		}
+
+		// For Active Setup, get StubPath
+		if keyDef.Category == "ActiveSetup" {
+			if stub, _, err := subkey.GetStringValue("StubPath"); err == nil {
+				entries = append(entries, types.RegistryEntry{
+					Key: fullPath + "\\" + subkeyName, ValueName: "StubPath",
+					ValueData: stub, ValueType: "REG_SZ",
+				})
+			}
+		}
+
+		// For RDP history, get UsernameHint
+		if keyDef.Category == "RDPHistory" {
+			if user, _, err := subkey.GetStringValue("UsernameHint"); err == nil {
+				entries = append(entries, types.RegistryEntry{
+					Key: fullPath + "\\" + subkeyName, ValueName: "UsernameHint",
+					ValueData: user, ValueType: "REG_SZ",
+				})
+			} else {
+				// Even without UsernameHint, record the server entry (subkey name = IP/hostname)
+				entries = append(entries, types.RegistryEntry{
+					Key: fullPath + "\\" + subkeyName, ValueName: "(server)",
+					ValueData: subkeyName, ValueType: "REG_SZ",
+				})
+			}
+		}
+
+		// For USBSTOR, enumerate serial number subkeys for FriendlyName
+		if keyDef.Category == "USBSTOR" {
+			serialKeys, _ := subkey.ReadSubKeyNames(-1)
+			for _, serial := range serialKeys {
+				serialPath := keyDef.Path + "\\" + subkeyName + "\\" + serial
+				if serialKey, err := registry.OpenKey(keyDef.Hive, serialPath, registry.READ); err == nil {
+					if friendly, _, err := serialKey.GetStringValue("FriendlyName"); err == nil {
+						entries = append(entries, types.RegistryEntry{
+							Key: fullPath + "\\" + subkeyName + "\\" + serial, ValueName: "FriendlyName",
+							ValueData: friendly, ValueType: "REG_SZ",
+						})
+					}
+					serialKey.Close()
+				}
+			}
+		}
+
+		// For Network profiles, get ProfileName + DateCreated
+		if keyDef.Category == "NetworkProfiles" {
+			if name, _, err := subkey.GetStringValue("ProfileName"); err == nil {
+				entries = append(entries, types.RegistryEntry{
+					Key: fullPath + "\\" + subkeyName, ValueName: "ProfileName",
+					ValueData: name, ValueType: "REG_SZ",
+				})
+			}
+		}
+
+		// For BAM, enumerate all values (each value = executable path, data = FILETIME)
+		if keyDef.Category == "BAM" {
+			bamValues, _ := subkey.ReadValueNames(-1)
+			for _, val := range bamValues {
+				if val == "Version" || val == "SequenceNumber" {
+					continue
+				}
+				data, valType, err := readRegistryValue(subkey, val)
+				if err != nil {
+					continue
+				}
+				entries = append(entries, types.RegistryEntry{
+					Key: fullPath + "\\" + subkeyName, ValueName: val,
+					ValueData: data, ValueType: registryTypeToString(valType),
+				})
 			}
 		}
 
