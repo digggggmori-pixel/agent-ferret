@@ -191,6 +191,197 @@ type USBDeviceInfo struct {
 	DriveLetter  string    `json:"drive_letter,omitempty"`
 }
 
+// DriverInfo represents a loaded kernel driver
+type DriverInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Path        string `json:"path"`
+	State       string `json:"state"`
+	StartMode   string `json:"start_mode"`
+	IsSigned    bool   `json:"is_signed"`
+	Signer      string `json:"signer,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// FirewallRuleInfo represents a Windows firewall rule
+type FirewallRuleInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Direction   string `json:"direction"`
+	Action      string `json:"action"`
+	Enabled     bool   `json:"enabled"`
+	Profile     string `json:"profile,omitempty"`
+	Program     string `json:"program,omitempty"`
+	LocalPort   string `json:"local_port,omitempty"`
+	RemoteAddr  string `json:"remote_addr,omitempty"`
+	RemotePort  string `json:"remote_port,omitempty"`
+	Protocol    string `json:"protocol,omitempty"`
+}
+
+// CertificateInfo represents a certificate in the Windows certificate store
+type CertificateInfo struct {
+	Subject      string    `json:"subject"`
+	Issuer       string    `json:"issuer"`
+	Thumbprint   string    `json:"thumbprint"`
+	NotBefore    time.Time `json:"not_before"`
+	NotAfter     time.Time `json:"not_after"`
+	SerialNumber string    `json:"serial_number"`
+	Store        string    `json:"store"`
+	IsSelfSigned bool      `json:"is_self_signed"`
+	IsExpired    bool      `json:"is_expired"`
+}
+
+// SharedFolderInfo represents a network shared folder
+type SharedFolderInfo struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Description string `json:"description,omitempty"`
+	ShareType   uint32 `json:"share_type"`
+	Permissions string `json:"permissions,omitempty"`
+	IsHidden    bool   `json:"is_hidden"`
+}
+
+// ARPEntry represents an ARP table entry
+type ARPEntry struct {
+	IPAddress    string `json:"ip_address"`
+	MACAddress   string `json:"mac_address"`
+	InterfaceIdx uint32 `json:"interface_idx"`
+	Type         string `json:"type"` // "dynamic", "static", "invalid"
+}
+
+// HandleInfo represents an open handle (focused on LSASS access detection)
+type HandleInfo struct {
+	ProcessPID  uint32 `json:"process_pid"`
+	ProcessName string `json:"process_name"`
+	ProcessPath string `json:"process_path,omitempty"`
+	TargetPID   uint32 `json:"target_pid"`
+	TargetName  string `json:"target_name"`
+	HandleType  string `json:"handle_type"`
+	AccessMask  uint32 `json:"access_mask"`
+}
+
+// BITSJobInfo represents a BITS (Background Intelligent Transfer Service) job
+type BITSJobInfo struct {
+	JobID       string    `json:"job_id"`
+	DisplayName string    `json:"display_name"`
+	JobType     string    `json:"job_type"`
+	State       string    `json:"state"`
+	Owner       string    `json:"owner"`
+	URL         string    `json:"url,omitempty"`
+	LocalFile   string    `json:"local_file,omitempty"`
+	BytesTotal  int64     `json:"bytes_total"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// UserAssistEntry represents a UserAssist registry entry (program execution history)
+type UserAssistEntry struct {
+	Name          string    `json:"name"`
+	RunCount      uint32    `json:"run_count"`
+	FocusCount    uint32    `json:"focus_count,omitempty"`
+	LastExecution time.Time `json:"last_execution"`
+	User          string    `json:"user"`
+}
+
+// BAMEntry represents a Background Activity Moderator entry (Win10 1709+)
+type BAMEntry struct {
+	Path           string    `json:"path"`
+	LastExecution  time.Time `json:"last_execution"`
+	User           string    `json:"user"`
+	SequenceNumber uint32    `json:"sequence_number,omitempty"`
+}
+
+// RDPCacheEntry represents an RDP connection history entry
+type RDPCacheEntry struct {
+	Server       string `json:"server"`
+	Username     string `json:"username,omitempty"`
+	UsernameHint string `json:"username_hint,omitempty"`
+	User         string `json:"user"` // local user who connected
+}
+
+// RecycleBinEntry represents a deleted file entry in the Recycle Bin
+type RecycleBinEntry struct {
+	OriginalPath string    `json:"original_path"`
+	DeletedTime  time.Time `json:"deleted_time"`
+	FileSize     int64     `json:"file_size"`
+	User         string    `json:"user"`
+}
+
+// JumplistEntry represents a Jumplist/LNK file entry
+type JumplistEntry struct {
+	TargetPath   string    `json:"target_path"`
+	Arguments    string    `json:"arguments,omitempty"`
+	WorkingDir   string    `json:"working_dir,omitempty"`
+	AppID        string    `json:"app_id,omitempty"`
+	AccessTime   time.Time `json:"access_time"`
+	CreationTime time.Time `json:"creation_time,omitempty"`
+	User         string    `json:"user"`
+}
+
+// WEREntry represents a Windows Error Reporting entry
+type WEREntry struct {
+	EventType    string    `json:"event_type"`
+	FaultingApp  string    `json:"faulting_app"`
+	FaultingPath string    `json:"faulting_path,omitempty"`
+	ExceptionCode string   `json:"exception_code,omitempty"`
+	ReportTime   time.Time `json:"report_time"`
+	ReportPath   string    `json:"report_path"`
+}
+
+// MFTEntry represents a Master File Table entry
+type MFTEntry struct {
+	RecordNumber uint64    `json:"record_number"`
+	FileName     string    `json:"file_name"`
+	FilePath     string    `json:"file_path"`
+	FileSize     int64     `json:"file_size"`
+	SICreated    time.Time `json:"si_created"`
+	SIModified   time.Time `json:"si_modified"`
+	FNCreated    time.Time `json:"fn_created,omitempty"`
+	FNModified   time.Time `json:"fn_modified,omitempty"`
+	IsDeleted    bool      `json:"is_deleted"`
+	InUse        bool      `json:"in_use"`
+}
+
+// USNJournalEntry represents a USN Journal change record
+type USNJournalEntry struct {
+	USN        int64     `json:"usn"`
+	FileName   string    `json:"file_name"`
+	Reason     string    `json:"reason"`
+	Timestamp  time.Time `json:"timestamp"`
+	FileRef    uint64    `json:"file_ref"`
+	ParentRef  uint64    `json:"parent_ref"`
+	SourceInfo uint32    `json:"source_info"`
+}
+
+// SRUMEntry represents a System Resource Usage Monitor entry
+type SRUMEntry struct {
+	AppName       string    `json:"app_name"`
+	UserSID       string    `json:"user_sid,omitempty"`
+	BytesSent     int64     `json:"bytes_sent"`
+	BytesReceived int64     `json:"bytes_received"`
+	Timestamp     time.Time `json:"timestamp"`
+	Duration      int64     `json:"duration_seconds,omitempty"`
+}
+
+// TimelineEntry represents a Windows Timeline (ActivitiesCache.db) entry
+type TimelineEntry struct {
+	AppID      string    `json:"app_id"`
+	Activity   string    `json:"activity"`
+	StartTime  time.Time `json:"start_time"`
+	EndTime    time.Time `json:"end_time,omitempty"`
+	Payload    string    `json:"payload,omitempty"`
+	User       string    `json:"user"`
+}
+
+// ETLLogEntry represents an ETW trace log entry
+type ETLLogEntry struct {
+	Provider  string    `json:"provider"`
+	EventID   uint32    `json:"event_id"`
+	Level     uint8     `json:"level"`
+	Timestamp time.Time `json:"timestamp"`
+	Message   string    `json:"message"`
+	Data      map[string]interface{} `json:"data,omitempty"`
+}
+
 // EventLogEntry represents a Windows event log entry
 type EventLogEntry struct {
 	Channel   string                 `json:"channel"`
@@ -317,6 +508,28 @@ const (
 	DetectionTypeWMIPersistence   = "wmi_persistence"
 	DetectionTypeSuspiciousBrowsing = "suspicious_browsing"
 	DetectionTypeSuspiciousUSB    = "suspicious_usb"
+
+	// Phase 3 detection types
+	DetectionTypeUnsignedDriver     = "unsigned_driver"
+	DetectionTypeFirewallAnomaly    = "firewall_anomaly"
+	DetectionTypeSuspiciousCert     = "suspicious_certificate"
+	DetectionTypeSuspiciousShare    = "suspicious_share"
+	DetectionTypeARPAnomaly         = "arp_anomaly"
+	DetectionTypeLSASSAccess        = "lsass_access"
+	DetectionTypeSuspiciousBITS     = "suspicious_bits_job"
+	DetectionTypeUserAssistAnomaly  = "userassist_anomaly"
+	DetectionTypeBAMAnomaly         = "bam_anomaly"
+	DetectionTypeRDPAnomaly         = "rdp_anomaly"
+	DetectionTypeRecycleBinAnomaly  = "recycle_bin_anomaly"
+	DetectionTypeJumplistAnomaly    = "jumplist_anomaly"
+	DetectionTypeWERAnomaly         = "wer_anomaly"
+	DetectionTypeTimestomping       = "timestomping"
+	DetectionTypeDataExfiltration   = "data_exfiltration"
+	DetectionTypeEvidenceDestruction = "evidence_destruction"
+	DetectionTypeBeaconing          = "beaconing_pattern"
+	DetectionTypeWebAttack          = "web_attack"
+	DetectionTypeDBCompromise       = "db_compromise"
+	DetectionTypeHashIOC            = "hash_ioc_match"
 )
 
 // NormalizeTactic converts MITRE tactic names to Title Case.

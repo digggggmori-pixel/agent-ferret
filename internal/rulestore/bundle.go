@@ -54,6 +54,16 @@ type DetectionBundleSection struct {
 	CommonEnglishWords        []string              `json:"common_english_words"`
 	MicrosoftServiceWhitelist []string              `json:"microsoft_service_whitelist"`
 	MicrosoftPathPrefixes     []string              `json:"microsoft_path_prefixes"`
+
+	// Phase 3 detection constants
+	SuspiciousFileExtensions      []string `json:"suspicious_file_extensions"`
+	TrustedCertificateAuthorities []string `json:"trusted_certificate_authorities"`
+	DefaultHiddenShares           []string `json:"default_hidden_shares"`
+	SuspiciousFirewallPrograms    []string `json:"suspicious_firewall_programs"`
+	CriticalSecurityProcesses     []string `json:"critical_security_processes"`
+	EvidenceFileExtensions        []string `json:"evidence_file_extensions"`
+	BeaconingThreshold            int      `json:"beaconing_threshold"`
+	TimestompingThresholdHours    int      `json:"timestomping_threshold_hours"`
 }
 
 // RuleBundle is the in-memory representation of a loaded rule bundle.
@@ -100,6 +110,16 @@ type DetectionRules struct {
 	DangerousPaths         []string
 	CriticalProcesses      map[string]string
 	EncodedCommandPatterns []string
+
+	// Phase 3 detection
+	SuspiciousFileExtensions      []string
+	TrustedCertificateAuthorities []string
+	DefaultHiddenShares           map[string]bool
+	SuspiciousFirewallPrograms    []string
+	CriticalSecurityProcesses     []string
+	EvidenceFileExtensions        []string
+	BeaconingThreshold            int
+	TimestompingThresholdHours    int
 }
 
 // LoadBundleFromFile loads a rule bundle from a JSON file on disk
@@ -230,6 +250,27 @@ func buildDetectionRules(d *DetectionBundleSection) (*DetectionRules, error) {
 	}
 	for _, svc := range d.MicrosoftServiceWhitelist {
 		rules.MicrosoftServiceWhitelist[svc] = true
+	}
+
+	// Phase 3 detection fields
+	rules.SuspiciousFileExtensions = d.SuspiciousFileExtensions
+	rules.TrustedCertificateAuthorities = d.TrustedCertificateAuthorities
+	rules.SuspiciousFirewallPrograms = d.SuspiciousFirewallPrograms
+	rules.CriticalSecurityProcesses = d.CriticalSecurityProcesses
+	rules.EvidenceFileExtensions = d.EvidenceFileExtensions
+
+	rules.DefaultHiddenShares = make(map[string]bool, len(d.DefaultHiddenShares))
+	for _, share := range d.DefaultHiddenShares {
+		rules.DefaultHiddenShares[share] = true
+	}
+
+	rules.BeaconingThreshold = d.BeaconingThreshold
+	if rules.BeaconingThreshold <= 0 {
+		rules.BeaconingThreshold = 3
+	}
+	rules.TimestompingThresholdHours = d.TimestompingThresholdHours
+	if rules.TimestompingThresholdHours <= 0 {
+		rules.TimestompingThresholdHours = 24
 	}
 
 	return rules, nil
