@@ -20,11 +20,11 @@ func NewWin11ArtifactsCollector() *Win11ArtifactsCollector {
 }
 
 // Collect reads Windows 11 specific execution artifacts
-func (c *Win11ArtifactsCollector) Collect() ([]types.BAMEntry, error) {
+func (c *Win11ArtifactsCollector) Collect() ([]types.Win11ArtifactEntry, error) {
 	logger.Section("Win11 Artifacts Collection")
 	startTime := time.Now()
 
-	var entries []types.BAMEntry
+	var entries []types.Win11ArtifactEntry
 
 	// PcaAppLaunchDic - Program Compatibility Assistant app launch dictionary
 	// Available on Windows 11 (Build 22000+)
@@ -42,8 +42,8 @@ func (c *Win11ArtifactsCollector) Collect() ([]types.BAMEntry, error) {
 }
 
 // collectPCA reads PcaAppLaunchDic from registry
-func (c *Win11ArtifactsCollector) collectPCA() []types.BAMEntry {
-	var entries []types.BAMEntry
+func (c *Win11ArtifactsCollector) collectPCA() []types.Win11ArtifactEntry {
+	var entries []types.Win11ArtifactEntry
 
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE,
 		`SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store`,
@@ -64,10 +64,9 @@ func (c *Win11ArtifactsCollector) collectPCA() []types.BAMEntry {
 			continue
 		}
 
-		entries = append(entries, types.BAMEntry{
-			Path:          valueName,
-			LastExecution: time.Time{}, // PCA doesn't store timestamps in the same way
-			User:          "",
+		entries = append(entries, types.Win11ArtifactEntry{
+			Path:   valueName,
+			Source: "pca",
 		})
 
 		if len(entries) >= 1000 {
@@ -79,8 +78,8 @@ func (c *Win11ArtifactsCollector) collectPCA() []types.BAMEntry {
 }
 
 // collectEventTranscript reads from EventTranscript.db if accessible
-func (c *Win11ArtifactsCollector) collectEventTranscript() []types.BAMEntry {
-	var entries []types.BAMEntry
+func (c *Win11ArtifactsCollector) collectEventTranscript() []types.Win11ArtifactEntry {
+	var entries []types.Win11ArtifactEntry
 
 	// EventTranscript.db is typically at:
 	// C:\ProgramData\Microsoft\Diagnosis\EventTranscript\EventTranscript.db
@@ -132,9 +131,10 @@ $results | ConvertTo-Json -Compress
 
 	for _, raw := range rawEntries {
 		ts, _ := time.Parse(time.RFC3339, raw.Timestamp)
-		entries = append(entries, types.BAMEntry{
+		entries = append(entries, types.Win11ArtifactEntry{
 			Path:          raw.AppName,
 			LastExecution: ts,
+			Source:        "event_transcript",
 		})
 	}
 

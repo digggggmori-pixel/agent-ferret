@@ -146,8 +146,12 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	// ── Step 4: Scan registry ──
 	s.emitProgress(4, "Scanning registry...", 9, "35 persistence keys")
 	registryCollector := collector.NewRegistryCollector()
-	registryCollector.Collect()
-	s.emitProgress(4, "Registry scan complete", 12, "")
+	registryEntries, err := registryCollector.Collect()
+	if err != nil {
+		registryEntries = []types.RegistryEntry{}
+	}
+	_ = registryEntries // TODO: wire to registry-specific detector when implemented
+	s.emitProgress(4, "Registry scan complete", 12, fmt.Sprintf("%d entries", len(registryEntries)))
 
 	// ── Step 5: Collect startup folder entries ──
 	s.emitProgress(5, "Scanning startup folders...", 12, "")
@@ -432,7 +436,7 @@ func (s *Service) Execute() (*types.ScanResult, error) {
 	win11Collector := collector.NewWin11ArtifactsCollector()
 	win11Entries, err := win11Collector.Collect()
 	if err != nil {
-		win11Entries = []types.BAMEntry{}
+		win11Entries = []types.Win11ArtifactEntry{}
 	}
 	s.emitProgress(35, "Win11 artifacts collected", 79, fmt.Sprintf("%d entries", len(win11Entries)))
 

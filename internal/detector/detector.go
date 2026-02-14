@@ -27,9 +27,9 @@ type Detector struct {
 
 // New creates a new Detector instance with injected detection rules
 func New(rules *rulestore.DetectionRules) *Detector {
-	d := &Detector{
-		rules:        rules,
-		pathPatterns: rules.PathAnomalyRegexps,
+	d := &Detector{rules: rules}
+	if rules != nil {
+		d.pathPatterns = rules.PathAnomalyRegexps
 	}
 	return d
 }
@@ -2932,6 +2932,46 @@ func (d *Detector) DetectTimestomping(entries []types.MFTEntry) []types.Detectio
 func (d *Detector) DetectEvidenceDestruction(recycleBin []types.RecycleBinEntry, usnJournal []types.USNJournalEntry) []types.Detection {
 	var detections []types.Detection
 
+	// Check Recycle Bin for deleted evidence files
+	for _, entry := range recycleBin {
+		entryCopy := entry
+		nameLower := strings.ToLower(filepath.Base(entryCopy.OriginalPath))
+
+		for _, ext := range d.rules.EvidenceFileExtensions {
+			if strings.HasSuffix(nameLower, ext) {
+				severity := types.SeverityMedium
+				confidence := 0.65
+				technique := "T1070.004"
+				if ext == ".evtx" {
+					severity = types.SeverityHigh
+					confidence = 0.8
+					technique = "T1070.001"
+				}
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("evidence-recycle-%s-%d", ext[1:], time.Now().UnixNano()),
+					Type:        types.DetectionTypeEvidenceDestruction,
+					Severity:    severity,
+					Confidence:  confidence,
+					Timestamp:   entryCopy.DeletedTime,
+					Description: fmt.Sprintf("Evidence file found in Recycle Bin: %s", entryCopy.OriginalPath),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Defense Evasion"},
+						Techniques: []string{technique},
+					},
+					Details: map[string]interface{}{
+						"original_path": entryCopy.OriginalPath,
+						"extension":     ext,
+						"deleted_time":  entryCopy.DeletedTime.Format(time.RFC3339),
+						"file_size":     entryCopy.FileSize,
+						"user":          entryCopy.User,
+						"source":        "recycle_bin",
+					},
+				})
+				break
+			}
+		}
+	}
+
 	// Check USN journal for log deletion
 	for _, entry := range usnJournal {
 		entryCopy := entry
@@ -2968,6 +3008,7 @@ func (d *Detector) DetectEvidenceDestruction(recycleBin []types.RecycleBinEntry,
 							"reason":    entryCopy.Reason,
 							"timestamp": entryCopy.Timestamp.Format(time.RFC3339),
 							"usn":       entryCopy.USN,
+							"source":    "usn_journal",
 						},
 					})
 					break

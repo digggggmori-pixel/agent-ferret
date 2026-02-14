@@ -290,6 +290,13 @@ type BAMEntry struct {
 	SequenceNumber uint32    `json:"sequence_number,omitempty"`
 }
 
+// Win11ArtifactEntry represents a Windows 11 specific execution artifact (PCA, EventTranscript)
+type Win11ArtifactEntry struct {
+	Path          string    `json:"path"`
+	LastExecution time.Time `json:"last_execution,omitempty"`
+	Source        string    `json:"source"` // "pca" or "event_transcript"
+}
+
 // RDPCacheEntry represents an RDP connection history entry
 type RDPCacheEntry struct {
 	Server       string `json:"server"`

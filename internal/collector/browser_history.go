@@ -115,7 +115,8 @@ func (c *BrowserHistoryCollector) collectChromiumHistory(browser, dbPath, userna
 	// Use robocopy for byte-level copy (handles locks better than Go copy)
 	srcDir := filepath.Dir(dbPath)
 	srcFile := filepath.Base(dbPath)
-	copyPSScript := fmt.Sprintf(`Copy-Item -Path '%s' -Destination '%s' -Force -ErrorAction SilentlyContinue`, dbPath, tempCopy)
+	copyPSScript := fmt.Sprintf(`Copy-Item -Path '%s' -Destination '%s' -Force -ErrorAction SilentlyContinue`,
+		strings.ReplaceAll(dbPath, "'", "''"), strings.ReplaceAll(tempCopy, "'", "''"))
 	runPowerShell(copyPSScript)
 
 	// Verify copy exists
@@ -157,7 +158,7 @@ try {
     }
 }
 $results | ConvertTo-Json -Compress
-`, tempCopy)
+`, strings.ReplaceAll(tempCopy, "'", "''"))
 
 	output, err := runPowerShell(psScript)
 	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
@@ -212,7 +213,8 @@ func (c *BrowserHistoryCollector) collectFirefoxHistory(dbPath, username string)
 	tempCopy := filepath.Join(os.TempDir(), fmt.Sprintf("ferret_firefox_history_%s.db", username))
 	defer os.Remove(tempCopy)
 
-	copyPSScript := fmt.Sprintf(`Copy-Item -Path '%s' -Destination '%s' -Force -ErrorAction SilentlyContinue`, dbPath, tempCopy)
+	copyPSScript := fmt.Sprintf(`Copy-Item -Path '%s' -Destination '%s' -Force -ErrorAction SilentlyContinue`,
+		strings.ReplaceAll(dbPath, "'", "''"), strings.ReplaceAll(tempCopy, "'", "''"))
 	runPowerShell(copyPSScript)
 
 	if _, err := os.Stat(tempCopy); err != nil {

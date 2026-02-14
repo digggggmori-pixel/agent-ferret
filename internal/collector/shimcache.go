@@ -130,6 +130,11 @@ func parseWin10Shimcache(data []byte) []types.ShimcacheEntry {
 		}
 		offset += 4
 
+		// Guard against corrupt data: shimcache data blobs should be small
+		if dataSize > 65536 {
+			break
+		}
+
 		// Skip data blob
 		offset += int(dataSize)
 
@@ -185,7 +190,9 @@ func filetimeToTime(ft uint64) time.Time {
 	// Unix epoch is January 1, 1970
 	// Difference = 116444736000000000 (in 100-nanosecond intervals)
 	const filetimeEpochDiff = 116444736000000000
-	if ft < filetimeEpochDiff {
+	// Max reasonable FILETIME: year 2100 = ~157766880000000000
+	const filetimeMax = 157766880000000000
+	if ft < filetimeEpochDiff || ft > filetimeMax {
 		return time.Time{}
 	}
 	nsec := (ft - filetimeEpochDiff) * 100
