@@ -8,6 +8,7 @@ import (
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/collector"
 	"github.com/digggggmori-pixel/agent-ferret/internal/detector"
+	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
 	"github.com/digggggmori-pixel/agent-ferret/internal/rulestore"
 	"github.com/digggggmori-pixel/agent-ferret/internal/sigma"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
@@ -65,6 +66,7 @@ const totalSteps = 40
 
 // emitProgress sends a progress update via channel (if set).
 func (s *Service) emitProgress(step int, name string, percent int, detail string) {
+	logger.Info("[Step %d/%d] %s %s", step, totalSteps, name, detail)
 	if s.progressCh != nil {
 		s.progressCh <- Progress{
 			Step:     step,
