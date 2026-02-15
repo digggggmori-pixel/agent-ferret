@@ -1,7 +1,9 @@
 package collector
 
 import (
-	"encoding/json"
+	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,105 +19,99 @@ func NewUSNJournalCollector() *USNJournalCollector {
 	return &USNJournalCollector{}
 }
 
-type usnPSEntry struct {
-	FileName  string `json:"FileName"`
-	Reason    string `json:"Reason"`
-	TimeStamp string `json:"TimeStamp"`
-	FileRef   uint64 `json:"FileReferenceNumber"`
-	ParentRef uint64 `json:"ParentFileReferenceNumber"`
-	USN       int64  `json:"Usn"`
-}
-
-// Collect reads recent USN Journal entries using fsutil
+// Collect reads recent USN Journal entries using fsutil directly
 func (c *USNJournalCollector) Collect() ([]types.USNJournalEntry, error) {
 	logger.Section("USN Journal Collection")
 	startTime := time.Now()
 
 	var entries []types.USNJournalEntry
 
-	// Use PowerShell with fsutil to read USN journal
-	// fsutil usn readjournal requires admin, so we try PowerShell approach
-	psScript := `
-$results = @()
-try {
-    # Query USN journal info first
-    $journalInfo = fsutil usn queryjournal C: 2>$null
-    if (-not $journalInfo) { return }
-
-    # Read recent USN records (last 10000 records, focused on creates/deletes/renames)
-    $output = fsutil usn enumdata 1 0 1 C: 2>$null
-    if ($output) {
-        $count = 0
-        foreach ($line in $output) {
-            if ($line -match 'File Ref#\s*:\s*(.+)') {
-                $currentRef = $Matches[1].Trim()
-            }
-            if ($line -match 'Parent File Ref#\s*:\s*(.+)') {
-                $currentParent = $Matches[1].Trim()
-            }
-            if ($line -match 'Usn\s*:\s*(\d+)') {
-                $currentUsn = [long]$Matches[1]
-            }
-            if ($line -match 'File Name\s*:\s*(.+)') {
-                $currentFileName = $Matches[1].Trim()
-            }
-            if ($line -match 'Reason\s*:\s*(.+)') {
-                $currentReason = $Matches[1].Trim()
-            }
-            if ($line -match 'Time Stamp\s*:\s*(.+)') {
-                $ts = $Matches[1].Trim()
-                $results += @{
-                    FileName = $currentFileName
-                    Reason = $currentReason
-                    TimeStamp = $ts
-                    Usn = $currentUsn
-                }
-                $count++
-                if ($count -ge 5000) { break }
-            }
-        }
-    }
-} catch {}
-$results | ConvertTo-Json -Compress
-`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
-		logger.Debug("Cannot read USN journal (admin required)")
+	// Check if USN journal exists (requires admin)
+	checkCmd := exec.Command("fsutil", "usn", "queryjournal", "C:")
+	if err := checkCmd.Run(); err != nil {
+		logger.Debug("Cannot query USN journal (admin required)")
 		return entries, nil
 	}
 
-	var rawEntries []usnPSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse USN journal JSON: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single usnPSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
+	// Enumerate USN records directly via fsutil (native Windows binary, no PS)
+	enumCmd := exec.Command("fsutil", "usn", "enumdata", "1", "0", "1", "C:")
+	output, err := enumCmd.Output()
+	if err != nil {
+		logger.Debug("Cannot enumerate USN data: %v", err)
+		return entries, nil
 	}
 
-	for _, raw := range rawEntries {
-		ts, _ := time.Parse("2006/01/02 15:04:05", raw.TimeStamp)
-		if ts.IsZero() {
-			ts, _ = time.Parse(time.RFC3339, raw.TimeStamp)
-		}
-
-		entries = append(entries, types.USNJournalEntry{
-			USN:       raw.USN,
-			FileName:  raw.FileName,
-			Reason:    raw.Reason,
-			Timestamp: ts,
-			FileRef:   raw.FileRef,
-			ParentRef: raw.ParentRef,
-		})
-	}
+	entries = c.parseFsutilOutput(string(output))
 
 	logger.Timing("USNJournalCollector.Collect", startTime)
 	logger.Info("USN Journal: %d entries collected", len(entries))
 
 	return entries, nil
+}
+
+// parseFsutilOutput parses the text output from "fsutil usn enumdata"
+func (c *USNJournalCollector) parseFsutilOutput(output string) []types.USNJournalEntry {
+	var entries []types.USNJournalEntry
+
+	fileRefRe := regexp.MustCompile(`File Ref#\s*:\s*(.+)`)
+	parentRefRe := regexp.MustCompile(`Parent File Ref#\s*:\s*(.+)`)
+	usnRe := regexp.MustCompile(`Usn\s*:\s*(\d+)`)
+	fileNameRe := regexp.MustCompile(`File Name\s*:\s*(.+)`)
+	reasonRe := regexp.MustCompile(`Reason\s*:\s*(.+)`)
+	timeStampRe := regexp.MustCompile(`Time Stamp\s*:\s*(.+)`)
+
+	var currentFileName, currentReason string
+	var currentUSN int64
+	var currentFileRef, currentParentRef uint64
+
+	lines := strings.Split(output, "\n")
+	count := 0
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if m := fileRefRe.FindStringSubmatch(line); len(m) > 1 {
+			refStr := strings.TrimSpace(m[1])
+			refStr = strings.TrimPrefix(refStr, "0x")
+			currentFileRef, _ = strconv.ParseUint(refStr, 16, 64)
+		}
+		if m := parentRefRe.FindStringSubmatch(line); len(m) > 1 {
+			refStr := strings.TrimSpace(m[1])
+			refStr = strings.TrimPrefix(refStr, "0x")
+			currentParentRef, _ = strconv.ParseUint(refStr, 16, 64)
+		}
+		if m := usnRe.FindStringSubmatch(line); len(m) > 1 {
+			currentUSN, _ = strconv.ParseInt(strings.TrimSpace(m[1]), 10, 64)
+		}
+		if m := fileNameRe.FindStringSubmatch(line); len(m) > 1 {
+			currentFileName = strings.TrimSpace(m[1])
+		}
+		if m := reasonRe.FindStringSubmatch(line); len(m) > 1 {
+			currentReason = strings.TrimSpace(m[1])
+		}
+		// Time Stamp is the last field per record — emit entry when seen
+		if m := timeStampRe.FindStringSubmatch(line); len(m) > 1 {
+			tsStr := strings.TrimSpace(m[1])
+			ts, _ := time.Parse("2006/01/02 15:04:05", tsStr)
+			if ts.IsZero() {
+				ts, _ = time.Parse(time.RFC3339, tsStr)
+			}
+
+			entries = append(entries, types.USNJournalEntry{
+				USN:       currentUSN,
+				FileName:  currentFileName,
+				Reason:    currentReason,
+				Timestamp: ts,
+				FileRef:   currentFileRef,
+				ParentRef: currentParentRef,
+			})
+
+			count++
+			if count >= 5000 {
+				break
+			}
+		}
+	}
+
+	return entries
 }

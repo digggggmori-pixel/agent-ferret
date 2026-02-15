@@ -1,8 +1,6 @@
 package collector
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,9 +32,9 @@ func (c *AmcacheCollector) Collect() ([]types.AmcacheEntry, error) {
 	// Strategy 1: Try to load hive via reg.exe (requires admin)
 	entries = c.tryLoadHive()
 
-	// Strategy 2: Fallback to PowerShell with compat flags registry
+	// Strategy 2: Fallback to native registry read of compat flags
 	if len(entries) == 0 {
-		entries = c.tryPowerShellFallback()
+		entries = c.tryRegistryFallback()
 	}
 
 	logger.Timing("AmcacheCollector.Collect", startTime)
@@ -177,60 +175,35 @@ func (c *AmcacheCollector) readInventoryApplicationFile() []types.AmcacheEntry {
 	return entries
 }
 
-// amcachePSEntry matches PowerShell JSON output
-type amcachePSEntry struct {
-	Path       string `json:"LowerCaseLongPath"`
-	Name       string `json:"Name"`
-	Publisher  string `json:"Publisher"`
-	Version    string `json:"Version"`
-	ProductName string `json:"ProductName"`
-	FileId     string `json:"FileId"`
-	Size       int64  `json:"Size"`
-}
-
-func (c *AmcacheCollector) tryPowerShellFallback() []types.AmcacheEntry {
-	// Use PowerShell to query Amcache via Get-ItemProperty on the hive
-	// This is a lighter approach that queries program compatibility data
-	psScript := fmt.Sprintf(`
-$entries = @()
-$regPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store'
-if (Test-Path $regPath) {
-    $props = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
-    if ($props) {
-        foreach ($name in $props.PSObject.Properties.Name) {
-            if ($name -like '*\*' -and $name -notlike 'PS*') {
-                $entries += @{Path=$name; Name=[System.IO.Path]::GetFileName($name)}
-            }
-        }
-    }
-}
-$entries | Select-Object -First 500 | ConvertTo-Json -Compress
-`)
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" {
-		return nil
-	}
-
-	var rawEntries []map[string]string
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse Amcache PS fallback: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single map[string]string
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
-	}
-
+// tryRegistryFallback reads program compatibility data directly from registry
+func (c *AmcacheCollector) tryRegistryFallback() []types.AmcacheEntry {
 	var entries []types.AmcacheEntry
-	for _, raw := range rawEntries {
+
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE,
+		`SOFTWARE\Microsoft\Windows\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store`,
+		registry.READ)
+	if err != nil {
+		return entries
+	}
+	defer key.Close()
+
+	valueNames, err := key.ReadValueNames(-1)
+	if err != nil {
+		return entries
+	}
+
+	for _, name := range valueNames {
+		if !strings.Contains(name, `\`) {
+			continue
+		}
+
 		entries = append(entries, types.AmcacheEntry{
-			Path: raw["Path"],
-			Name: raw["Name"],
+			Path: name,
+			Name: filepath.Base(name),
 		})
+		if len(entries) >= 500 {
+			break
+		}
 	}
 
 	return entries

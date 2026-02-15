@@ -1,7 +1,8 @@
 package collector
 
 import (
-	"encoding/json"
+	"database/sql"
+	"os"
 	"strings"
 	"time"
 
@@ -77,66 +78,53 @@ func (c *Win11ArtifactsCollector) collectPCA() []types.Win11ArtifactEntry {
 	return entries
 }
 
-// collectEventTranscript reads from EventTranscript.db if accessible
+// collectEventTranscript reads from EventTranscript.db using native Go SQLite
 func (c *Win11ArtifactsCollector) collectEventTranscript() []types.Win11ArtifactEntry {
 	var entries []types.Win11ArtifactEntry
 
-	// EventTranscript.db is typically at:
-	// C:\ProgramData\Microsoft\Diagnosis\EventTranscript\EventTranscript.db
-	// It requires admin access
+	programData := os.Getenv("ProgramData")
+	if programData == "" {
+		programData = `C:\ProgramData`
+	}
+	dbPath := programData + `\Microsoft\Diagnosis\EventTranscript\EventTranscript.db`
 
-	psScript := `
-$results = @()
-$dbPath = "$env:ProgramData\Microsoft\Diagnosis\EventTranscript\EventTranscript.db"
-if (Test-Path $dbPath) {
-    $tempCopy = "$env:TEMP\ferret_event_transcript.db"
-    Copy-Item $dbPath $tempCopy -Force -ErrorAction SilentlyContinue
-    if (Test-Path $tempCopy) {
-        $sqlite3 = Get-Command sqlite3.exe -ErrorAction SilentlyContinue
-        if ($sqlite3) {
-            $query = "SELECT json_extract(payload, '$.data.app') as AppName, timestamp FROM events WHERE json_extract(payload, '$.data.app') IS NOT NULL ORDER BY timestamp DESC LIMIT 500;"
-            $output = & sqlite3.exe $tempCopy -json $query 2>$null
-            if ($output) {
-                try { $results = $output | ConvertFrom-Json } catch {}
-            }
-        }
-        Remove-Item $tempCopy -Force -ErrorAction SilentlyContinue
-    }
-}
-$results | ConvertTo-Json -Compress
-`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
+	if _, err := os.Stat(dbPath); err != nil {
 		return entries
 	}
 
-	type etEntry struct {
-		AppName   string `json:"AppName"`
-		Timestamp string `json:"timestamp"`
+	tempCopy, cleanup, err := copyFileSafe(dbPath, "event_transcript")
+	defer cleanup()
+	if err != nil {
+		return entries
 	}
 
-	var rawEntries []etEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse EventTranscript JSON: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single etEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
+	db, err := openSQLiteReadOnly(tempCopy)
+	if err != nil {
+		return entries
 	}
+	defer db.Close()
 
-	for _, raw := range rawEntries {
-		ts, _ := time.Parse(time.RFC3339, raw.Timestamp)
+	query := "SELECT json_extract(payload, '$.data.app') as AppName, timestamp FROM events WHERE json_extract(payload, '$.data.app') IS NOT NULL ORDER BY timestamp DESC LIMIT 500"
+
+	querySQLiteRows(db, query, func(rows *sql.Rows) error {
+		var appName sql.NullString
+		var timestamp sql.NullString
+		if err := rows.Scan(&appName, &timestamp); err != nil {
+			return err
+		}
+
+		var ts time.Time
+		if timestamp.Valid {
+			ts, _ = time.Parse(time.RFC3339, timestamp.String)
+		}
+
 		entries = append(entries, types.Win11ArtifactEntry{
-			Path:          raw.AppName,
+			Path:          appName.String,
 			LastExecution: ts,
 			Source:        "event_transcript",
 		})
-	}
+		return nil
+	})
 
 	return entries
 }

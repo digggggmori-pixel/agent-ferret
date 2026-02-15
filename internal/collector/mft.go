@@ -2,11 +2,10 @@ package collector
 
 import (
 	"encoding/binary"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"syscall"
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
@@ -52,21 +51,8 @@ func (c *MFTCollector) Collect() ([]types.MFTEntry, error) {
 	// Try esentutl /y (Volume Shadow Copy)
 	copyCmd := exec.Command("esentutl.exe", "/y", mftPath, "/vssrec", "/d", tempCopy)
 	if err := copyCmd.Run(); err != nil {
-		// Try direct raw copy via PowerShell
-		psScript := fmt.Sprintf(`
-$drive = '%s'
-$dest = '%s'
-try {
-    $vol = [System.IO.File]::Open("\\.\$drive", [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-    $buf = New-Object byte[] (1024*1024*10)  # Read first 10MB of MFT
-    $vol.Read($buf, 0, $buf.Length) | Out-Null
-    $vol.Close()
-    [System.IO.File]::WriteAllBytes($dest, $buf)
-} catch {
-    # Cannot access raw volume
-}
-`, strings.ReplaceAll(systemDrive, "'", "''"), strings.ReplaceAll(tempCopy, "'", "''"))
-		runPowerShell(psScript)
+		// Try direct raw volume read via syscall
+		c.rawCopyMFT(systemDrive, tempCopy)
 	}
 
 	// Check if copy succeeded
@@ -82,6 +68,36 @@ try {
 	logger.Info("MFT: %d entries parsed", len(entries))
 
 	return entries, nil
+}
+
+// rawCopyMFT reads the first 10MB from the raw volume using syscall
+func (c *MFTCollector) rawCopyMFT(drive, destPath string) {
+	volumePath := `\\.\` + drive
+	pathPtr, _ := syscall.UTF16PtrFromString(volumePath)
+
+	handle, err := syscall.CreateFile(
+		pathPtr,
+		syscall.GENERIC_READ,
+		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE,
+		nil,
+		syscall.OPEN_EXISTING,
+		0,
+		0,
+	)
+	if err != nil {
+		return
+	}
+	defer syscall.CloseHandle(handle)
+
+	// Read first 10MB (same as PS version)
+	buf := make([]byte, 10*1024*1024)
+	var bytesRead uint32
+	err = syscall.ReadFile(handle, buf, &bytesRead, nil)
+	if err != nil || bytesRead == 0 {
+		return
+	}
+
+	os.WriteFile(destPath, buf[:bytesRead], 0600)
 }
 
 // parseMFT reads and parses MFT records

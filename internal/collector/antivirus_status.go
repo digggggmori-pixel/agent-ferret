@@ -1,10 +1,7 @@
 package collector
 
 import (
-	"bytes"
-	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
@@ -26,46 +23,27 @@ func (c *AntivirusCollector) Collect() ([]types.AntivirusInfo, error) {
 
 	var products []types.AntivirusInfo
 
-	// Use PowerShell to query WMI SecurityCenter2 — avoids complex COM interop
-	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
-		`Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | ForEach-Object { $_.displayName + '|' + $_.instanceGuid + '|' + $_.productState.ToString() + '|' + $_.pathToSignedProductExe }`)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		logger.Error("Failed to query antivirus status: %v (stderr: %s)", err, stderr.String())
+	// Use native WMI COM query via go-ole (no PowerShell)
+	rows, err := WMIQueryFields(`root\SecurityCenter2`,
+		"SELECT displayName, instanceGuid, productState, pathToSignedProductExe FROM AntiVirusProduct",
+		[]string{"displayName", "instanceGuid", "productState", "pathToSignedProductExe"})
+	if err != nil {
+		logger.Error("Failed to query antivirus status: %v", err)
 		return products, nil
 	}
 
-	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		parts := strings.SplitN(line, "|", 4)
-		if len(parts) < 3 {
-			continue
-		}
-
-		productState, _ := strconv.ParseUint(strings.TrimSpace(parts[2]), 10, 32)
-		state := uint32(productState)
-
-		pathToExe := ""
-		if len(parts) >= 4 {
-			pathToExe = strings.TrimSpace(parts[3])
-		}
+	for _, row := range rows {
+		stateStr := row["productState"]
+		state64, _ := strconv.ParseUint(stateStr, 10, 32)
+		state := uint32(state64)
 
 		product := types.AntivirusInfo{
-			ProductName:  strings.TrimSpace(parts[0]),
-			InstanceGUID: strings.TrimSpace(parts[1]),
+			ProductName:  row["displayName"],
+			InstanceGUID: row["instanceGuid"],
 			ProductState: state,
 			IsEnabled:    decodeAVEnabled(state),
 			IsUpToDate:   decodeAVUpToDate(state),
-			PathToExe:    pathToExe,
+			PathToExe:    row["pathToSignedProductExe"],
 		}
 
 		products = append(products, product)

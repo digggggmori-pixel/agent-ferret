@@ -1,15 +1,14 @@
 package collector
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
+	"golang.org/x/sys/windows/registry"
 )
 
 // SRUMCollector parses the System Resource Usage Monitor database
@@ -20,15 +19,9 @@ func NewSRUMCollector() *SRUMCollector {
 	return &SRUMCollector{}
 }
 
-type srumPSEntry struct {
-	AppName       string `json:"AppName"`
-	UserSID       string `json:"UserSid"`
-	BytesSent     int64  `json:"BytesSent"`
-	BytesReceived int64  `json:"BytesRecvd"`
-	Timestamp     string `json:"TimeStamp"`
-}
-
-// Collect reads SRUM data (network usage per application)
+// Collect reads SRUM data
+// SRUDB.dat is an ESE (Extensible Storage Engine) database, not SQLite.
+// We use esentutl.exe to verify/copy and read available metadata from registry.
 func (c *SRUMCollector) Collect() ([]types.SRUMEntry, error) {
 	logger.Section("SRUM Collection")
 	startTime := time.Now()
@@ -46,7 +39,7 @@ func (c *SRUMCollector) Collect() ([]types.SRUMEntry, error) {
 		return entries, nil
 	}
 
-	// Copy SRUDB.dat to temp (it's locked by the service)
+	// Copy SRUDB.dat to temp (it's locked by the SRU service)
 	tempDir := os.TempDir()
 	tempCopy := filepath.Join(tempDir, "ferret_srudb_copy.dat")
 	defer os.Remove(tempCopy)
@@ -65,93 +58,106 @@ func (c *SRUMCollector) Collect() ([]types.SRUMEntry, error) {
 		}
 	}
 
-	// Use PowerShell with ESE (Extensible Storage Engine) to parse
-	// We use esentutl to export the database or PowerShell ESE module
-	entries = c.parseSRUM(tempCopy)
+	// Read SRUM extension registry metadata and network profile data
+	entries = c.readSRUMRegistry()
 
 	logger.Timing("SRUMCollector.Collect", startTime)
-	logger.Info("SRUM: %d network usage entries collected", len(entries))
+	logger.Info("SRUM: %d entries collected", len(entries))
 
 	return entries, nil
 }
 
-func (c *SRUMCollector) parseSRUM(dbPath string) []types.SRUMEntry {
+// readSRUMRegistry reads SRUM extension and network data from registry
+func (c *SRUMCollector) readSRUMRegistry() []types.SRUMEntry {
 	var entries []types.SRUMEntry
 
-	// Use PowerShell to query the ESE database
-	// The network usage table is {D10CA2FE-6FCF-4F6D-848E-B2E99266FA89}
-	psScript := `
-$dbPath = '` + strings.ReplaceAll(dbPath, "'", "''") + `'
-$results = @()
-try {
-    # Try using the ESE module if available
-    Add-Type -Path "$env:ProgramFiles\System.Data.SQLite\bin\System.Data.SQLite.dll" -ErrorAction SilentlyContinue
+	// SRUM extensions are registered here
+	extensionsPath := `SOFTWARE\Microsoft\Windows NT\CurrentVersion\SRUM\Extensions`
+	extensionsKey, err := registry.OpenKey(registry.LOCAL_MACHINE, extensionsPath, registry.READ)
+	if err != nil {
+		return entries
+	}
+	defer extensionsKey.Close()
 
-    # Alternative: use esentutl to dump the table
-    $dumpFile = "$env:TEMP\ferret_srum_dump.csv"
-
-    # Try PowerShell native ESE access
-    $tableGuid = '{D10CA2FE-6FCF-4F6D-848E-B2E99266FA89}'
-
-    # Use ESENT managed API or PowerShell workaround
-    # For now, try to use Get-SRUMData if PSModule is available
-    if (Get-Command Get-SRUMNetworkUsage -ErrorAction SilentlyContinue) {
-        $data = Get-SRUMNetworkUsage -Path $dbPath -ErrorAction SilentlyContinue
-        foreach ($d in $data) {
-            $results += @{
-                AppName = $d.App
-                UserSid = $d.UserSid
-                BytesSent = $d.BytesSent
-                BytesRecvd = $d.BytesReceived
-                TimeStamp = $d.TimeStamp.ToString('o')
-            }
-        }
-    }
-} catch {}
-
-# Fallback: read from registry cache if ESE parsing fails
-if ($results.Count -eq 0) {
-    try {
-        $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SRUM\Extensions\{D10CA2FE-6FCF-4F6D-848E-B2E99266FA89}'
-        if (Test-Path $regPath) {
-            $props = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
-            if ($props) {
-                $results += @{AppName='SRUM_registry_data_available'; BytesSent=0; BytesRecvd=0; TimeStamp=(Get-Date).ToString('o')}
-            }
-        }
-    } catch {}
-}
-
-$results | ConvertTo-Json -Compress
-`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
+	subkeys, err := extensionsKey.ReadSubKeyNames(-1)
+	if err != nil {
 		return entries
 	}
 
-	var rawEntries []srumPSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse SRUM JSON: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single srumPSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
+	// Known SRUM extension GUIDs
+	extensionNames := map[string]string{
+		"{D10CA2FE-6FCF-4F6D-848E-B2E99266FA89}": "NetworkUsage",
+		"{DA73FB89-2BEA-4DDC-86B8-6E048C6DA477}": "NetworkConnectivity",
+		"{FEE4E14F-02A9-4550-B5CE-5FA2DA202E37}": "EnergyUsage",
+		"{973F5D5C-1D90-4944-BE8E-24B94231A174}": "AppTimeline",
 	}
 
-	for _, raw := range rawEntries {
-		ts, _ := time.Parse(time.RFC3339, raw.Timestamp)
+	for _, subkey := range subkeys {
+		extKey, err := registry.OpenKey(extensionsKey, subkey, registry.READ)
+		if err != nil {
+			continue
+		}
+
+		dllPath, _, _ := extKey.GetStringValue("")
+		extKey.Close()
+
+		if dllPath == "" {
+			continue
+		}
+
+		extName := subkey
+		if name, ok := extensionNames[subkey]; ok {
+			extName = name
+		}
+
 		entries = append(entries, types.SRUMEntry{
-			AppName:       raw.AppName,
-			UserSID:       raw.UserSID,
-			BytesSent:     raw.BytesSent,
-			BytesReceived: raw.BytesReceived,
-			Timestamp:     ts,
+			AppName:   "SRUM_" + extName,
+			Timestamp: time.Now(),
 		})
+	}
+
+	// Read network profiles for additional context
+	profileEntries := c.readNetworkProfiles()
+	entries = append(entries, profileEntries...)
+
+	return entries
+}
+
+// readNetworkProfiles reads network profile data from registry
+func (c *SRUMCollector) readNetworkProfiles() []types.SRUMEntry {
+	var entries []types.SRUMEntry
+
+	profilesPath := `SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles`
+	profilesKey, err := registry.OpenKey(registry.LOCAL_MACHINE, profilesPath, registry.READ)
+	if err != nil {
+		return entries
+	}
+	defer profilesKey.Close()
+
+	subkeys, err := profilesKey.ReadSubKeyNames(-1)
+	if err != nil {
+		return entries
+	}
+
+	for _, subkey := range subkeys {
+		profKey, err := registry.OpenKey(profilesKey, subkey, registry.READ)
+		if err != nil {
+			continue
+		}
+
+		profileName, _, _ := profKey.GetStringValue("ProfileName")
+		profKey.Close()
+
+		if profileName != "" {
+			entries = append(entries, types.SRUMEntry{
+				AppName:   "NetworkProfile:" + profileName,
+				Timestamp: time.Now(),
+			})
+		}
+
+		if len(entries) >= 100 {
+			break
+		}
 	}
 
 	return entries

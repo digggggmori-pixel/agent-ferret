@@ -4,7 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"strings"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
@@ -100,39 +101,60 @@ func (c *UserAssistCollector) collectFromHKCU() []types.UserAssistEntry {
 	return entries
 }
 
+// collectForUser loads another user's NTUSER.DAT via reg.exe and reads UserAssist keys
 func (c *UserAssistCollector) collectForUser(username string) []types.UserAssistEntry {
 	var entries []types.UserAssistEntry
 
-	// Try loading user's NTUSER.DAT via PowerShell
-	psScript := fmt.Sprintf(`
-$results = @()
-$guids = @('%s', '%s')
-foreach ($guid in $guids) {
-    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist\$guid\Count"
-    if (Test-Path $path) {
-        $props = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
-        if ($props) {
-            foreach ($name in $props.PSObject.Properties.Name) {
-                if ($name -notlike 'PS*') {
-                    $val = $props.$name
-                    if ($val -is [byte[]]) {
-                        $hex = [BitConverter]::ToString($val) -replace '-',''
-                        $results += @{Name=$name; Data=$hex}
-                    }
-                }
-            }
-        }
-    }
-}
-$results | ConvertTo-Json -Compress
-`, userAssistGUIDs[0], userAssistGUIDs[1])
+	usersDir := os.Getenv("SYSTEMDRIVE") + `\Users`
+	if usersDir == `\Users` {
+		usersDir = `C:\Users`
+	}
 
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
+	ntUserPath := filepath.Join(usersDir, username, "NTUSER.DAT")
+	if _, err := os.Stat(ntUserPath); err != nil {
 		return entries
 	}
 
-	// Parse via direct HKCU read for current user
+	tempKeyName := fmt.Sprintf("FERRET_UA_%s", username)
+
+	// Load the user's registry hive (requires admin, fails for logged-in users)
+	loadCmd := exec.Command("reg.exe", "load", `HKLM\`+tempKeyName, ntUserPath)
+	if err := loadCmd.Run(); err != nil {
+		return entries
+	}
+	defer func() {
+		unloadCmd := exec.Command("reg.exe", "unload", `HKLM\`+tempKeyName)
+		unloadCmd.Run()
+	}()
+
+	for _, guid := range userAssistGUIDs {
+		keyPath := fmt.Sprintf(`%s\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist\%s\Count`, tempKeyName, guid)
+		key, err := registry.OpenKey(registry.LOCAL_MACHINE, keyPath, registry.READ)
+		if err != nil {
+			continue
+		}
+
+		valueNames, err := key.ReadValueNames(-1)
+		if err != nil {
+			key.Close()
+			continue
+		}
+
+		for _, valueName := range valueNames {
+			data, _, err := key.GetBinaryValue(valueName)
+			if err != nil || len(data) < 16 {
+				continue
+			}
+
+			decoded := rot13(valueName)
+			entry := parseUserAssistData(decoded, data, username)
+			if entry != nil {
+				entries = append(entries, *entry)
+			}
+		}
+		key.Close()
+	}
+
 	return entries
 }
 

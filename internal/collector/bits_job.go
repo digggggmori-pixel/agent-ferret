@@ -1,7 +1,8 @@
 package collector
 
 import (
-	"encoding/json"
+	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,94 +18,102 @@ func NewBITSCollector() *BITSCollector {
 	return &BITSCollector{}
 }
 
-type bitsPSEntry struct {
-	JobID       string `json:"JobId"`
-	DisplayName string `json:"DisplayName"`
-	JobType     string `json:"TransferType"`
-	JobState    string `json:"JobState"`
-	Owner       string `json:"OwnerAccount"`
-	URL         string `json:"RemoteName"`
-	LocalFile   string `json:"LocalName"`
-	BytesTotal  int64  `json:"BytesTotal"`
-	CreatedAt   string `json:"CreationTime"`
-}
-
-// Collect retrieves BITS transfer jobs using PowerShell
+// Collect retrieves BITS transfer jobs using bitsadmin.exe (native Windows binary)
 func (c *BITSCollector) Collect() ([]types.BITSJobInfo, error) {
 	logger.Section("BITS Job Collection")
 	startTime := time.Now()
 
 	var entries []types.BITSJobInfo
 
-	psScript := `
-$results = @()
-try {
-    Import-Module BitsTransfer -ErrorAction SilentlyContinue
-    $jobs = Get-BitsTransfer -AllUsers -ErrorAction SilentlyContinue
-    if (-not $jobs) {
-        $jobs = Get-BitsTransfer -ErrorAction SilentlyContinue
-    }
-    foreach ($job in $jobs) {
-        $files = $job | Get-BitsTransfer -ErrorAction SilentlyContinue
-        $url = ""
-        $local = ""
-        if ($job.FileList -and $job.FileList.Count -gt 0) {
-            $url = $job.FileList[0].RemoteName
-            $local = $job.FileList[0].LocalName
-        }
-        $results += @{
-            JobId = [string]$job.JobId
-            DisplayName = $job.DisplayName
-            TransferType = [string]$job.TransferType
-            JobState = [string]$job.JobState
-            OwnerAccount = $job.OwnerAccount
-            RemoteName = $url
-            LocalName = $local
-            BytesTotal = $job.BytesTotal
-            CreationTime = $job.CreationTime.ToString('o')
-        }
-    }
-} catch {}
-$results | ConvertTo-Json -Compress -Depth 2
-`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
-		logger.Debug("Cannot collect BITS jobs: %v", err)
-		return entries, nil
-	}
-
-	var rawEntries []bitsPSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse BITS JSON: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single bitsPSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
+	// Use bitsadmin.exe directly (no PowerShell)
+	cmd := exec.Command("bitsadmin", "/list", "/allusers", "/verbose")
+	output, err := cmd.Output()
+	if err != nil {
+		// Try without /allusers (non-admin)
+		cmd2 := exec.Command("bitsadmin", "/list", "/verbose")
+		output, err = cmd2.Output()
+		if err != nil {
+			logger.Debug("Cannot collect BITS jobs: %v", err)
+			return entries, nil
 		}
 	}
 
-	for _, raw := range rawEntries {
-		createdAt, _ := time.Parse(time.RFC3339, raw.CreatedAt)
-
-		entries = append(entries, types.BITSJobInfo{
-			JobID:       raw.JobID,
-			DisplayName: raw.DisplayName,
-			JobType:     raw.JobType,
-			State:       raw.JobState,
-			Owner:       raw.Owner,
-			URL:         raw.URL,
-			LocalFile:   raw.LocalFile,
-			BytesTotal:  raw.BytesTotal,
-			CreatedAt:   createdAt,
-		})
-	}
+	entries = c.parseBitsadminOutput(string(output))
 
 	logger.Timing("BITSCollector.Collect", startTime)
 	logger.Info("BITS: %d jobs collected", len(entries))
 
 	return entries, nil
+}
+
+// parseBitsadminOutput parses verbose output from bitsadmin /list /verbose
+func (c *BITSCollector) parseBitsadminOutput(output string) []types.BITSJobInfo {
+	var entries []types.BITSJobInfo
+
+	guidRe := regexp.MustCompile(`(?i)GUID\s*:\s*(.+)`)
+	displayRe := regexp.MustCompile(`(?i)DISPLAY\s*:\s*(.+)`)
+	typeRe := regexp.MustCompile(`(?i)TYPE\s*:\s*(.+)`)
+	stateRe := regexp.MustCompile(`(?i)STATE\s*:\s*(.+)`)
+	ownerRe := regexp.MustCompile(`(?i)OWNER\s*:\s*(.+)`)
+	creationRe := regexp.MustCompile(`(?i)CREATION TIME\s*:\s*(.+)`)
+
+	var current *types.BITSJobInfo
+
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if m := guidRe.FindStringSubmatch(line); len(m) > 1 {
+			if current != nil {
+				entries = append(entries, *current)
+			}
+			current = &types.BITSJobInfo{
+				JobID: strings.TrimSpace(m[1]),
+			}
+		}
+
+		if current == nil {
+			continue
+		}
+
+		if m := displayRe.FindStringSubmatch(line); len(m) > 1 {
+			current.DisplayName = strings.TrimSpace(m[1])
+		}
+		if m := typeRe.FindStringSubmatch(line); len(m) > 1 {
+			current.JobType = strings.TrimSpace(m[1])
+		}
+		if m := stateRe.FindStringSubmatch(line); len(m) > 1 {
+			current.State = strings.TrimSpace(m[1])
+		}
+		if m := ownerRe.FindStringSubmatch(line); len(m) > 1 {
+			current.Owner = strings.TrimSpace(m[1])
+		}
+		if m := creationRe.FindStringSubmatch(line); len(m) > 1 {
+			tsStr := strings.TrimSpace(m[1])
+			current.CreatedAt, _ = time.Parse("1/2/2006 3:04:05 PM", tsStr)
+			if current.CreatedAt.IsZero() {
+				current.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", tsStr)
+			}
+		}
+		// URL / remote file
+		if strings.HasPrefix(strings.ToUpper(line), "REMOTE NAME") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) > 1 {
+				current.URL = strings.TrimSpace(parts[1])
+			}
+		}
+		// Local file
+		if strings.HasPrefix(strings.ToUpper(line), "LOCAL NAME") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) > 1 {
+				current.LocalFile = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+
+	if current != nil {
+		entries = append(entries, *current)
+	}
+
+	return entries
 }

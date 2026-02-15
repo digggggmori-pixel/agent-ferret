@@ -1,8 +1,6 @@
 package collector
 
 import (
-	"encoding/json"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -18,94 +16,62 @@ func NewWMIPersistenceCollector() *WMIPersistenceCollector {
 	return &WMIPersistenceCollector{}
 }
 
-// wmiFilter represents a __EventFilter from WMI
-type wmiFilter struct {
-	Name           string `json:"Name"`
-	QueryLanguage  string `json:"QueryLanguage"`
-	Query          string `json:"Query"`
-	CreatorSID     string `json:"CreatorSID"`
-}
-
-// wmiConsumer represents a __EventConsumer from WMI (CommandLine or ActiveScript)
-type wmiConsumer struct {
-	Name             string `json:"Name"`
-	CommandLineTemplate string `json:"CommandLineTemplate,omitempty"`
-	ExecutablePath   string `json:"ExecutablePath,omitempty"`
-	ScriptText       string `json:"ScriptText,omitempty"`
-	ScriptFileName   string `json:"ScriptFileName,omitempty"`
-	ClassName        string `json:"__CLASS,omitempty"`
-}
-
-// wmiBinding represents a __FilterToConsumerBinding
-type wmiBinding struct {
-	Filter   string `json:"Filter"`
-	Consumer string `json:"Consumer"`
-}
-
-// Collect retrieves WMI event subscription persistence entries
+// Collect retrieves WMI event subscription persistence entries via native COM
 func (c *WMIPersistenceCollector) Collect() ([]types.WMIPersistenceInfo, error) {
 	logger.Section("WMI Persistence Collection")
 	startTime := time.Now()
 
 	var entries []types.WMIPersistenceInfo
 
-	// Query event filters
 	filters := c.queryFilters()
-
-	// Query event consumers
 	consumers := c.queryConsumers()
-
-	// Query bindings
 	bindings := c.queryBindings()
 
 	// Correlate: for each binding, find the filter and consumer
 	for _, binding := range bindings {
 		entry := types.WMIPersistenceInfo{
-			BindingPath: binding.Filter + " -> " + binding.Consumer,
+			BindingPath: binding["Filter"] + " -> " + binding["Consumer"],
 		}
 
-		// Match filter
-		filterName := extractWMIName(binding.Filter)
+		filterName := extractWMIName(binding["Filter"])
 		for _, f := range filters {
-			if f.Name == filterName {
-				entry.FilterName = f.Name
-				entry.FilterQuery = f.Query
-				entry.CreatorSID = f.CreatorSID
+			if f["Name"] == filterName {
+				entry.FilterName = f["Name"]
+				entry.FilterQuery = f["Query"]
+				entry.CreatorSID = f["CreatorSID"]
 				break
 			}
 		}
 
-		// Match consumer
-		consumerName := extractWMIName(binding.Consumer)
+		consumerName := extractWMIName(binding["Consumer"])
 		for _, cons := range consumers {
-			if cons.Name == consumerName {
-				entry.ConsumerName = cons.Name
-				entry.ConsumerType = classifyConsumer(cons)
-				entry.ConsumerData = getConsumerData(cons)
+			if cons["Name"] == consumerName {
+				entry.ConsumerName = cons["Name"]
+				entry.ConsumerType = classifyConsumerMap(cons)
+				entry.ConsumerData = getConsumerDataMap(cons)
 				break
 			}
 		}
 
-		// Only add if we have at least filter or consumer info
 		if entry.FilterName != "" || entry.ConsumerName != "" {
 			entries = append(entries, entry)
 		}
 	}
 
-	// Also add orphan filters (filters without bindings)
+	// Add orphan filters (filters without bindings)
 	for _, f := range filters {
 		found := false
 		for _, e := range entries {
-			if e.FilterName == f.Name {
+			if e.FilterName == f["Name"] {
 				found = true
 				break
 			}
 		}
 		if !found {
 			entries = append(entries, types.WMIPersistenceInfo{
-				FilterName:  f.Name,
-				FilterQuery: f.Query,
-				CreatorSID:  f.CreatorSID,
+				FilterName:  f["Name"],
+				FilterQuery: f["Query"],
+				CreatorSID:  f["CreatorSID"],
 			})
 		}
 	}
@@ -116,33 +82,18 @@ func (c *WMIPersistenceCollector) Collect() ([]types.WMIPersistenceInfo, error) 
 	return entries, nil
 }
 
-func (c *WMIPersistenceCollector) queryFilters() []wmiFilter {
-	psScript := `Get-WmiObject -Namespace root\subscription -Class __EventFilter -ErrorAction SilentlyContinue | Select-Object Name,QueryLanguage,Query,@{N='CreatorSID';E={($_.CreatorSID -join ',')}} | ConvertTo-Json -Compress`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" {
+func (c *WMIPersistenceCollector) queryFilters() []map[string]string {
+	rows, err := WMIQueryFields(`root\subscription`,
+		"SELECT Name, QueryLanguage, Query, CreatorSID FROM __EventFilter",
+		[]string{"Name", "QueryLanguage", "Query", "CreatorSID"})
+	if err != nil {
+		logger.Debug("WMI filter query failed: %v", err)
 		return nil
 	}
-
-	var filters []wmiFilter
-	// Handle both single object and array
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &filters); err != nil {
-			logger.Debug("Failed to parse WMI filters: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single wmiFilter
-		if json.Unmarshal([]byte(output), &single) == nil {
-			filters = append(filters, single)
-		}
-	}
-
-	return filters
+	return rows
 }
 
-func (c *WMIPersistenceCollector) queryConsumers() []wmiConsumer {
-	// Query all consumer types
+func (c *WMIPersistenceCollector) queryConsumers() []map[string]string {
 	consumerClasses := []string{
 		"CommandLineEventConsumer",
 		"ActiveScriptEventConsumer",
@@ -151,64 +102,32 @@ func (c *WMIPersistenceCollector) queryConsumers() []wmiConsumer {
 		"SMTPEventConsumer",
 	}
 
-	var allConsumers []wmiConsumer
-
+	var allConsumers []map[string]string
 	for _, cls := range consumerClasses {
-		psScript := `Get-WmiObject -Namespace root\subscription -Class ` + cls + ` -ErrorAction SilentlyContinue | Select-Object Name,CommandLineTemplate,ExecutablePath,ScriptText,ScriptFileName,@{N='__CLASS';E={'` + cls + `'}} | ConvertTo-Json -Compress`
-
-		output, err := runPowerShell(psScript)
-		if err != nil || strings.TrimSpace(output) == "" {
+		rows, err := WMIQueryFields(`root\subscription`,
+			"SELECT Name, CommandLineTemplate, ExecutablePath, ScriptText, ScriptFileName FROM "+cls,
+			[]string{"Name", "CommandLineTemplate", "ExecutablePath", "ScriptText", "ScriptFileName"})
+		if err != nil {
 			continue
 		}
-
-		output = strings.TrimSpace(output)
-		if strings.HasPrefix(output, "[") {
-			var consumers []wmiConsumer
-			if json.Unmarshal([]byte(output), &consumers) == nil {
-				allConsumers = append(allConsumers, consumers...)
-			}
-		} else if strings.HasPrefix(output, "{") {
-			var single wmiConsumer
-			if json.Unmarshal([]byte(output), &single) == nil {
-				allConsumers = append(allConsumers, single)
-			}
+		for _, row := range rows {
+			row["__CLASS"] = cls
 		}
+		allConsumers = append(allConsumers, rows...)
 	}
 
 	return allConsumers
 }
 
-func (c *WMIPersistenceCollector) queryBindings() []wmiBinding {
-	psScript := `Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding -ErrorAction SilentlyContinue | Select-Object @{N='Filter';E={$_.Filter}},@{N='Consumer';E={$_.Consumer}} | ConvertTo-Json -Compress`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" {
+func (c *WMIPersistenceCollector) queryBindings() []map[string]string {
+	rows, err := WMIQueryFields(`root\subscription`,
+		"SELECT Filter, Consumer FROM __FilterToConsumerBinding",
+		[]string{"Filter", "Consumer"})
+	if err != nil {
+		logger.Debug("WMI binding query failed: %v", err)
 		return nil
 	}
-
-	var bindings []wmiBinding
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &bindings); err != nil {
-			logger.Debug("Failed to parse WMI bindings: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single wmiBinding
-		if json.Unmarshal([]byte(output), &single) == nil {
-			bindings = append(bindings, single)
-		}
-	}
-
-	return bindings
-}
-
-func runPowerShell(script string) (string, error) {
-	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return string(output), nil
+	return rows
 }
 
 // extractWMIName extracts the Name property from a WMI object path
@@ -220,39 +139,37 @@ func extractWMIName(path string) string {
 			return rest[:end]
 		}
 	}
-	// Fallback: just return the path as-is
 	return path
 }
 
-func classifyConsumer(c wmiConsumer) string {
-	if c.ClassName != "" {
-		// Remove "EventConsumer" suffix for cleaner display
-		return strings.TrimSuffix(c.ClassName, "EventConsumer")
+func classifyConsumerMap(c map[string]string) string {
+	if cls, ok := c["__CLASS"]; ok && cls != "" {
+		return strings.TrimSuffix(cls, "EventConsumer")
 	}
-	if c.CommandLineTemplate != "" || c.ExecutablePath != "" {
+	if c["CommandLineTemplate"] != "" || c["ExecutablePath"] != "" {
 		return "CommandLine"
 	}
-	if c.ScriptText != "" || c.ScriptFileName != "" {
+	if c["ScriptText"] != "" || c["ScriptFileName"] != "" {
 		return "ActiveScript"
 	}
 	return "Unknown"
 }
 
-func getConsumerData(c wmiConsumer) string {
-	if c.CommandLineTemplate != "" {
-		return c.CommandLineTemplate
+func getConsumerDataMap(c map[string]string) string {
+	if v := c["CommandLineTemplate"]; v != "" {
+		return v
 	}
-	if c.ExecutablePath != "" {
-		return c.ExecutablePath
+	if v := c["ExecutablePath"]; v != "" {
+		return v
 	}
-	if c.ScriptFileName != "" {
-		return c.ScriptFileName
+	if v := c["ScriptFileName"]; v != "" {
+		return v
 	}
-	if c.ScriptText != "" {
-		if len(c.ScriptText) > 500 {
-			return c.ScriptText[:500] + "..."
+	if v := c["ScriptText"]; v != "" {
+		if len(v) > 500 {
+			return v[:500] + "..."
 		}
-		return c.ScriptText
+		return v
 	}
 	return ""
 }

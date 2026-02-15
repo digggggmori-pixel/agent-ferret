@@ -1,10 +1,11 @@
 package collector
 
 import (
-	"encoding/json"
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
@@ -19,15 +20,7 @@ func NewETLLogCollector() *ETLLogCollector {
 	return &ETLLogCollector{}
 }
 
-type etlPSEntry struct {
-	Provider  string `json:"ProviderName"`
-	EventID   uint32 `json:"Id"`
-	Level     uint8  `json:"Level"`
-	Timestamp string `json:"TimeCreated"`
-	Message   string `json:"Message"`
-}
-
-// Collect reads relevant ETL log files using PowerShell Get-WinEvent
+// Collect reads relevant ETL log files using wevtapi.dll EvtQuery
 func (c *ETLLogCollector) Collect() ([]types.ETLLogEntry, error) {
 	logger.Section("ETL Log Collection")
 	startTime := time.Now()
@@ -59,54 +52,98 @@ func (c *ETLLogCollector) Collect() ([]types.ETLLogEntry, error) {
 	return entries, nil
 }
 
+// etlEventXML is a local XML struct for parsing ETL events (includes Level field)
+type etlEventXML struct {
+	XMLName xml.Name `xml:"Event"`
+	System  struct {
+		Provider struct {
+			Name string `xml:"Name,attr"`
+		} `xml:"Provider"`
+		EventID     uint32 `xml:"EventID"`
+		Level       uint8  `xml:"Level"`
+		TimeCreated struct {
+			SystemTime string `xml:"SystemTime,attr"`
+		} `xml:"TimeCreated"`
+	} `xml:"System"`
+	EventData struct {
+		Data []struct {
+			Name  string `xml:"Name,attr"`
+			Value string `xml:",chardata"`
+		} `xml:"Data"`
+	} `xml:"EventData"`
+}
+
+// parseETL reads events from an .etl file using wevtapi.dll EvtQuery with EvtQueryFilePath
 func (c *ETLLogCollector) parseETL(etlPath string) []types.ETLLogEntry {
 	var entries []types.ETLLogEntry
 
-	psScript := `
-$results = @()
-try {
-    $events = Get-WinEvent -Path '` + strings.ReplaceAll(etlPath, "'", "''") + `' -MaxEvents 1000 -ErrorAction SilentlyContinue
-    foreach ($e in $events) {
-        $results += @{
-            ProviderName = $e.ProviderName
-            Id = $e.Id
-            Level = $e.Level
-            TimeCreated = $e.TimeCreated.ToString('o')
-            Message = if ($e.Message.Length -gt 200) { $e.Message.Substring(0, 200) } else { $e.Message }
-        }
-    }
-} catch {}
-$results | ConvertTo-Json -Compress -Depth 2
-`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
+	// Use EvtQuery with EvtQueryFilePath flag to read .etl files directly
+	handle, err := evtQuery(etlPath, "*", EvtQueryFilePath|EvtQueryForwardDirection)
+	if err != nil {
+		logger.Debug("Cannot open ETL file %s: %v", etlPath, err)
 		return entries
 	}
+	defer evtClose(handle)
 
-	var rawEntries []etlPSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse ETL JSON: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single etlPSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
-	}
+	const batchSize = 100
+	const maxEvents = 1000
+	eventHandles := make([]syscall.Handle, batchSize)
+	total := 0
 
-	for _, raw := range rawEntries {
-		ts, _ := time.Parse(time.RFC3339, raw.Timestamp)
-		entries = append(entries, types.ETLLogEntry{
-			Provider:  raw.Provider,
-			EventID:   raw.EventID,
-			Level:     raw.Level,
-			Timestamp: ts,
-			Message:   raw.Message,
-		})
+	for total < maxEvents {
+		returned, err := evtNext(handle, eventHandles)
+		if err != nil {
+			break
+		}
+
+		for i := uint32(0); i < returned && total < maxEvents; i++ {
+			eventXMLStr, err := renderEventXML(eventHandles[i])
+			evtClose(eventHandles[i])
+			if err != nil {
+				continue
+			}
+
+			entry := c.parseETLEventXML(eventXMLStr)
+			if entry != nil {
+				entries = append(entries, *entry)
+				total++
+			}
+		}
+
+		if returned < uint32(batchSize) {
+			break
+		}
 	}
 
 	return entries
+}
+
+// parseETLEventXML parses a single event XML into an ETLLogEntry
+func (c *ETLLogCollector) parseETLEventXML(xmlStr string) *types.ETLLogEntry {
+	var event etlEventXML
+	if err := xml.Unmarshal([]byte(xmlStr), &event); err != nil {
+		return nil
+	}
+
+	ts, _ := time.Parse(time.RFC3339Nano, event.System.TimeCreated.SystemTime)
+
+	// Build message from event data fields
+	var msgParts []string
+	for _, d := range event.EventData.Data {
+		if d.Value != "" {
+			msgParts = append(msgParts, d.Value)
+		}
+	}
+	message := strings.Join(msgParts, " | ")
+	if len(message) > 200 {
+		message = message[:200]
+	}
+
+	return &types.ETLLogEntry{
+		Provider:  event.System.Provider.Name,
+		EventID:   event.System.EventID,
+		Level:     event.System.Level,
+		Timestamp: ts,
+		Message:   message,
+	}
 }

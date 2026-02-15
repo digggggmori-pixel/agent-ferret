@@ -1,7 +1,8 @@
 package collector
 
 import (
-	"encoding/json"
+	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,89 +18,115 @@ func NewCertificateCollector() *CertificateCollector {
 	return &CertificateCollector{}
 }
 
-type certPSEntry struct {
-	Subject      string `json:"Subject"`
-	Issuer       string `json:"Issuer"`
-	Thumbprint   string `json:"Thumbprint"`
-	NotBefore    string `json:"NotBefore"`
-	NotAfter     string `json:"NotAfter"`
-	SerialNumber string `json:"SerialNumber"`
-	Store        string `json:"Store"`
-}
-
-// Collect retrieves certificates from Root and CA stores
+// Collect retrieves certificates from Root and CA stores using certutil.exe
 func (c *CertificateCollector) Collect() ([]types.CertificateInfo, error) {
 	logger.Section("Certificate Collection")
 	startTime := time.Now()
 
 	var entries []types.CertificateInfo
 
-	// Scan Root and CA certificate stores for suspicious certificates
-	psScript := `
-$results = @()
-$stores = @(
-    @{Path='Cert:\LocalMachine\Root'; Name='LocalMachine-Root'},
-    @{Path='Cert:\LocalMachine\CA'; Name='LocalMachine-CA'},
-    @{Path='Cert:\CurrentUser\Root'; Name='CurrentUser-Root'}
-)
-foreach ($store in $stores) {
-    $certs = Get-ChildItem -Path $store.Path -ErrorAction SilentlyContinue
-    foreach ($cert in $certs) {
-        $results += @{
-            Subject = $cert.Subject
-            Issuer = $cert.Issuer
-            Thumbprint = $cert.Thumbprint
-            NotBefore = $cert.NotBefore.ToString('o')
-            NotAfter = $cert.NotAfter.ToString('o')
-            SerialNumber = $cert.SerialNumber
-            Store = $store.Name
-        }
-    }
-}
-$results | ConvertTo-Json -Compress -Depth 2
-`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
-		logger.Debug("Cannot collect certificates: %v", err)
-		return entries, nil
+	// Scan certificate stores using certutil.exe (native Windows binary)
+	stores := []struct {
+		args []string
+		name string
+	}{
+		{[]string{"-store", "Root"}, "LocalMachine-Root"},
+		{[]string{"-store", "CA"}, "LocalMachine-CA"},
+		{[]string{"-user", "-store", "Root"}, "CurrentUser-Root"},
 	}
 
-	var rawEntries []certPSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse certificate JSON: %v", err)
+	for _, store := range stores {
+		cmd := exec.Command("certutil.exe", store.args...)
+		output, err := cmd.Output()
+		if err != nil {
+			continue
 		}
-	} else if strings.HasPrefix(output, "{") {
-		var single certPSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
-	}
-
-	now := time.Now()
-	for _, raw := range rawEntries {
-		notBefore, _ := time.Parse(time.RFC3339, raw.NotBefore)
-		notAfter, _ := time.Parse(time.RFC3339, raw.NotAfter)
-
-		entry := types.CertificateInfo{
-			Subject:      raw.Subject,
-			Issuer:       raw.Issuer,
-			Thumbprint:   raw.Thumbprint,
-			NotBefore:    notBefore,
-			NotAfter:     notAfter,
-			SerialNumber: raw.SerialNumber,
-			Store:        raw.Store,
-			IsSelfSigned: raw.Subject == raw.Issuer,
-			IsExpired:    !notAfter.IsZero() && now.After(notAfter),
-		}
-
-		entries = append(entries, entry)
+		storeEntries := c.parseCertutilOutput(string(output), store.name)
+		entries = append(entries, storeEntries...)
 	}
 
 	logger.Timing("CertificateCollector.Collect", startTime)
 	logger.Info("Certificates: %d entries collected", len(entries))
 
 	return entries, nil
+}
+
+// parseCertutilOutput parses the text output from "certutil -store"
+func (c *CertificateCollector) parseCertutilOutput(output, storeName string) []types.CertificateInfo {
+	var entries []types.CertificateInfo
+
+	serialRe := regexp.MustCompile(`(?i)Serial Number:\s*(.+)`)
+	issuerRe := regexp.MustCompile(`(?i)Issuer:\s*(.+)`)
+	subjectRe := regexp.MustCompile(`(?i)^Subject:\s*(.+)`)
+	notBeforeRe := regexp.MustCompile(`(?i)NotBefore:\s*(.+)`)
+	notAfterRe := regexp.MustCompile(`(?i)NotAfter:\s*(.+)`)
+	thumbprintRe := regexp.MustCompile(`(?i)Cert Hash\(sha1\):\s*(.+)`)
+
+	var current *types.CertificateInfo
+	now := time.Now()
+
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if strings.HasPrefix(line, "================ Certificate") {
+			if current != nil {
+				current.IsSelfSigned = current.Subject == current.Issuer
+				current.IsExpired = !current.NotAfter.IsZero() && now.After(current.NotAfter)
+				entries = append(entries, *current)
+			}
+			current = &types.CertificateInfo{Store: storeName}
+			continue
+		}
+
+		if current == nil {
+			continue
+		}
+
+		if m := serialRe.FindStringSubmatch(line); len(m) > 1 {
+			current.SerialNumber = strings.TrimSpace(m[1])
+		}
+		if m := issuerRe.FindStringSubmatch(line); len(m) > 1 {
+			current.Issuer = strings.TrimSpace(m[1])
+		}
+		if m := subjectRe.FindStringSubmatch(line); len(m) > 1 {
+			current.Subject = strings.TrimSpace(m[1])
+		}
+		if m := notBeforeRe.FindStringSubmatch(line); len(m) > 1 {
+			current.NotBefore = parseCertutilTime(strings.TrimSpace(m[1]))
+		}
+		if m := notAfterRe.FindStringSubmatch(line); len(m) > 1 {
+			current.NotAfter = parseCertutilTime(strings.TrimSpace(m[1]))
+		}
+		if m := thumbprintRe.FindStringSubmatch(line); len(m) > 1 {
+			current.Thumbprint = strings.ReplaceAll(strings.TrimSpace(m[1]), " ", "")
+		}
+	}
+
+	// Add last cert
+	if current != nil {
+		current.IsSelfSigned = current.Subject == current.Issuer
+		current.IsExpired = !current.NotAfter.IsZero() && now.After(current.NotAfter)
+		entries = append(entries, *current)
+	}
+
+	return entries
+}
+
+// parseCertutilTime parses locale-dependent date formats from certutil output
+func parseCertutilTime(s string) time.Time {
+	layouts := []string{
+		"1/2/2006 3:04 PM",
+		"1/2/2006 3:04:05 PM",
+		"2006/01/02 15:04",
+		"2006/01/02 15:04:05",
+		"01/02/2006 15:04:05",
+		time.RFC3339,
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }

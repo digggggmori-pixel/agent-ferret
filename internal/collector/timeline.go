@@ -1,11 +1,9 @@
 package collector
 
 import (
-	"encoding/json"
-	"fmt"
+	"database/sql"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
@@ -19,14 +17,6 @@ type TimelineCollector struct{}
 // NewTimelineCollector creates a new Timeline collector
 func NewTimelineCollector() *TimelineCollector {
 	return &TimelineCollector{}
-}
-
-type timelinePSEntry struct {
-	AppID     string `json:"AppId"`
-	Activity  string `json:"ActivityType"`
-	StartTime string `json:"StartTime"`
-	EndTime   string `json:"EndTime"`
-	Payload   string `json:"Payload"`
 }
 
 // Collect reads ActivitiesCache.db for all user profiles
@@ -91,75 +81,48 @@ func (c *TimelineCollector) Collect() ([]types.TimelineEntry, error) {
 }
 
 func (c *TimelineCollector) collectFromDB(dbPath, username string) []types.TimelineEntry {
+	tempCopy, cleanup, err := copyFileSafe(dbPath, "timeline_"+username)
+	defer cleanup()
+	if err != nil {
+		return nil
+	}
+
+	db, err := openSQLiteReadOnly(tempCopy)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+
 	var entries []types.TimelineEntry
+	query := "SELECT AppId, ActivityType, StartTime, EndTime, Payload FROM Activity ORDER BY StartTime DESC LIMIT 500"
 
-	// Copy DB to temp
-	tempCopy := filepath.Join(os.TempDir(), fmt.Sprintf("ferret_timeline_%s.db", username))
-	defer os.Remove(tempCopy)
-
-	copyScript := fmt.Sprintf(`Copy-Item -Path '%s' -Destination '%s' -Force -ErrorAction SilentlyContinue`,
-		strings.ReplaceAll(dbPath, "'", "''"), strings.ReplaceAll(tempCopy, "'", "''"))
-	runPowerShell(copyScript)
-
-	if _, err := os.Stat(tempCopy); err != nil {
-		return entries
-	}
-
-	// Use sqlite3.exe or PowerShell to query
-	entries = c.querySQLite(tempCopy, username)
-	return entries
-}
-
-func (c *TimelineCollector) querySQLite(dbPath, username string) []types.TimelineEntry {
-	var entries []types.TimelineEntry
-
-	psScript := fmt.Sprintf(`
-$dbPath = '%s'
-$results = @()
-try {
-    $sqlite3 = Get-Command sqlite3.exe -ErrorAction SilentlyContinue
-    if ($sqlite3) {
-        $query = "SELECT AppId, ActivityType, datetime(StartTime, 'unixepoch') as StartTime, datetime(EndTime, 'unixepoch') as EndTime, Payload FROM Activity ORDER BY StartTime DESC LIMIT 500;"
-        $output = & sqlite3.exe $dbPath -json $query 2>$null
-        if ($output) {
-            $results = $output | ConvertFrom-Json
-        }
-    }
-} catch {}
-$results | ConvertTo-Json -Compress
-`, strings.ReplaceAll(dbPath, "'", "''"))
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
-		return entries
-	}
-
-	var rawEntries []timelinePSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse timeline JSON: %v", err)
+	querySQLiteRows(db, query, func(rows *sql.Rows) error {
+		var appID string
+		var activityType sql.NullString
+		var startTimeUnix, endTimeUnix sql.NullInt64
+		var payload sql.NullString
+		if err := rows.Scan(&appID, &activityType, &startTimeUnix, &endTimeUnix, &payload); err != nil {
+			return err
 		}
-	} else if strings.HasPrefix(output, "{") {
-		var single timelinePSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
-	}
 
-	for _, raw := range rawEntries {
-		st, _ := time.Parse("2006-01-02 15:04:05", raw.StartTime)
-		et, _ := time.Parse("2006-01-02 15:04:05", raw.EndTime)
+		var st, et time.Time
+		if startTimeUnix.Valid && startTimeUnix.Int64 > 0 {
+			st = time.Unix(startTimeUnix.Int64, 0)
+		}
+		if endTimeUnix.Valid && endTimeUnix.Int64 > 0 {
+			et = time.Unix(endTimeUnix.Int64, 0)
+		}
 
 		entries = append(entries, types.TimelineEntry{
-			AppID:     raw.AppID,
-			Activity:  raw.Activity,
+			AppID:     appID,
+			Activity:  activityType.String,
 			StartTime: st,
 			EndTime:   et,
-			Payload:   raw.Payload,
+			Payload:   payload.String,
 			User:      username,
 		})
-	}
+		return nil
+	})
 
 	return entries
 }

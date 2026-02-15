@@ -1,9 +1,11 @@
 package collector
 
 import (
-	"encoding/json"
+	"os"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/digggggmori-pixel/agent-ferret/internal/logger"
 	"github.com/digggggmori-pixel/agent-ferret/pkg/types"
@@ -17,96 +19,34 @@ func NewDriverCollector() *DriverCollector {
 	return &DriverCollector{}
 }
 
-type driverPSEntry struct {
-	Name        string `json:"Name"`
-	DisplayName string `json:"DisplayName"`
-	PathName    string `json:"PathName"`
-	State       string `json:"State"`
-	StartMode   string `json:"StartMode"`
-	IsSigned    bool   `json:"IsSigned"`
-	Signer      string `json:"Signer"`
-	Description string `json:"Description"`
-}
-
-// Collect enumerates kernel drivers using PowerShell/WMI
+// Collect enumerates kernel drivers using native WMI COM query + WinVerifyTrust signature check
 func (c *DriverCollector) Collect() ([]types.DriverInfo, error) {
 	logger.Section("Driver Collection")
 	startTime := time.Now()
 
 	var entries []types.DriverInfo
 
-	// Use PowerShell to query Win32_SystemDriver + signature check
-	psScript := `
-$drivers = Get-WmiObject Win32_SystemDriver | Select-Object Name, DisplayName, PathName, State, StartMode, Description
-$results = @()
-foreach ($d in $drivers) {
-    $signed = $false
-    $signer = ""
-    if ($d.PathName) {
-        $path = $d.PathName
-        # Normalize path (remove \SystemRoot\ prefix)
-        if ($path -like '\SystemRoot\*') {
-            $path = $path -replace '\\SystemRoot\\', "$env:SystemRoot\"
-        }
-        if ($path -like '\??\*') {
-            $path = $path.Substring(4)
-        }
-        if (Test-Path $path -ErrorAction SilentlyContinue) {
-            $sig = Get-AuthenticodeSignature $path -ErrorAction SilentlyContinue
-            if ($sig -and $sig.Status -eq 'Valid') {
-                $signed = $true
-                if ($sig.SignerCertificate) {
-                    $signer = $sig.SignerCertificate.Subject
-                }
-            }
-        }
-    }
-    $results += @{
-        Name = $d.Name
-        DisplayName = $d.DisplayName
-        PathName = $d.PathName
-        State = $d.State
-        StartMode = $d.StartMode
-        IsSigned = $signed
-        Signer = $signer
-        Description = $d.Description
-    }
-}
-$results | ConvertTo-Json -Compress -Depth 2
-`
-
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" || output == "null" {
-		// Fallback: simpler query without signature check
-		entries = c.fallbackCollect()
-		logger.Timing("DriverCollector.Collect", startTime)
-		logger.Info("Drivers: %d entries (fallback)", len(entries))
+	rows, err := WMIQueryFields(`root\cimv2`,
+		"SELECT Name, DisplayName, PathName, State, StartMode, Description FROM Win32_SystemDriver",
+		[]string{"Name", "DisplayName", "PathName", "State", "StartMode", "Description"})
+	if err != nil {
+		logger.Error("Failed to query drivers via WMI: %v", err)
 		return entries, nil
 	}
 
-	var rawEntries []driverPSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse driver JSON: %v", err)
-		}
-	} else if strings.HasPrefix(output, "{") {
-		var single driverPSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
-		}
-	}
+	for _, row := range rows {
+		driverPath := resolveDriverPath(row["PathName"])
+		signed, signer := verifyFileSignature(driverPath)
 
-	for _, raw := range rawEntries {
 		entries = append(entries, types.DriverInfo{
-			Name:        raw.Name,
-			DisplayName: raw.DisplayName,
-			Path:        raw.PathName,
-			State:       raw.State,
-			StartMode:   raw.StartMode,
-			IsSigned:    raw.IsSigned,
-			Signer:      raw.Signer,
-			Description: raw.Description,
+			Name:        row["Name"],
+			DisplayName: row["DisplayName"],
+			Path:        row["PathName"],
+			State:       row["State"],
+			StartMode:   row["StartMode"],
+			Description: row["Description"],
+			IsSigned:    signed,
+			Signer:      signer,
 		})
 	}
 
@@ -116,41 +56,211 @@ $results | ConvertTo-Json -Compress -Depth 2
 	return entries, nil
 }
 
-func (c *DriverCollector) fallbackCollect() []types.DriverInfo {
-	psScript := `
-Get-WmiObject Win32_SystemDriver | Select-Object Name, DisplayName, PathName, State, StartMode, Description |
-    ForEach-Object { @{Name=$_.Name; DisplayName=$_.DisplayName; PathName=$_.PathName; State=$_.State; StartMode=$_.StartMode; Description=$_.Description} } |
-    ConvertTo-Json -Compress
-`
-	output, err := runPowerShell(psScript)
-	if err != nil || strings.TrimSpace(output) == "" {
-		return nil
+// resolveDriverPath normalizes WMI driver paths to filesystem paths
+// e.g., "\SystemRoot\system32\drivers\foo.sys" → "C:\Windows\system32\drivers\foo.sys"
+//
+//	"\??\C:\Windows\..." → "C:\Windows\..."
+func resolveDriverPath(rawPath string) string {
+	if rawPath == "" {
+		return ""
 	}
 
-	var rawEntries []driverPSEntry
-	output = strings.TrimSpace(output)
-	if strings.HasPrefix(output, "[") {
-		if err := json.Unmarshal([]byte(output), &rawEntries); err != nil {
-			logger.Debug("Failed to parse driver fallback JSON: %v", err)
+	path := rawPath
+
+	// \SystemRoot\ → %WINDIR%\
+	if strings.HasPrefix(strings.ToLower(path), `\systemroot\`) {
+		winDir := os.Getenv("WINDIR")
+		if winDir == "" {
+			winDir = `C:\Windows`
 		}
-	} else if strings.HasPrefix(output, "{") {
-		var single driverPSEntry
-		if json.Unmarshal([]byte(output), &single) == nil {
-			rawEntries = append(rawEntries, single)
+		path = winDir + path[11:] // len(`\SystemRoot`) == 11
+	}
+
+	// \??\ prefix (NT path)
+	if strings.HasPrefix(path, `\??\`) {
+		path = path[4:]
+	}
+
+	// system32\drivers\... (relative, no leading slash)
+	if !strings.Contains(path, `:`) && !strings.HasPrefix(path, `\`) {
+		winDir := os.Getenv("WINDIR")
+		if winDir == "" {
+			winDir = `C:\Windows`
 		}
+		path = winDir + `\` + path
 	}
 
-	var entries []types.DriverInfo
-	for _, raw := range rawEntries {
-		entries = append(entries, types.DriverInfo{
-			Name:        raw.Name,
-			DisplayName: raw.DisplayName,
-			Path:        raw.PathName,
-			State:       raw.State,
-			StartMode:   raw.StartMode,
-			Description: raw.Description,
-		})
+	return path
+}
+
+// ── WinVerifyTrust via wintrust.dll ──────────────────────────────────────────
+
+var (
+	modWintrust        = syscall.NewLazyDLL("wintrust.dll")
+	procWinVerifyTrust = modWintrust.NewProc("WinVerifyTrust")
+)
+
+// WINTRUST_ACTION_GENERIC_VERIFY_V2 GUID: {00AAC56B-CD44-11D0-8CC2-00C04FC295EE}
+var actionGenericVerifyV2 = syscall.GUID{
+	Data1: 0x00AAC56B,
+	Data2: 0xCD44,
+	Data3: 0x11D0,
+	Data4: [8]byte{0x8C, 0xC2, 0x00, 0xC0, 0x4F, 0xC2, 0x95, 0xEE},
+}
+
+const (
+	wtdUINone                = 2
+	wtdRevokeNone            = 0
+	wtdChoiceFile            = 1
+	wtdStateActionVerify     = 1
+	wtdStateActionClose      = 2
+	wtdCacheOnlyURLRetrieval = 0x1000
+	wtdUseDefaultOSVerCheck  = 0x0400
+)
+
+type wintrustFileInfo struct {
+	cbStruct       uint32
+	pcwszFilePath  *uint16
+	hFile          syscall.Handle
+	pgKnownSubject *syscall.GUID
+}
+
+type wintrustData struct {
+	cbStruct            uint32
+	pPolicyCallbackData uintptr
+	pSIPClientData      uintptr
+	dwUIChoice          uint32
+	fdwRevocationChecks uint32
+	dwUnionChoice       uint32
+	pFile               *wintrustFileInfo
+	dwStateAction       uint32
+	hWVTStateData       syscall.Handle
+	pwszURLReference    *uint16
+	dwProvFlags         uint32
+	dwUIContext         uint32
+	pSignatureSettings  uintptr
+}
+
+// verifyFileSignature checks if a file has a valid Authenticode signature using WinVerifyTrust.
+// Returns (isSigned bool, signerName string).
+func verifyFileSignature(filePath string) (bool, string) {
+	if filePath == "" {
+		return false, ""
 	}
 
-	return entries
+	if _, err := os.Stat(filePath); err != nil {
+		return false, ""
+	}
+
+	pathPtr, err := syscall.UTF16PtrFromString(filePath)
+	if err != nil {
+		return false, ""
+	}
+
+	fileInfo := wintrustFileInfo{
+		cbStruct:      uint32(unsafe.Sizeof(wintrustFileInfo{})),
+		pcwszFilePath: pathPtr,
+	}
+
+	trustData := wintrustData{
+		cbStruct:            uint32(unsafe.Sizeof(wintrustData{})),
+		dwUIChoice:          wtdUINone,
+		fdwRevocationChecks: wtdRevokeNone,
+		dwUnionChoice:       wtdChoiceFile,
+		pFile:               &fileInfo,
+		dwStateAction:       wtdStateActionVerify,
+		dwProvFlags:         wtdCacheOnlyURLRetrieval | wtdUseDefaultOSVerCheck,
+	}
+
+	actionGUID := actionGenericVerifyV2
+
+	ret, _, _ := procWinVerifyTrust.Call(
+		^uintptr(0), // INVALID_HANDLE_VALUE
+		uintptr(unsafe.Pointer(&actionGUID)),
+		uintptr(unsafe.Pointer(&trustData)),
+	)
+
+	// Close the state handle
+	trustData.dwStateAction = wtdStateActionClose
+	procWinVerifyTrust.Call(
+		^uintptr(0),
+		uintptr(unsafe.Pointer(&actionGUID)),
+		uintptr(unsafe.Pointer(&trustData)),
+	)
+
+	isSigned := ret == 0 // S_OK = 0 means valid signature
+
+	signer := ""
+	if isSigned {
+		signer = getSignerName(filePath)
+	}
+
+	return isSigned, signer
+}
+
+// ── Signer name extraction via crypt32.dll ───────────────────────────────────
+
+var (
+	modCrypt32                     = syscall.NewLazyDLL("crypt32.dll")
+	procCryptQueryObject           = modCrypt32.NewProc("CryptQueryObject")
+	procCryptMsgGetParam           = modCrypt32.NewProc("CryptMsgGetParam")
+	procCertEnumCertificatesInStore = modCrypt32.NewProc("CertEnumCertificatesInStore")
+	procCertGetNameStringW         = modCrypt32.NewProc("CertGetNameStringW")
+	procCertFreeCertificateContext = modCrypt32.NewProc("CertFreeCertificateContext")
+	procCertCloseStore             = modCrypt32.NewProc("CertCloseStore")
+	procCryptMsgClose              = modCrypt32.NewProc("CryptMsgClose")
+)
+
+const (
+	certQueryObjectFile                 = 1
+	certQueryContentFlagPKCS7SignedEmbed = 0x400
+	certQueryFormatFlagBinary           = 2
+	certNameSimpleDisplayType           = 4
+)
+
+// getSignerName extracts the signer subject name from a signed PE file
+func getSignerName(filePath string) string {
+	pathPtr, _ := syscall.UTF16PtrFromString(filePath)
+
+	var hStore, hMsg syscall.Handle
+	var dwEncoding, dwContentType, dwFormatType uint32
+
+	ret, _, _ := procCryptQueryObject.Call(
+		certQueryObjectFile,
+		uintptr(unsafe.Pointer(pathPtr)),
+		certQueryContentFlagPKCS7SignedEmbed,
+		certQueryFormatFlagBinary,
+		0,
+		uintptr(unsafe.Pointer(&dwEncoding)),
+		uintptr(unsafe.Pointer(&dwContentType)),
+		uintptr(unsafe.Pointer(&dwFormatType)),
+		uintptr(unsafe.Pointer(&hStore)),
+		uintptr(unsafe.Pointer(&hMsg)),
+		0,
+	)
+	if ret == 0 {
+		return ""
+	}
+	defer procCryptMsgClose.Call(uintptr(hMsg))
+	defer procCertCloseStore.Call(uintptr(hStore), 0)
+
+	// Get the first certificate from the embedded signature store (the signer cert)
+	certCtx, _, _ := procCertEnumCertificatesInStore.Call(uintptr(hStore), 0)
+	if certCtx == 0 {
+		return ""
+	}
+	defer procCertFreeCertificateContext.Call(certCtx)
+
+	// Extract the subject display name
+	var buf [256]uint16
+	procCertGetNameStringW.Call(
+		certCtx,
+		certNameSimpleDisplayType,
+		0,
+		0,
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(len(buf)),
+	)
+
+	return syscall.UTF16ToString(buf[:])
 }
