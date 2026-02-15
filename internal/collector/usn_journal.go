@@ -42,7 +42,17 @@ func (c *USNJournalCollector) Collect() ([]types.USNJournalEntry, error) {
 		return entries, nil
 	}
 
-	entries = c.parseFsutilOutput(string(output))
+	// Decode from OEM codepage (e.g. CP949 on Korean Windows) to UTF-8
+	outputStr := decodeOEMOutput(output)
+
+	// Log first 300 chars to help diagnose locale parsing issues
+	peek := outputStr
+	if len(peek) > 300 {
+		peek = peek[:300]
+	}
+	logger.Debug("USN enumdata output (first 300 chars): %s", peek)
+
+	entries = c.parseFsutilOutput(outputStr)
 
 	logger.Timing("USNJournalCollector.Collect", startTime)
 	logger.Info("USN Journal: %d entries collected", len(entries))
@@ -51,15 +61,17 @@ func (c *USNJournalCollector) Collect() ([]types.USNJournalEntry, error) {
 }
 
 // parseFsutilOutput parses the text output from "fsutil usn enumdata"
+// Supports both English and Korean locale field names.
 func (c *USNJournalCollector) parseFsutilOutput(output string) []types.USNJournalEntry {
 	var entries []types.USNJournalEntry
 
-	fileRefRe := regexp.MustCompile(`File Ref#\s*:\s*(.+)`)
-	parentRefRe := regexp.MustCompile(`Parent File Ref#\s*:\s*(.+)`)
-	usnRe := regexp.MustCompile(`Usn\s*:\s*(\d+)`)
-	fileNameRe := regexp.MustCompile(`File Name\s*:\s*(.+)`)
-	reasonRe := regexp.MustCompile(`Reason\s*:\s*(.+)`)
-	timeStampRe := regexp.MustCompile(`Time Stamp\s*:\s*(.+)`)
+	// English and Korean field name patterns for fsutil output
+	fileRefRe := regexp.MustCompile(`(?:File Ref#|파일 참조#|파일 Ref#)\s*:\s*(.+)`)
+	parentRefRe := regexp.MustCompile(`(?:Parent File Ref#|부모 파일 참조#|상위 파일 Ref#)\s*:\s*(.+)`)
+	usnRe := regexp.MustCompile(`(?:Usn|USN)\s*:\s*(\d+)`)
+	fileNameRe := regexp.MustCompile(`(?:File Name|파일 이름|파일 명)\s*:\s*(.+)`)
+	reasonRe := regexp.MustCompile(`(?:Reason|이유)\s*:\s*(.+)`)
+	timeStampRe := regexp.MustCompile(`(?:Time Stamp|타임 스탬프|타임스탬프)\s*:\s*(.+)`)
 
 	var currentFileName, currentReason string
 	var currentUSN int64
@@ -93,9 +105,17 @@ func (c *USNJournalCollector) parseFsutilOutput(output string) []types.USNJourna
 		// Time Stamp is the last field per record — emit entry when seen
 		if m := timeStampRe.FindStringSubmatch(line); len(m) > 1 {
 			tsStr := strings.TrimSpace(m[1])
-			ts, _ := time.Parse("2006/01/02 15:04:05", tsStr)
-			if ts.IsZero() {
-				ts, _ = time.Parse(time.RFC3339, tsStr)
+			// Try multiple date formats (English and Korean locale variants)
+			var ts time.Time
+			for _, layout := range []string{
+				"2006/01/02 15:04:05",
+				"2006-01-02 15:04:05",
+				time.RFC3339,
+			} {
+				if t, err := time.Parse(layout, tsStr); err == nil {
+					ts = t
+					break
+				}
 			}
 
 			entries = append(entries, types.USNJournalEntry{

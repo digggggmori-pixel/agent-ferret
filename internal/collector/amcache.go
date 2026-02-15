@@ -204,21 +204,41 @@ func (c *AmcacheCollector) readInventoryApplicationFile() []types.AmcacheEntry {
 }
 
 // tryRegistryFallback reads program compatibility data directly from registry
+// Tries multiple registry locations that contain execution history
 func (c *AmcacheCollector) tryRegistryFallback() []types.AmcacheEntry {
 	var entries []types.AmcacheEntry
 
-	key, err := registry.OpenKey(registry.LOCAL_MACHINE,
-		`SOFTWARE\Microsoft\Windows\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store`,
-		registry.READ)
+	// Location 1: Compatibility Assistant Store (HKLM)
+	entries = append(entries, c.readCompatStore(registry.LOCAL_MACHINE,
+		`SOFTWARE\Microsoft\Windows\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store`)...)
+
+	// Location 2: Compatibility Assistant Store (HKCU)
+	if len(entries) == 0 {
+		entries = append(entries, c.readCompatStore(registry.CURRENT_USER,
+			`SOFTWARE\Microsoft\Windows\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store`)...)
+	}
+
+	logger.Debug("Amcache fallback: %d entries from registry", len(entries))
+	return entries
+}
+
+func (c *AmcacheCollector) readCompatStore(root registry.Key, keyPath string) []types.AmcacheEntry {
+	var entries []types.AmcacheEntry
+
+	key, err := registry.OpenKey(root, keyPath, registry.READ)
 	if err != nil {
+		logger.Debug("Amcache fallback: cannot open %s: %v", keyPath, err)
 		return entries
 	}
 	defer key.Close()
 
 	valueNames, err := key.ReadValueNames(-1)
 	if err != nil {
+		logger.Debug("Amcache fallback: cannot read value names: %v", err)
 		return entries
 	}
+
+	logger.Debug("Amcache fallback: %d values in %s", len(valueNames), keyPath)
 
 	for _, name := range valueNames {
 		if !strings.Contains(name, `\`) {

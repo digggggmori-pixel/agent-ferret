@@ -71,9 +71,9 @@ func (c *ShimcacheCollector) Collect() ([]types.ShimcacheEntry, error) {
 }
 
 // parseWin10Shimcache parses Windows 10/11 AppCompatCache format
-// Win10 format:
-//   Header: 0x30 (4 bytes) + unknown (28 bytes) = 32 bytes header
-//   Entries start at offset 0x30 (48):
+// Win10/11 format:
+//   The signature value (0x30 or 0x34) equals the header size in bytes.
+//   Entries start at offset = signature value:
 //     Signature "10ts" (4 bytes)
 //     Unknown (4 bytes)
 //     DataSize (4 bytes)
@@ -84,7 +84,9 @@ func (c *ShimcacheCollector) Collect() ([]types.ShimcacheEntry, error) {
 //     Data (DataSize2 bytes)
 func parseWin10Shimcache(data []byte) []types.ShimcacheEntry {
 	var entries []types.ShimcacheEntry
-	offset := 48 // Skip header
+	// The first uint32 (signature) is also the header size: 0x30=48, 0x34=52
+	sig := binary.LittleEndian.Uint32(data[0:4])
+	offset := int(sig)
 	order := 0
 
 	for offset < len(data)-12 {

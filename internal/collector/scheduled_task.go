@@ -33,7 +33,7 @@ func (c *ScheduledTaskCollector) Collect() ([]types.ScheduledTaskInfo, error) {
 		return tasks, nil
 	}
 
-	reader := csv.NewReader(strings.NewReader(string(output)))
+	reader := csv.NewReader(strings.NewReader(decodeOEMOutput(output)))
 	reader.LazyQuotes = true
 	reader.FieldsPerRecord = -1 // Variable fields
 

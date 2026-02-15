@@ -28,7 +28,7 @@ func (c *FirewallCollector) Collect() ([]types.FirewallRuleInfo, error) {
 	statusCmd := exec.Command("netsh", "advfirewall", "show", "allprofiles", "state")
 	statusOutput, _ := statusCmd.Output()
 	if len(statusOutput) > 0 {
-		logger.Debug("Firewall status: %s", strings.TrimSpace(string(statusOutput)))
+		logger.Debug("Firewall status: %s", strings.TrimSpace(decodeOEMOutput(statusOutput)))
 	}
 
 	// Get ALL rules without locale-dependent filters (name=all is the only safe param)
@@ -40,7 +40,16 @@ func (c *FirewallCollector) Collect() ([]types.FirewallRuleInfo, error) {
 		return entries, nil
 	}
 
-	entries = c.parseNetshOutput(string(output))
+	// Decode from OEM codepage (e.g. CP949 on Korean Windows) to UTF-8
+	outputStr := decodeOEMOutput(output)
+	// Log first 500 chars to help diagnose locale parsing issues
+	peek := outputStr
+	if len(peek) > 500 {
+		peek = peek[:500]
+	}
+	logger.Debug("Firewall rules output (first 500 chars): %s", peek)
+
+	entries = c.parseNetshOutput(outputStr)
 
 	logger.Timing("FirewallCollector.Collect", startTime)
 	logger.Info("Firewall: %d inbound allow rules collected", len(entries))
@@ -53,6 +62,7 @@ func (c *FirewallCollector) Collect() ([]types.FirewallRuleInfo, error) {
 func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRuleInfo {
 	var entries []types.FirewallRuleInfo
 	var current *types.FirewallRuleInfo
+	totalRules := 0
 
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -74,10 +84,13 @@ func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRule
 		keyLower := strings.ToLower(key)
 
 		// Detect rule boundary: "Rule Name" (EN) or "규칙 이름" (KO)
-		if strings.Contains(keyLower, "rule name") || key == "규칙 이름" {
+		if strings.Contains(keyLower, "rule name") || strings.Contains(key, "규칙") {
 			// Save previous rule if it passes filters
-			if current != nil && c.shouldIncludeRule(current) {
-				entries = append(entries, *current)
+			if current != nil {
+				totalRules++
+				if c.shouldIncludeRule(current) {
+					entries = append(entries, *current)
+				}
 			}
 			current = &types.FirewallRuleInfo{
 				DisplayName: value,
@@ -106,19 +119,19 @@ func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRule
 			current.Profile = value
 
 		// Local Port: EN "LocalPort" / KO "로컬 포트"
-		case strings.Contains(keyLower, "localport") || strings.Contains(keyLower, "local port") || key == "로컬 포트":
+		case strings.Contains(keyLower, "localport") || strings.Contains(keyLower, "local port") || strings.Contains(key, "로컬 포트"):
 			current.LocalPort = value
 
 		// Remote Port: EN "RemotePort" / KO "원격 포트"
-		case strings.Contains(keyLower, "remoteport") || strings.Contains(keyLower, "remote port") || key == "원격 포트":
+		case strings.Contains(keyLower, "remoteport") || strings.Contains(keyLower, "remote port") || strings.Contains(key, "원격 포트"):
 			current.RemotePort = value
 
 		// Remote Address: EN "RemoteIP" / KO "원격 주소"
-		case strings.Contains(keyLower, "remoteip") || strings.Contains(keyLower, "remote address") || key == "원격 주소":
+		case strings.Contains(keyLower, "remoteip") || strings.Contains(keyLower, "remote address") || strings.Contains(key, "원격 주소") || strings.Contains(key, "원격 IP"):
 			current.RemoteAddr = value
 
 		// Protocol: EN "Protocol" / KO "프로토콜"
-		case strings.Contains(keyLower, "protocol") || key == "프로토콜":
+		case strings.Contains(keyLower, "protocol") || strings.Contains(key, "프로토콜"):
 			current.Protocol = value
 
 		// Program: EN "Program" / KO "프로그램"
@@ -132,9 +145,14 @@ func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRule
 	}
 
 	// Add last entry
-	if current != nil && c.shouldIncludeRule(current) {
-		entries = append(entries, *current)
+	if current != nil {
+		totalRules++
+		if c.shouldIncludeRule(current) {
+			entries = append(entries, *current)
+		}
 	}
+
+	logger.Debug("Firewall: parsed %d total rules, %d matched inbound+allow+enabled filter", totalRules, len(entries))
 
 	// Limit to 500 entries
 	if len(entries) > 500 {

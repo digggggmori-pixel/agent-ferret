@@ -38,7 +38,7 @@ func (c *BITSCollector) Collect() ([]types.BITSJobInfo, error) {
 		}
 	}
 
-	entries = c.parseBitsadminOutput(string(output))
+	entries = c.parseBitsadminOutput(decodeOEMOutput(output))
 
 	logger.Timing("BITSCollector.Collect", startTime)
 	logger.Info("BITS: %d jobs collected", len(entries))
