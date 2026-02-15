@@ -34,7 +34,8 @@ func (c *USNJournalCollector) Collect() ([]types.USNJournalEntry, error) {
 	}
 
 	// Enumerate USN records directly via fsutil (native Windows binary, no PS)
-	enumCmd := exec.Command("fsutil", "usn", "enumdata", "1", "0", "1", "C:")
+	// HighUsn must be large enough to cover the full USN range (not just 1)
+	enumCmd := exec.Command("fsutil", "usn", "enumdata", "1", "0", "9223372036854775807", "C:")
 	output, err := enumCmd.Output()
 	if err != nil {
 		logger.Debug("Cannot enumerate USN data: %v", err)

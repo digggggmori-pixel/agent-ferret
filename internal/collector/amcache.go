@@ -59,23 +59,51 @@ func (c *AmcacheCollector) tryLoadHive() []types.AmcacheEntry {
 		return entries
 	}
 
-	// Copy to temp to avoid lock issues (use esentutl for locked files)
+	// Copy to temp to avoid lock issues
 	tempDir := os.TempDir()
 	tempCopy := filepath.Join(tempDir, "ferret_amcache_copy.hve")
 	defer os.Remove(tempCopy)
 
-	// Try esentutl first (can copy locked files)
-	copyCmd := exec.Command("esentutl.exe", "/y", amcachePath, "/vssrec", "/d", tempCopy)
-	if err := copyCmd.Run(); err != nil {
-		// Fallback: simple copy (works if file isn't exclusively locked)
+	copied := false
+
+	// Strategy 1: esentutl /y without VSS (works for most locked ESE files)
+	if !copied {
+		copyCmd := exec.Command("esentutl.exe", "/y", amcachePath, "/d", tempCopy)
+		if err := copyCmd.Run(); err != nil {
+			logger.Debug("esentutl /y failed: %v", err)
+		} else {
+			copied = true
+		}
+	}
+
+	// Strategy 2: esentutl /y with VSS (/vssrec for shadow copy)
+	if !copied {
+		os.Remove(tempCopy) // clean up partial file
+		copyCmd := exec.Command("esentutl.exe", "/y", amcachePath, "/vssrec", "/d", tempCopy)
+		if err := copyCmd.Run(); err != nil {
+			logger.Debug("esentutl /vssrec failed: %v", err)
+		} else {
+			copied = true
+		}
+	}
+
+	// Strategy 3: direct file read (works if file isn't exclusively locked)
+	if !copied {
+		os.Remove(tempCopy)
 		data, err := os.ReadFile(amcachePath)
 		if err != nil {
 			logger.Debug("Cannot copy Amcache.hve: %v", err)
 			return entries
 		}
 		if err := os.WriteFile(tempCopy, data, 0600); err != nil {
+			logger.Debug("Cannot write Amcache temp copy: %v", err)
 			return entries
 		}
+		copied = true
+	}
+
+	if !copied {
+		return entries
 	}
 
 	// Load the hive copy into a temporary registry location

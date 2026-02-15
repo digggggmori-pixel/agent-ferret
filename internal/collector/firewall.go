@@ -31,9 +31,9 @@ func (c *FirewallCollector) Collect() ([]types.FirewallRuleInfo, error) {
 		logger.Debug("Firewall status: %s", strings.TrimSpace(string(statusOutput)))
 	}
 
-	// Get enabled inbound rules using netsh (native Windows binary, no PS)
-	cmd := exec.Command("netsh", "advfirewall", "firewall", "show", "rule",
-		"name=all", "dir=in", "status=enable", "type=static")
+	// Get ALL rules without locale-dependent filters (name=all is the only safe param)
+	// Filtering by dir/status/type fails on non-English Windows because param values are localized
+	cmd := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name=all")
 	output, err := cmd.Output()
 	if err != nil {
 		logger.Debug("Cannot collect firewall rules: %v", err)
@@ -49,6 +49,7 @@ func (c *FirewallCollector) Collect() ([]types.FirewallRuleInfo, error) {
 }
 
 // parseNetshOutput parses the text output from "netsh advfirewall firewall show rule"
+// Supports both English and Korean locale field names.
 func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRuleInfo {
 	var entries []types.FirewallRuleInfo
 	var current *types.FirewallRuleInfo
@@ -70,18 +71,17 @@ func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRule
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		// Normalize key names (netsh output language may vary by locale)
 		keyLower := strings.ToLower(key)
 
-		if strings.Contains(keyLower, "rule name") {
-			// Save previous rule if it was an Allow rule
-			if current != nil && current.Action == "Allow" {
+		// Detect rule boundary: "Rule Name" (EN) or "규칙 이름" (KO)
+		if strings.Contains(keyLower, "rule name") || key == "규칙 이름" {
+			// Save previous rule if it passes filters
+			if current != nil && c.shouldIncludeRule(current) {
 				entries = append(entries, *current)
 			}
 			current = &types.FirewallRuleInfo{
 				DisplayName: value,
 				Name:        value,
-				Direction:   "Inbound",
 			}
 			continue
 		}
@@ -91,29 +91,48 @@ func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRule
 		}
 
 		switch {
-		case strings.Contains(keyLower, "enabled"):
-			current.Enabled = strings.EqualFold(value, "Yes") || strings.EqualFold(value, "True")
-		case strings.Contains(keyLower, "direction"):
-			current.Direction = value
-		case strings.Contains(keyLower, "profiles") || strings.Contains(keyLower, "profile"):
+		// Enabled: EN "Enabled" / KO "사용"
+		case strings.Contains(keyLower, "enabled") || key == "사용":
+			current.Enabled = strings.EqualFold(value, "Yes") ||
+				strings.EqualFold(value, "True") ||
+				value == "예"
+
+		// Direction: EN "Direction" / KO "방향"
+		case strings.Contains(keyLower, "direction") || key == "방향":
+			current.Direction = normalizeDirection(value)
+
+		// Profiles: EN "Profiles" / KO "프로필"
+		case strings.Contains(keyLower, "profiles") || strings.Contains(keyLower, "profile") || key == "프로필":
 			current.Profile = value
-		case strings.Contains(keyLower, "localport") || strings.Contains(keyLower, "local port"):
+
+		// Local Port: EN "LocalPort" / KO "로컬 포트"
+		case strings.Contains(keyLower, "localport") || strings.Contains(keyLower, "local port") || key == "로컬 포트":
 			current.LocalPort = value
-		case strings.Contains(keyLower, "remoteport") || strings.Contains(keyLower, "remote port"):
+
+		// Remote Port: EN "RemotePort" / KO "원격 포트"
+		case strings.Contains(keyLower, "remoteport") || strings.Contains(keyLower, "remote port") || key == "원격 포트":
 			current.RemotePort = value
-		case strings.Contains(keyLower, "remoteip") || strings.Contains(keyLower, "remote address"):
+
+		// Remote Address: EN "RemoteIP" / KO "원격 주소"
+		case strings.Contains(keyLower, "remoteip") || strings.Contains(keyLower, "remote address") || key == "원격 주소":
 			current.RemoteAddr = value
-		case strings.Contains(keyLower, "protocol"):
+
+		// Protocol: EN "Protocol" / KO "프로토콜"
+		case strings.Contains(keyLower, "protocol") || key == "프로토콜":
 			current.Protocol = value
-		case strings.Contains(keyLower, "program"):
+
+		// Program: EN "Program" / KO "프로그램"
+		case strings.Contains(keyLower, "program") || key == "프로그램":
 			current.Program = value
-		case strings.Contains(keyLower, "action"):
-			current.Action = value
+
+		// Action: EN "Action" / KO "작업"
+		case strings.Contains(keyLower, "action") || key == "작업":
+			current.Action = normalizeAction(value)
 		}
 	}
 
 	// Add last entry
-	if current != nil && current.Action == "Allow" {
+	if current != nil && c.shouldIncludeRule(current) {
 		entries = append(entries, *current)
 	}
 
@@ -123,4 +142,35 @@ func (c *FirewallCollector) parseNetshOutput(output string) []types.FirewallRule
 	}
 
 	return entries
+}
+
+// shouldIncludeRule filters for enabled inbound allow rules
+func (c *FirewallCollector) shouldIncludeRule(rule *types.FirewallRuleInfo) bool {
+	return rule.Enabled &&
+		rule.Direction == "Inbound" &&
+		rule.Action == "Allow"
+}
+
+// normalizeDirection converts localized direction values to English
+func normalizeDirection(value string) string {
+	lower := strings.ToLower(value)
+	switch {
+	case lower == "in" || lower == "inbound" || value == "인바운드":
+		return "Inbound"
+	case lower == "out" || lower == "outbound" || value == "아웃바운드":
+		return "Outbound"
+	}
+	return value
+}
+
+// normalizeAction converts localized action values to English
+func normalizeAction(value string) string {
+	lower := strings.ToLower(value)
+	switch {
+	case lower == "allow" || value == "허용":
+		return "Allow"
+	case lower == "block" || value == "차단":
+		return "Block"
+	}
+	return value
 }

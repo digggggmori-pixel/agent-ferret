@@ -49,13 +49,18 @@ func (c *ShimcacheCollector) Collect() ([]types.ShimcacheEntry, error) {
 
 	// Parse header signature to determine format
 	sig := binary.LittleEndian.Uint32(data[0:4])
+	logger.Debug("Shimcache: signature=0x%x, dataLen=%d", sig, len(data))
 
 	switch sig {
 	case 0x30, 0x34:
 		// Windows 10/11 format (signature 0x30 or 0x34)
 		entries = parseWin10Shimcache(data)
 	default:
-		logger.Debug("Unknown Shimcache signature: 0x%x", sig)
+		headerLen := len(data)
+		if headerLen > 64 {
+			headerLen = 64
+		}
+		logger.Debug("Unknown Shimcache signature: 0x%x, first %d bytes: %x", sig, headerLen, data[:headerLen])
 		return entries, nil
 	}
 
@@ -85,6 +90,14 @@ func parseWin10Shimcache(data []byte) []types.ShimcacheEntry {
 	for offset < len(data)-12 {
 		// Check for entry signature "10ts"
 		if string(data[offset:offset+4]) != "10ts" {
+			if order == 0 {
+				// First entry doesn't have expected magic — log for debugging
+				peekLen := 16
+				if offset+peekLen > len(data) {
+					peekLen = len(data) - offset
+				}
+				logger.Debug("Shimcache: no '10ts' magic at offset %d, got: %x", offset, data[offset:offset+peekLen])
+			}
 			break
 		}
 
