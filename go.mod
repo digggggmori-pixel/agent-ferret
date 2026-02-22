@@ -8,8 +8,10 @@ require (
 	github.com/charmbracelet/bubbles v0.21.1
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/go-ole/go-ole v1.3.0
 	github.com/google/uuid v1.6.0
 	golang.org/x/sys v0.38.0
+	modernc.org/sqlite v1.37.0
 )
 
 require (

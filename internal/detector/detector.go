@@ -2,6 +2,7 @@ package detector
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -26,9 +27,9 @@ type Detector struct {
 
 // New creates a new Detector instance with injected detection rules
 func New(rules *rulestore.DetectionRules) *Detector {
-	d := &Detector{
-		rules:        rules,
-		pathPatterns: rules.PathAnomalyRegexps,
+	d := &Detector{rules: rules}
+	if rules != nil {
+		d.pathPatterns = rules.PathAnomalyRegexps
 	}
 	return d
 }
@@ -1035,6 +1036,7 @@ func (d *Detector) DetectUnsignedCriticalProcesses(processes []types.ProcessInfo
 				continue
 			}
 
+			procCopy := proc
 			detection := types.Detection{
 				ID:          fmt.Sprintf("unsigned-%d-%d", proc.PID, time.Now().UnixNano()),
 				Type:        types.DetectionTypeUnsignedProcess,
@@ -1042,7 +1044,7 @@ func (d *Detector) DetectUnsignedCriticalProcesses(processes []types.ProcessInfo
 				Confidence:  0.95,
 				Timestamp:   proc.CreateTime,
 				Description: fmt.Sprintf("Critical process %s running from unexpected path", proc.Name),
-				Process:     &proc,
+				Process:     &procCopy,
 				MITRE: &types.MITREMapping{
 					Tactics:    []string{"Defense Evasion"},
 					Techniques: []string{"T1036.005"},
@@ -1189,6 +1191,1949 @@ func (d *Detector) DetectEncodedCommands(processes []types.ProcessInfo) []types.
 	}
 
 	return detections
+}
+
+// ── Phase 1 Detection Methods ──
+
+// DetectSuspiciousStartup detects suspicious files in startup folders
+func (d *Detector) DetectSuspiciousStartup(entries []types.StartupEntry) []types.Detection {
+	var detections []types.Detection
+
+	executableExts := map[string]bool{
+		".exe": true, ".bat": true, ".cmd": true, ".ps1": true,
+		".vbs": true, ".js": true, ".wsf": true, ".scr": true,
+		".com": true, ".pif": true, ".hta": true,
+	}
+
+	for _, entry := range entries {
+		ext := strings.ToLower(getExtension(entry.Name))
+
+		// Skip non-executable LNK shortcuts (normal in startup)
+		if ext == ".lnk" || ext == ".ini" || ext == ".url" {
+			continue
+		}
+
+		severity := types.SeverityMedium
+		confidence := 0.7
+		reason := ""
+
+		if executableExts[ext] {
+			reason = fmt.Sprintf("Executable file in startup folder: %s", entry.Name)
+			severity = types.SeverityHigh
+			confidence = 0.8
+
+			// Recently created = higher severity
+			if !entry.CreatedAt.IsZero() && time.Since(entry.CreatedAt) < 7*24*time.Hour {
+				severity = types.SeverityHigh
+				confidence = 0.9
+				reason += " (created within last 7 days)"
+			}
+		} else {
+			reason = fmt.Sprintf("Unknown file in startup folder: %s", entry.Name)
+		}
+
+		if entry.IsHidden {
+			severity = types.SeverityHigh
+			confidence = 0.85
+			reason += " [hidden]"
+		}
+
+		if reason != "" {
+			detection := types.Detection{
+				ID:          fmt.Sprintf("startup-%s-%d", entry.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousStartup,
+				Severity:    severity,
+				Confidence:  confidence,
+				Timestamp:   time.Now(),
+				Description: reason,
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Persistence"},
+					Techniques: []string{"T1547.001"},
+				},
+				Details: map[string]interface{}{
+					"file_name":  entry.Name,
+					"file_path":  entry.Path,
+					"file_size":  entry.Size,
+					"scope":      entry.Scope,
+					"user":       entry.User,
+					"created_at": entry.CreatedAt.Format(time.RFC3339),
+					"is_hidden":  entry.IsHidden,
+				},
+			}
+			detections = append(detections, detection)
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousPowerShell detects suspicious commands in PowerShell history
+func (d *Detector) DetectSuspiciousPowerShell(entries []types.PowerShellHistoryEntry) []types.Detection {
+	var detections []types.Detection
+
+	suspiciousPatterns := []struct {
+		pattern  string
+		severity string
+		desc     string
+	}{
+		{"invoke-mimikatz", types.SeverityCritical, "Mimikatz credential dump"},
+		{"get-credential", types.SeverityHigh, "Credential harvesting"},
+		{"set-mppreference -disablerealtimemonitoring", types.SeverityCritical, "Disabling Defender real-time protection"},
+		{"set-mppreference -disableioavprotection", types.SeverityCritical, "Disabling Defender IO/AV protection"},
+		{"add-mppreference -exclusionpath", types.SeverityHigh, "Adding Defender exclusion"},
+		{"net user", types.SeverityMedium, "User account manipulation"},
+		{"net localgroup administrators", types.SeverityHigh, "Local admin group change"},
+		{"-encodedcommand", types.SeverityHigh, "Encoded command execution"},
+		{"-enc ", types.SeverityHigh, "Encoded command execution"},
+		{"frombase64string", types.SeverityHigh, "Base64 decode (possible payload)"},
+		{"downloadstring", types.SeverityHigh, "Remote script download"},
+		{"downloadfile", types.SeverityHigh, "Remote file download"},
+		{"invoke-webrequest", types.SeverityMedium, "Web request (possible download)"},
+		{"start-process", types.SeverityLow, "Process execution"},
+		{"invoke-expression", types.SeverityHigh, "Dynamic code execution (IEX)"},
+		{"new-object net.webclient", types.SeverityHigh, "WebClient download"},
+		{"bypass", types.SeverityMedium, "Execution policy bypass"},
+		{"reg add", types.SeverityMedium, "Registry modification"},
+		{"schtasks /create", types.SeverityMedium, "Scheduled task creation"},
+		{"certutil -urlcache", types.SeverityHigh, "File download via certutil"},
+		{"bitsadmin /transfer", types.SeverityHigh, "File download via BITS"},
+	}
+
+	for _, entry := range entries {
+		cmdLower := strings.ToLower(entry.Command)
+
+		for _, p := range suspiciousPatterns {
+			if strings.Contains(cmdLower, p.pattern) {
+				detection := types.Detection{
+					ID:          fmt.Sprintf("pshist-%s-%d-%d", entry.User, entry.LineNumber, time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousPowerShell,
+					Severity:    p.severity,
+					Confidence:  0.85,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Suspicious PowerShell command: %s (user: %s)", p.desc, entry.User),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution"},
+						Techniques: []string{"T1059.001"},
+					},
+					Details: map[string]interface{}{
+						"user":        entry.User,
+						"command":     truncateString(entry.Command, 500),
+						"line_number": entry.LineNumber,
+						"file_path":   entry.FilePath,
+						"pattern":     p.pattern,
+					},
+				}
+				detections = append(detections, detection)
+				break // One detection per command
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousDNSCache detects suspicious domains in DNS cache
+func (d *Detector) DetectSuspiciousDNSCache(entries []types.DNSCacheEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		domainLower := strings.ToLower(entry.Name)
+
+		var reason string
+		severity := types.SeverityMedium
+
+		// Reuse existing domain detection logic
+		for _, tld := range d.rules.HighRiskTLDs {
+			if strings.HasSuffix(domainLower, "."+tld) {
+				reason = fmt.Sprintf("High-risk TLD: .%s", tld)
+				severity = types.SeverityHigh
+				break
+			}
+		}
+
+		if reason == "" && dgaPatternCompiled.MatchString(domainLower) {
+			reason = "DGA-like domain pattern"
+			severity = types.SeverityCritical
+		}
+
+		if reason == "" && punycodePatternCompiled.MatchString(domainLower) {
+			reason = "Punycode IDN domain"
+			severity = types.SeverityHigh
+		}
+
+		if reason == "" && strings.HasSuffix(domainLower, ".onion") {
+			reason = "Tor .onion domain"
+			severity = types.SeverityCritical
+		}
+
+		if reason == "" {
+			for _, keyword := range d.rules.MaliciousKeywords {
+				if strings.Contains(domainLower, keyword) {
+					reason = fmt.Sprintf("Malicious keyword: %s", keyword)
+					severity = types.SeverityHigh
+					break
+				}
+			}
+		}
+
+		// DNS tunneling: unusually long subdomain
+		if reason == "" {
+			parts := strings.Split(domainLower, ".")
+			for _, part := range parts {
+				if len(part) > 50 {
+					reason = "Extremely long subdomain (possible DNS tunneling)"
+					severity = types.SeverityHigh
+					break
+				}
+			}
+		}
+
+		if reason != "" {
+			detection := types.Detection{
+				ID:          fmt.Sprintf("dns-%s-%d", entry.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousDNS,
+				Severity:    severity,
+				Confidence:  0.75,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Suspicious DNS cache entry: %s (%s)", entry.Name, reason),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Command and Control"},
+					Techniques: []string{"T1071.004"},
+				},
+				Details: map[string]interface{}{
+					"domain":      entry.Name,
+					"record_type": entry.Section,
+					"reason":      reason,
+				},
+			}
+			detections = append(detections, detection)
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousAccounts detects suspicious user accounts
+func (d *Detector) DetectSuspiciousAccounts(accounts []types.UserAccountInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, account := range accounts {
+		// Hidden account (name ends with $)
+		if strings.HasSuffix(account.Name, "$") && !strings.EqualFold(account.Name, "DefaultAccount$") {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("acct-hidden-%s-%d", account.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousAccount,
+				Severity:    types.SeverityHigh,
+				Confidence:  0.9,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Hidden user account detected: %s", account.Name),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Persistence"},
+					Techniques: []string{"T1136.001"},
+				},
+				Details: map[string]interface{}{
+					"account_name": account.Name,
+					"is_admin":     account.IsAdmin,
+					"reason":       "hidden_account",
+				},
+			})
+		}
+
+		// Active admin account with password that never expires
+		if account.IsAdmin && !account.IsDisabled && account.Flags&0x10000 != 0 { // UF_DONT_EXPIRE_PASSWD
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("acct-noexpire-%s-%d", account.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousAccount,
+				Severity:    types.SeverityMedium,
+				Confidence:  0.6,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Admin account with non-expiring password: %s", account.Name),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Persistence"},
+					Techniques: []string{"T1098"},
+				},
+				Details: map[string]interface{}{
+					"account_name": account.Name,
+					"is_admin":     true,
+					"reason":       "non_expiring_password",
+				},
+			})
+		}
+
+		// Enabled default accounts (Administrator, Guest)
+		nameLower := strings.ToLower(account.Name)
+		if (nameLower == "administrator" || nameLower == "guest") && !account.IsDisabled {
+			severity := types.SeverityMedium
+			if nameLower == "guest" {
+				severity = types.SeverityHigh
+			}
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("acct-default-%s-%d", account.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousAccount,
+				Severity:    severity,
+				Confidence:  0.7,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Default account '%s' is enabled", account.Name),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Persistence"},
+					Techniques: []string{"T1078.001"},
+				},
+				Details: map[string]interface{}{
+					"account_name": account.Name,
+					"is_admin":     account.IsAdmin,
+					"reason":       "default_account_enabled",
+				},
+			})
+		}
+
+		// High number of failed login attempts
+		if account.BadPWCount > 10 {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("acct-bruteforce-%s-%d", account.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousAccount,
+				Severity:    types.SeverityHigh,
+				Confidence:  0.8,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Account '%s' has %d failed login attempts", account.Name, account.BadPWCount),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Credential Access"},
+					Techniques: []string{"T1110"},
+				},
+				Details: map[string]interface{}{
+					"account_name":    account.Name,
+					"bad_pw_count":    account.BadPWCount,
+					"reason":          "brute_force_attempt",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectAntivirusIssues detects problems with antivirus protection
+func (d *Detector) DetectAntivirusIssues(products []types.AntivirusInfo) []types.Detection {
+	var detections []types.Detection
+
+	if len(products) == 0 {
+		detections = append(detections, types.Detection{
+			ID:          fmt.Sprintf("av-none-%d", time.Now().UnixNano()),
+			Type:        types.DetectionTypeAntivirusIssue,
+			Severity:    types.SeverityCritical,
+			Confidence:  0.95,
+			Timestamp:   time.Now(),
+			Description: "No antivirus product detected on this system",
+			MITRE: &types.MITREMapping{
+				Tactics:    []string{"Defense Evasion"},
+				Techniques: []string{"T1562.001"},
+			},
+			Details: map[string]interface{}{
+				"reason": "no_av_installed",
+			},
+		})
+		return detections
+	}
+
+	for _, product := range products {
+		if !product.IsEnabled {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("av-disabled-%s-%d", product.ProductName, time.Now().UnixNano()),
+				Type:        types.DetectionTypeAntivirusIssue,
+				Severity:    types.SeverityCritical,
+				Confidence:  0.95,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Antivirus '%s' is disabled", product.ProductName),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Defense Evasion"},
+					Techniques: []string{"T1562.001"},
+				},
+				Details: map[string]interface{}{
+					"product_name":  product.ProductName,
+					"product_state": product.ProductState,
+					"reason":        "av_disabled",
+				},
+			})
+		}
+
+		if !product.IsUpToDate {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("av-outdated-%s-%d", product.ProductName, time.Now().UnixNano()),
+				Type:        types.DetectionTypeAntivirusIssue,
+				Severity:    types.SeverityHigh,
+				Confidence:  0.9,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Antivirus '%s' definitions are out of date", product.ProductName),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Defense Evasion"},
+					Techniques: []string{"T1562.001"},
+				},
+				Details: map[string]interface{}{
+					"product_name":  product.ProductName,
+					"product_state": product.ProductState,
+					"reason":        "av_outdated",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousScheduledTasks detects suspicious scheduled tasks
+func (d *Detector) DetectSuspiciousScheduledTasks(tasks []types.ScheduledTaskInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, task := range tasks {
+		pathLower := strings.ToLower(task.ActionPath)
+		argsLower := strings.ToLower(task.ActionArgs)
+
+		// Encoded commands in task arguments
+		encodedPatterns := []string{"-enc ", "-encodedcommand", "frombase64string", "iex(", "invoke-expression"}
+		for _, pattern := range encodedPatterns {
+			if strings.Contains(argsLower, pattern) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("task-encoded-%s-%d", task.Name, time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousTask,
+					Severity:    types.SeverityCritical,
+					Confidence:  0.9,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Scheduled task with encoded command: %s", task.Name),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Persistence", "Execution"},
+						Techniques: []string{"T1053.005", "T1059.001"},
+					},
+					Details: map[string]interface{}{
+						"task_name":   task.Name,
+						"action_path": task.ActionPath,
+						"action_args": truncateString(task.ActionArgs, 500),
+						"principal":   task.Principal,
+						"reason":      "encoded_command",
+					},
+				})
+				break
+			}
+		}
+
+		// Tasks running from suspicious paths
+		suspiciousPaths := []string{`\temp\`, `\tmp\`, `\users\public\`, `\downloads\`, `\appdata\`}
+		for _, sp := range suspiciousPaths {
+			if strings.Contains(pathLower, sp) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("task-path-%s-%d", task.Name, time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousTask,
+					Severity:    types.SeverityHigh,
+					Confidence:  0.8,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Scheduled task running from suspicious path: %s", task.Name),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Persistence"},
+						Techniques: []string{"T1053.005"},
+					},
+					Details: map[string]interface{}{
+						"task_name":   task.Name,
+						"action_path": task.ActionPath,
+						"principal":   task.Principal,
+						"reason":      "suspicious_path",
+					},
+				})
+				break
+			}
+		}
+
+		// Tasks executing shell binaries directly
+		shellBinaries := []string{"powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe"}
+		for _, shell := range shellBinaries {
+			if strings.Contains(pathLower, shell) {
+				// Check if it's a SYSTEM-level shell task
+				severity := types.SeverityMedium
+				if strings.EqualFold(task.Principal, "SYSTEM") || strings.EqualFold(task.Principal, "NT AUTHORITY\\SYSTEM") {
+					severity = types.SeverityHigh
+				}
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("task-shell-%s-%d", task.Name, time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousTask,
+					Severity:    severity,
+					Confidence:  0.7,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Scheduled task executes %s: %s", shell, task.Name),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Persistence", "Execution"},
+						Techniques: []string{"T1053.005", "T1059"},
+					},
+					Details: map[string]interface{}{
+						"task_name":   task.Name,
+						"action_path": task.ActionPath,
+						"action_args": truncateString(task.ActionArgs, 500),
+						"principal":   task.Principal,
+						"shell":       shell,
+						"reason":      "shell_execution",
+					},
+				})
+				break
+			}
+		}
+
+		// Hidden tasks (GUID names)
+		if task.IsHidden {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("task-hidden-%s-%d", task.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousTask,
+				Severity:    types.SeverityMedium,
+				Confidence:  0.65,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Hidden scheduled task (GUID name): %s", task.Name),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Persistence", "Defense Evasion"},
+					Techniques: []string{"T1053.005"},
+				},
+				Details: map[string]interface{}{
+					"task_name":   task.Name,
+					"action_path": task.ActionPath,
+					"principal":   task.Principal,
+					"reason":      "hidden_task",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+func getExtension(name string) string {
+	for i := len(name) - 1; i >= 0; i-- {
+		if name[i] == '.' {
+			return name[i:]
+		}
+	}
+	return ""
+}
+
+// ── Phase 2 Detection Methods ──
+
+// DetectPrefetchAnomalies detects suspicious Prefetch entries
+func (d *Detector) DetectPrefetchAnomalies(entries []types.PrefetchInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		nameLower := strings.ToLower(entry.ExecutableName)
+
+		// LOLBin execution history in Prefetch
+		if d.rules.AllLOLBins[nameLower] {
+			severity := types.SeverityMedium
+			confidence := 0.6
+			if entry.RunCount > 10 {
+				severity = types.SeverityHigh
+				confidence = 0.75
+			}
+
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("pf-lolbin-%s-%d", nameLower, time.Now().UnixNano()),
+				Type:        types.DetectionTypePrefetchAnomaly,
+				Severity:    severity,
+				Confidence:  confidence,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("LOLBin '%s' has Prefetch evidence (run %d times)", entry.ExecutableName, entry.RunCount),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Execution"},
+					Techniques: []string{"T1059"},
+				},
+				Details: map[string]interface{}{
+					"executable":    entry.ExecutableName,
+					"prefetch_path": entry.PrefetchPath,
+					"run_count":     entry.RunCount,
+					"reason":        "lolbin_history",
+				},
+			})
+		}
+
+		// Recent first-time execution (single last run time, low run count)
+		if len(entry.LastRunTimes) == 1 && entry.RunCount <= 2 {
+			lastRun := entry.LastRunTimes[0]
+			if !lastRun.IsZero() && time.Since(lastRun) < 7*24*time.Hour {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("pf-recent-%s-%d", nameLower, time.Now().UnixNano()),
+					Type:        types.DetectionTypePrefetchAnomaly,
+					Severity:    types.SeverityLow,
+					Confidence:  0.5,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Recently executed program '%s' (run %d times, last: %s)", entry.ExecutableName, entry.RunCount, lastRun.Format("2006-01-02")),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution"},
+						Techniques: []string{"T1204"},
+					},
+					Details: map[string]interface{}{
+						"executable": entry.ExecutableName,
+						"run_count":  entry.RunCount,
+						"last_run":   lastRun.Format(time.RFC3339),
+						"reason":     "recent_first_execution",
+					},
+				})
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectShimcacheAnomalies detects suspicious Shimcache entries
+func (d *Detector) DetectShimcacheAnomalies(entries []types.ShimcacheEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		pathLower := strings.ToLower(entry.Path)
+		fileName := filepath.Base(pathLower)
+
+		// LOLBin from unusual path
+		if d.rules.AllLOLBins[fileName] {
+			if !strings.Contains(pathLower, `\windows\system32\`) &&
+				!strings.Contains(pathLower, `\windows\syswow64\`) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("shim-lolbin-%d-%d", entry.Order, time.Now().UnixNano()),
+					Type:        types.DetectionTypeShimcacheAnomaly,
+					Severity:    types.SeverityHigh,
+					Confidence:  0.8,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("LOLBin '%s' in Shimcache from unusual path", fileName),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution", "Defense Evasion"},
+						Techniques: []string{"T1059", "T1036"},
+					},
+					Details: map[string]interface{}{
+						"path":          entry.Path,
+						"order":         entry.Order,
+						"last_modified": entry.LastModified.Format(time.RFC3339),
+						"reason":        "lolbin_unusual_path",
+					},
+				})
+			}
+		}
+
+		// Executables from suspicious directories
+		suspDirs := []string{`\temp\`, `\tmp\`, `\users\public\`, `\downloads\`, `\$recycle.bin\`}
+		for _, dir := range suspDirs {
+			if strings.Contains(pathLower, dir) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("shim-path-%d-%d", entry.Order, time.Now().UnixNano()),
+					Type:        types.DetectionTypeShimcacheAnomaly,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.7,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Shimcache entry from suspicious path: %s", entry.Path),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution"},
+						Techniques: []string{"T1204"},
+					},
+					Details: map[string]interface{}{
+						"path":          entry.Path,
+						"order":         entry.Order,
+						"last_modified": entry.LastModified.Format(time.RFC3339),
+						"reason":        "suspicious_path",
+					},
+				})
+				break
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectAmcacheAnomalies detects suspicious Amcache entries
+func (d *Detector) DetectAmcacheAnomalies(entries []types.AmcacheEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		pathLower := strings.ToLower(entry.Path)
+		nameLower := strings.ToLower(entry.Name)
+
+		// LOLBin from unusual path
+		if d.rules.AllLOLBins[nameLower] && pathLower != "" {
+			if !strings.Contains(pathLower, `\windows\system32\`) &&
+				!strings.Contains(pathLower, `\windows\syswow64\`) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("amc-lolbin-%s-%d", nameLower, time.Now().UnixNano()),
+					Type:        types.DetectionTypeAmcacheAnomaly,
+					Severity:    types.SeverityHigh,
+					Confidence:  0.75,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("LOLBin '%s' in Amcache from unusual path", entry.Name),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution"},
+						Techniques: []string{"T1059"},
+					},
+					Details: map[string]interface{}{
+						"path":      entry.Path,
+						"name":      entry.Name,
+						"publisher": entry.Publisher,
+						"sha1":      entry.SHA1,
+						"reason":    "lolbin_history",
+					},
+				})
+			}
+		}
+
+		// Unsigned executables from suspicious locations
+		if entry.Publisher == "" && pathLower != "" {
+			suspDirs := []string{`\temp\`, `\tmp\`, `\users\public\`, `\downloads\`, `\appdata\`}
+			for _, dir := range suspDirs {
+				if strings.Contains(pathLower, dir) {
+					detections = append(detections, types.Detection{
+						ID:          fmt.Sprintf("amc-unsigned-%s-%d", nameLower, time.Now().UnixNano()),
+						Type:        types.DetectionTypeAmcacheAnomaly,
+						Severity:    types.SeverityMedium,
+						Confidence:  0.65,
+						Timestamp:   time.Now(),
+						Description: fmt.Sprintf("Unsigned executable '%s' in Amcache from suspicious path", entry.Name),
+						MITRE: &types.MITREMapping{
+							Tactics:    []string{"Execution", "Defense Evasion"},
+							Techniques: []string{"T1204", "T1036"},
+						},
+						Details: map[string]interface{}{
+							"path":   entry.Path,
+							"name":   entry.Name,
+							"sha1":   entry.SHA1,
+							"size":   entry.Size,
+							"reason": "unsigned_suspicious_path",
+						},
+					})
+					break
+				}
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectDLLAnomalies detects suspicious DLL modules loaded in processes
+func (d *Detector) DetectDLLAnomalies(modules []types.DLLModuleInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, mod := range modules {
+		pathLower := strings.ToLower(mod.ModulePath)
+		nameLower := strings.ToLower(mod.ModuleName)
+
+		// DLL from suspicious paths
+		suspDirs := []string{`\temp\`, `\tmp\`, `\downloads\`, `\users\public\`, `\$recycle.bin\`}
+		for _, dir := range suspDirs {
+			if strings.Contains(pathLower, dir) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("dll-path-%d-%s-%d", mod.ProcessPID, nameLower, time.Now().UnixNano()),
+					Type:        types.DetectionTypeDLLAnomaly,
+					Severity:    types.SeverityHigh,
+					Confidence:  0.8,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("DLL '%s' loaded from suspicious path in process '%s'", mod.ModuleName, mod.ProcessName),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Persistence", "Defense Evasion"},
+						Techniques: []string{"T1574.001"},
+					},
+					Details: map[string]interface{}{
+						"process_name": mod.ProcessName,
+						"process_pid":  mod.ProcessPID,
+						"module_name":  mod.ModuleName,
+						"module_path":  mod.ModulePath,
+						"reason":       "suspicious_dll_path",
+					},
+				})
+				break
+			}
+		}
+
+		// DLL name typosquatting
+		knownDLLs := []string{
+			"kernel32.dll", "ntdll.dll", "user32.dll", "advapi32.dll",
+			"ws2_32.dll", "crypt32.dll", "msvcrt.dll", "ole32.dll",
+			"shell32.dll", "gdi32.dll", "comctl32.dll", "comdlg32.dll",
+		}
+		for _, knownDLL := range knownDLLs {
+			if nameLower != knownDLL && isSimilar(nameLower, knownDLL) {
+				if !strings.Contains(pathLower, `\windows\system32\`) &&
+					!strings.Contains(pathLower, `\windows\syswow64\`) {
+					detections = append(detections, types.Detection{
+						ID:          fmt.Sprintf("dll-typo-%d-%s-%d", mod.ProcessPID, nameLower, time.Now().UnixNano()),
+						Type:        types.DetectionTypeDLLAnomaly,
+						Severity:    types.SeverityCritical,
+						Confidence:  0.9,
+						Timestamp:   time.Now(),
+						Description: fmt.Sprintf("DLL '%s' similar to system DLL '%s' from non-system path", mod.ModuleName, knownDLL),
+						MITRE: &types.MITREMapping{
+							Tactics:    []string{"Persistence", "Defense Evasion"},
+							Techniques: []string{"T1574.001", "T1036.005"},
+						},
+						Details: map[string]interface{}{
+							"process_name": mod.ProcessName,
+							"process_pid":  mod.ProcessPID,
+							"module_name":  mod.ModuleName,
+							"module_path":  mod.ModulePath,
+							"known_dll":    knownDLL,
+							"reason":       "dll_typosquatting",
+						},
+					})
+					break
+				}
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectWMIPersistence detects WMI event subscription based persistence
+func (d *Detector) DetectWMIPersistence(entries []types.WMIPersistenceInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		severity := types.SeverityHigh
+		confidence := 0.85
+
+		consumerTypeLower := strings.ToLower(entry.ConsumerType)
+
+		// CommandLine and ActiveScript consumers are almost always malicious
+		if consumerTypeLower == "commandline" || consumerTypeLower == "activescript" {
+			severity = types.SeverityCritical
+			confidence = 0.95
+		}
+
+		// Suspicious patterns in consumer data
+		dataLower := strings.ToLower(entry.ConsumerData)
+		if strings.Contains(dataLower, "powershell") ||
+			strings.Contains(dataLower, "cmd.exe") ||
+			strings.Contains(dataLower, "-enc") ||
+			strings.Contains(dataLower, "downloadstring") ||
+			strings.Contains(dataLower, "invoke-expression") {
+			severity = types.SeverityCritical
+			confidence = 0.95
+		}
+
+		desc := fmt.Sprintf("WMI persistence: %s consumer '%s'", entry.ConsumerType, entry.ConsumerName)
+		if entry.FilterName != "" {
+			desc += fmt.Sprintf(" (filter: %s)", entry.FilterName)
+		}
+
+		detections = append(detections, types.Detection{
+			ID:          fmt.Sprintf("wmi-%s-%d", entry.ConsumerName, time.Now().UnixNano()),
+			Type:        types.DetectionTypeWMIPersistence,
+			Severity:    severity,
+			Confidence:  confidence,
+			Timestamp:   time.Now(),
+			Description: desc,
+			MITRE: &types.MITREMapping{
+				Tactics:    []string{"Persistence", "Execution"},
+				Techniques: []string{"T1546.003"},
+			},
+			Details: map[string]interface{}{
+				"filter_name":   entry.FilterName,
+				"filter_query":  entry.FilterQuery,
+				"consumer_name": entry.ConsumerName,
+				"consumer_type": entry.ConsumerType,
+				"consumer_data": truncateString(entry.ConsumerData, 500),
+				"creator_sid":   entry.CreatorSID,
+			},
+		})
+	}
+
+	return detections
+}
+
+// DetectSuspiciousBrowsing detects suspicious URLs in browser history
+func (d *Detector) DetectSuspiciousBrowsing(entries []types.BrowserHistoryEntry) []types.Detection {
+	var detections []types.Detection
+
+	suspiciousPatterns := []struct {
+		pattern  string
+		severity string
+		desc     string
+	}{
+		{"pastebin.com", types.SeverityMedium, "Paste service (common payload hosting)"},
+		{"hastebin.com", types.SeverityMedium, "Paste service"},
+		{"ghostbin.", types.SeverityMedium, "Paste service"},
+		{"raw.githubusercontent.com", types.SeverityLow, "Raw GitHub content"},
+		{".onion.", types.SeverityCritical, "Tor hidden service"},
+		{"exploit-db.com", types.SeverityMedium, "Exploit database"},
+		{"shodan.io", types.SeverityLow, "Network scanner service"},
+	}
+
+	dangerousExts := []string{".exe", ".ps1", ".bat", ".cmd", ".vbs", ".hta", ".scr", ".msi"}
+
+	for _, entry := range entries {
+		urlLower := strings.ToLower(entry.URL)
+
+		// Check suspicious URL patterns
+		for _, sp := range suspiciousPatterns {
+			if strings.Contains(urlLower, sp.pattern) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("browse-%s-%d", entry.Browser, time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousBrowsing,
+					Severity:    sp.severity,
+					Confidence:  0.65,
+					Timestamp:   entry.LastVisited,
+					Description: fmt.Sprintf("Suspicious browsing: %s (%s)", sp.desc, entry.Browser),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Command and Control", "Execution"},
+						Techniques: []string{"T1105"},
+					},
+					Details: map[string]interface{}{
+						"url":         truncateString(entry.URL, 300),
+						"title":       entry.Title,
+						"browser":     entry.Browser,
+						"user":        entry.User,
+						"visit_count": entry.VisitCount,
+						"reason":      "suspicious_url",
+					},
+				})
+				break
+			}
+		}
+
+		// Dangerous file downloads
+		for _, ext := range dangerousExts {
+			if strings.Contains(urlLower, ext) &&
+				(strings.Contains(urlLower, "download") || strings.HasSuffix(urlLower, ext)) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("browse-dl-%s-%d", entry.Browser, time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousBrowsing,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.6,
+					Timestamp:   entry.LastVisited,
+					Description: fmt.Sprintf("Potential dangerous file download via %s", entry.Browser),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Initial Access"},
+						Techniques: []string{"T1189"},
+					},
+					Details: map[string]interface{}{
+						"url":     truncateString(entry.URL, 300),
+						"browser": entry.Browser,
+						"user":    entry.User,
+						"reason":  "dangerous_download",
+					},
+				})
+				break
+			}
+		}
+
+		// High-risk TLD domains
+		domain := extractDomainFromURL(urlLower)
+		if domain == "" {
+			continue
+		}
+		for _, tld := range d.rules.HighRiskTLDs {
+			if strings.HasSuffix(domain, "."+tld) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("browse-tld-%s-%d", entry.Browser, time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousBrowsing,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.6,
+					Timestamp:   entry.LastVisited,
+					Description: fmt.Sprintf("Browser visited high-risk TLD domain: .%s (%s)", tld, entry.Browser),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Command and Control"},
+						Techniques: []string{"T1071"},
+					},
+					Details: map[string]interface{}{
+						"url":     truncateString(entry.URL, 300),
+						"domain":  domain,
+						"browser": entry.Browser,
+						"user":    entry.User,
+						"reason":  "high_risk_tld",
+					},
+				})
+				break
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousUSB detects suspicious USB device activity
+func (d *Detector) DetectSuspiciousUSB(devices []types.USBDeviceInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, device := range devices {
+		// Recently connected USB storage
+		if !device.LastConnect.IsZero() && time.Since(device.LastConnect) < 7*24*time.Hour {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("usb-recent-%s-%d", device.SerialNumber, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousUSB,
+				Severity:    types.SeverityInfo,
+				Confidence:  0.5,
+				Timestamp:   device.LastConnect,
+				Description: fmt.Sprintf("USB storage device '%s' connected within last 7 days", device.FriendlyName),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Initial Access", "Exfiltration"},
+					Techniques: []string{"T1091", "T1052.001"},
+				},
+				Details: map[string]interface{}{
+					"device_id":     device.DeviceID,
+					"serial_number": device.SerialNumber,
+					"friendly_name": device.FriendlyName,
+					"first_install": device.FirstInstall.Format(time.RFC3339),
+					"last_connect":  device.LastConnect.Format(time.RFC3339),
+					"drive_letter":  device.DriveLetter,
+					"reason":        "recent_usb",
+				},
+			})
+		}
+
+		// All USB devices for audit
+		if device.LastConnect.IsZero() && device.FirstInstall.IsZero() {
+			continue
+		}
+		detections = append(detections, types.Detection{
+			ID:          fmt.Sprintf("usb-audit-%s-%d", device.SerialNumber, time.Now().UnixNano()),
+			Type:        types.DetectionTypeSuspiciousUSB,
+			Severity:    types.SeverityInfo,
+			Confidence:  0.3,
+			Timestamp:   time.Now(),
+			Description: fmt.Sprintf("USB storage device history: '%s' (S/N: %s)", device.FriendlyName, device.SerialNumber),
+			MITRE: &types.MITREMapping{
+				Tactics:    []string{"Initial Access"},
+				Techniques: []string{"T1091"},
+			},
+			Details: map[string]interface{}{
+				"device_id":     device.DeviceID,
+				"serial_number": device.SerialNumber,
+				"friendly_name": device.FriendlyName,
+				"first_install": device.FirstInstall.Format(time.RFC3339),
+				"last_connect":  device.LastConnect.Format(time.RFC3339),
+				"drive_letter":  device.DriveLetter,
+				"reason":        "usb_audit",
+			},
+		})
+	}
+
+	return detections
+}
+
+// ═══════════════════════════════════════════════════════════
+// Phase 3 Detection Engines
+// ═══════════════════════════════════════════════════════════
+
+// DetectUnsignedDrivers detects unsigned or suspicious kernel drivers
+func (d *Detector) DetectUnsignedDrivers(drivers []types.DriverInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, drv := range drivers {
+		drvCopy := drv
+
+		// Unsigned running driver
+		if !drvCopy.IsSigned && drvCopy.State == "Running" {
+			severity := types.SeverityHigh
+			confidence := 0.8
+
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("driver-unsigned-%s-%d", drvCopy.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeUnsignedDriver,
+				Severity:    severity,
+				Confidence:  confidence,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Unsigned kernel driver '%s' is running (path: %s)", drvCopy.Name, drvCopy.Path),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Persistence", "Privilege Escalation"},
+					Techniques: []string{"T1543.003", "T1068"},
+				},
+				Details: map[string]interface{}{
+					"driver_name":  drvCopy.Name,
+					"display_name": drvCopy.DisplayName,
+					"path":         drvCopy.Path,
+					"state":        drvCopy.State,
+					"start_mode":   drvCopy.StartMode,
+					"reason":       "unsigned_driver",
+				},
+			})
+		}
+
+		// Driver from suspicious path
+		pathLower := strings.ToLower(drvCopy.Path)
+		suspiciousPath := false
+		if drvCopy.State == "Running" {
+			for _, dp := range d.rules.DangerousPaths {
+				if strings.Contains(pathLower, dp) {
+					suspiciousPath = true
+					break
+				}
+			}
+		}
+		if suspiciousPath {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("driver-path-%s-%d", drvCopy.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeUnsignedDriver,
+				Severity:    types.SeverityCritical,
+				Confidence:  0.9,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Kernel driver '%s' loaded from suspicious path: %s", drvCopy.Name, drvCopy.Path),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Persistence", "Defense Evasion"},
+					Techniques: []string{"T1543.003", "T1014"},
+				},
+				Details: map[string]interface{}{
+					"driver_name": drvCopy.Name,
+					"path":        drvCopy.Path,
+					"reason":      "suspicious_driver_path",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectFirewallAnomalies detects suspicious firewall rules
+func (d *Detector) DetectFirewallAnomalies(rules []types.FirewallRuleInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, rule := range rules {
+		ruleCopy := rule
+		programLower := strings.ToLower(ruleCopy.Program)
+
+		// Rules allowing suspicious programs
+		suspicious := false
+		if programLower != "" && ruleCopy.Enabled {
+			for _, sp := range d.rules.SuspiciousFirewallPrograms {
+				if strings.Contains(programLower, sp) {
+					suspicious = true
+					break
+				}
+			}
+
+			// Programs from suspicious paths
+			for _, dp := range d.rules.DangerousPaths {
+				if strings.Contains(programLower, dp) {
+					suspicious = true
+					break
+				}
+			}
+		}
+
+		// Rules allowing Any/All remote addresses on sensitive ports
+		if ruleCopy.Enabled && ruleCopy.RemoteAddr == "Any" {
+			if ruleCopy.LocalPort != "" && ruleCopy.LocalPort != "Any" {
+				// Check for well-known attack ports
+				var port uint16
+				if _, err := fmt.Sscanf(ruleCopy.LocalPort, "%d", &port); err == nil {
+					if _, known := d.rules.SuspiciousPorts[port]; known {
+						suspicious = true
+					}
+				}
+			}
+		}
+
+		if suspicious {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("firewall-%s-%d", ruleCopy.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeFirewallAnomaly,
+				Severity:    types.SeverityMedium,
+				Confidence:  0.7,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Suspicious firewall allow rule '%s' (program: %s, port: %s)", ruleCopy.DisplayName, ruleCopy.Program, ruleCopy.LocalPort),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Defense Evasion", "Command and Control"},
+					Techniques: []string{"T1562.004"},
+				},
+				Details: map[string]interface{}{
+					"rule_name":   ruleCopy.DisplayName,
+					"direction":   ruleCopy.Direction,
+					"program":     ruleCopy.Program,
+					"local_port":  ruleCopy.LocalPort,
+					"remote_addr": ruleCopy.RemoteAddr,
+					"reason":      "suspicious_firewall_rule",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousCertificates detects suspicious certificates in the store
+func (d *Detector) DetectSuspiciousCertificates(certs []types.CertificateInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, cert := range certs {
+		certCopy := cert
+
+		// Self-signed root certificates (not from well-known CAs)
+		if certCopy.IsSelfSigned && strings.Contains(certCopy.Store, "Root") {
+			// Check if it's a known legitimate self-signed cert
+			subjectLower := strings.ToLower(certCopy.Subject)
+			knownSelfSigned := false
+			for _, issuer := range d.rules.TrustedCertificateAuthorities {
+				if strings.Contains(subjectLower, issuer) {
+					knownSelfSigned = true
+					break
+				}
+			}
+
+			if !knownSelfSigned {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("cert-%s-%d", certCopy.Thumbprint[:8], time.Now().UnixNano()),
+					Type:        types.DetectionTypeSuspiciousCert,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.7,
+					Timestamp:   time.Now(),
+					Description: fmt.Sprintf("Unknown self-signed certificate in Root store: %s", certCopy.Subject),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Defense Evasion"},
+						Techniques: []string{"T1553.004"},
+					},
+					Details: map[string]interface{}{
+						"subject":     certCopy.Subject,
+						"issuer":      certCopy.Issuer,
+						"thumbprint":  certCopy.Thumbprint,
+						"store":       certCopy.Store,
+						"not_after":   certCopy.NotAfter.Format(time.RFC3339),
+						"reason":      "unknown_root_cert",
+					},
+				})
+			}
+		}
+
+		// Certificates in CurrentUser Root store (potential MITM proxy)
+		if strings.Contains(certCopy.Store, "CurrentUser-Root") && certCopy.IsSelfSigned {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("cert-user-%s-%d", certCopy.Thumbprint[:8], time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousCert,
+				Severity:    types.SeverityMedium,
+				Confidence:  0.6,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Self-signed certificate in CurrentUser Root store: %s (potential MITM)", certCopy.Subject),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Credential Access", "Collection"},
+					Techniques: []string{"T1557.002"},
+				},
+				Details: map[string]interface{}{
+					"subject":    certCopy.Subject,
+					"thumbprint": certCopy.Thumbprint,
+					"store":      certCopy.Store,
+					"reason":     "user_root_cert",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectSuspiciousShares detects suspicious network shares
+func (d *Detector) DetectSuspiciousShares(shares []types.SharedFolderInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, share := range shares {
+		shareCopy := share
+		nameLower := strings.ToLower(shareCopy.Name)
+
+		// Non-default hidden shares ($ suffix but not C$, D$, ADMIN$, IPC$, PRINT$)
+		if shareCopy.IsHidden && !d.rules.DefaultHiddenShares[nameLower] {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("share-hidden-%s-%d", shareCopy.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousShare,
+				Severity:    types.SeverityMedium,
+				Confidence:  0.7,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Non-default hidden share found: %s (path: %s)", shareCopy.Name, shareCopy.Path),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Lateral Movement", "Collection"},
+					Techniques: []string{"T1021.002", "T1039"},
+				},
+				Details: map[string]interface{}{
+					"share_name": shareCopy.Name,
+					"path":       shareCopy.Path,
+					"reason":     "non_default_hidden_share",
+				},
+			})
+		}
+
+		// Shares pointing to user directories or sensitive paths
+		pathLower := strings.ToLower(shareCopy.Path)
+		if !shareCopy.IsHidden && (strings.Contains(pathLower, `\users\`) ||
+			strings.Contains(pathLower, `\windows\`) ||
+			strings.Contains(pathLower, `\temp`)) {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("share-path-%s-%d", shareCopy.Name, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousShare,
+				Severity:    types.SeverityLow,
+				Confidence:  0.5,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Share '%s' exposes sensitive directory: %s", shareCopy.Name, shareCopy.Path),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Collection"},
+					Techniques: []string{"T1039"},
+				},
+				Details: map[string]interface{}{
+					"share_name": shareCopy.Name,
+					"path":       shareCopy.Path,
+					"reason":     "sensitive_path_share",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectLSASSAccess detects processes accessing LSASS (credential dumping)
+func (d *Detector) DetectLSASSAccess(handles []types.HandleInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, h := range handles {
+		hCopy := h
+
+		detections = append(detections, types.Detection{
+			ID:          fmt.Sprintf("lsass-%d-%s-%d", hCopy.ProcessPID, hCopy.ProcessName, time.Now().UnixNano()),
+			Type:        types.DetectionTypeLSASSAccess,
+			Severity:    types.SeverityCritical,
+			Confidence:  0.9,
+			Timestamp:   time.Now(),
+			Description: fmt.Sprintf("Process '%s' (PID: %d) has handle/access to LSASS (credential dump indicator)", hCopy.ProcessName, hCopy.ProcessPID),
+			MITRE: &types.MITREMapping{
+				Tactics:    []string{"Credential Access"},
+				Techniques: []string{"T1003.001"},
+			},
+			Details: map[string]interface{}{
+				"process_pid":  hCopy.ProcessPID,
+				"process_name": hCopy.ProcessName,
+				"process_path": hCopy.ProcessPath,
+				"target_pid":   hCopy.TargetPID,
+				"target_name":  hCopy.TargetName,
+				"reason":       "lsass_access",
+			},
+		})
+	}
+
+	return detections
+}
+
+// DetectSuspiciousBITS detects suspicious BITS transfer jobs
+func (d *Detector) DetectSuspiciousBITS(jobs []types.BITSJobInfo) []types.Detection {
+	var detections []types.Detection
+
+	for _, job := range jobs {
+		jobCopy := job
+		urlLower := strings.ToLower(jobCopy.URL)
+		localLower := strings.ToLower(jobCopy.LocalFile)
+
+		suspicious := false
+		reason := ""
+
+		// Suspicious URLs (raw IPs, high-risk TLDs)
+		if strings.Contains(urlLower, "http://") && !strings.Contains(urlLower, "microsoft.com") {
+			for _, tld := range d.rules.HighRiskTLDs {
+				if strings.HasSuffix(urlLower, tld) {
+					suspicious = true
+					reason = "high_risk_tld"
+					break
+				}
+			}
+		}
+
+		// Download to suspicious locations
+		for _, dp := range d.rules.DangerousPaths {
+			if strings.Contains(localLower, dp) {
+				suspicious = true
+				if reason == "" {
+					reason = "suspicious_download_path"
+				}
+				break
+			}
+		}
+
+		// Executable downloads
+		for _, ext := range d.rules.SuspiciousFileExtensions {
+			if strings.HasSuffix(localLower, ext) || strings.HasSuffix(urlLower, ext) {
+				suspicious = true
+				if reason == "" {
+					reason = "executable_download"
+				}
+				break
+			}
+		}
+
+		if suspicious {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("bits-%s-%d", jobCopy.JobID, time.Now().UnixNano()),
+				Type:        types.DetectionTypeSuspiciousBITS,
+				Severity:    types.SeverityMedium,
+				Confidence:  0.7,
+				Timestamp:   jobCopy.CreatedAt,
+				Description: fmt.Sprintf("Suspicious BITS job '%s': %s → %s", jobCopy.DisplayName, jobCopy.URL, jobCopy.LocalFile),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Defense Evasion", "Persistence"},
+					Techniques: []string{"T1197"},
+				},
+				Details: map[string]interface{}{
+					"job_id":      jobCopy.JobID,
+					"display_name": jobCopy.DisplayName,
+					"url":         jobCopy.URL,
+					"local_file":  jobCopy.LocalFile,
+					"owner":       jobCopy.Owner,
+					"state":       jobCopy.State,
+					"reason":      reason,
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectUserAssistAnomalies detects suspicious program execution from UserAssist
+func (d *Detector) DetectUserAssistAnomalies(entries []types.UserAssistEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		entryCopy := entry
+		nameLower := strings.ToLower(entryCopy.Name)
+
+		// Check for LOLBin execution
+		for _, lolbin := range d.rules.LOLBinCategories {
+			for binName := range lolbin {
+				if strings.Contains(nameLower, strings.ToLower(binName)) {
+					detections = append(detections, types.Detection{
+						ID:          fmt.Sprintf("userassist-lolbin-%d", time.Now().UnixNano()),
+						Type:        types.DetectionTypeUserAssistAnomaly,
+						Severity:    types.SeverityMedium,
+						Confidence:  0.6,
+						Timestamp:   entryCopy.LastExecution,
+						Description: fmt.Sprintf("UserAssist shows LOLBin execution: %s (run count: %d)", entryCopy.Name, entryCopy.RunCount),
+						MITRE: &types.MITREMapping{
+							Tactics:    []string{"Execution", "Defense Evasion"},
+							Techniques: []string{"T1218"},
+						},
+						Details: map[string]interface{}{
+							"program":        entryCopy.Name,
+							"run_count":      entryCopy.RunCount,
+							"last_execution": entryCopy.LastExecution.Format(time.RFC3339),
+							"user":           entryCopy.User,
+							"reason":         "lolbin_userassist",
+						},
+					})
+					break
+				}
+			}
+		}
+
+		// Programs from suspicious paths
+		suspiciousUA := false
+		for _, dp := range d.rules.DangerousPaths {
+			if strings.Contains(nameLower, dp) {
+				suspiciousUA = true
+				break
+			}
+		}
+		if suspiciousUA {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("userassist-path-%d", time.Now().UnixNano()),
+				Type:        types.DetectionTypeUserAssistAnomaly,
+				Severity:    types.SeverityLow,
+				Confidence:  0.5,
+				Timestamp:   entryCopy.LastExecution,
+				Description: fmt.Sprintf("UserAssist shows execution from suspicious path: %s", entryCopy.Name),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Execution"},
+					Techniques: []string{"T1204.002"},
+				},
+				Details: map[string]interface{}{
+					"program":        entryCopy.Name,
+					"run_count":      entryCopy.RunCount,
+					"last_execution": entryCopy.LastExecution.Format(time.RFC3339),
+					"reason":         "suspicious_path_userassist",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectBAMAnomalies detects suspicious execution from BAM/DAM entries
+func (d *Detector) DetectBAMAnomalies(entries []types.BAMEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		entryCopy := entry
+		pathLower := strings.ToLower(entryCopy.Path)
+
+		// Check for LOLBin execution
+		for binName := range d.rules.AllLOLBins {
+			if strings.HasSuffix(pathLower, strings.ToLower(binName)) ||
+				strings.Contains(pathLower, `\`+strings.ToLower(binName)) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("bam-lolbin-%d", time.Now().UnixNano()),
+					Type:        types.DetectionTypeBAMAnomaly,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.6,
+					Timestamp:   entryCopy.LastExecution,
+					Description: fmt.Sprintf("BAM shows LOLBin execution: %s", entryCopy.Path),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution", "Defense Evasion"},
+						Techniques: []string{"T1218"},
+					},
+					Details: map[string]interface{}{
+						"path":           entryCopy.Path,
+						"last_execution": entryCopy.LastExecution.Format(time.RFC3339),
+						"user":           entryCopy.User,
+						"reason":         "lolbin_bam",
+					},
+				})
+				break
+			}
+		}
+
+		// Execution from suspicious paths
+		suspiciousBAM := false
+		for _, dp := range d.rules.DangerousPaths {
+			if strings.Contains(pathLower, dp) {
+				suspiciousBAM = true
+				break
+			}
+		}
+		if suspiciousBAM {
+			if !entryCopy.LastExecution.IsZero() && time.Since(entryCopy.LastExecution) < 30*24*time.Hour {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("bam-path-%d", time.Now().UnixNano()),
+					Type:        types.DetectionTypeBAMAnomaly,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.6,
+					Timestamp:   entryCopy.LastExecution,
+					Description: fmt.Sprintf("Recent execution from suspicious path: %s", entryCopy.Path),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution"},
+						Techniques: []string{"T1204.002"},
+					},
+					Details: map[string]interface{}{
+						"path":           entryCopy.Path,
+						"last_execution": entryCopy.LastExecution.Format(time.RFC3339),
+						"user":           entryCopy.User,
+						"reason":         "suspicious_path_bam",
+					},
+				})
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectRDPAnomalies detects suspicious RDP connection history
+func (d *Detector) DetectRDPAnomalies(entries []types.RDPCacheEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		entryCopy := entry
+
+		// All RDP connections are noteworthy for security audit
+		severity := types.SeverityInfo
+		confidence := 0.4
+
+		// Internal IP connections (lateral movement indicator)
+		if isPrivateIP(entryCopy.Server) {
+			severity = types.SeverityLow
+			confidence = 0.5
+		}
+
+		detections = append(detections, types.Detection{
+			ID:          fmt.Sprintf("rdp-%s-%d", entryCopy.Server, time.Now().UnixNano()),
+			Type:        types.DetectionTypeRDPAnomaly,
+			Severity:    severity,
+			Confidence:  confidence,
+			Timestamp:   time.Now(),
+			Description: fmt.Sprintf("RDP connection history: %s (username hint: %s)", entryCopy.Server, entryCopy.UsernameHint),
+			MITRE: &types.MITREMapping{
+				Tactics:    []string{"Lateral Movement"},
+				Techniques: []string{"T1021.001"},
+			},
+			Details: map[string]interface{}{
+				"server":        entryCopy.Server,
+				"username_hint": entryCopy.UsernameHint,
+				"local_user":    entryCopy.User,
+				"reason":        "rdp_connection",
+			},
+		})
+	}
+
+	return detections
+}
+
+// DetectRecycleBinAnomalies detects suspicious files in the Recycle Bin
+func (d *Detector) DetectRecycleBinAnomalies(entries []types.RecycleBinEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		entryCopy := entry
+		pathLower := strings.ToLower(entryCopy.OriginalPath)
+
+		// Check for deleted security tools or LOLBins
+		for binName := range d.rules.AllLOLBins {
+			if strings.HasSuffix(pathLower, strings.ToLower(binName)) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("recbin-lolbin-%d", time.Now().UnixNano()),
+					Type:        types.DetectionTypeRecycleBinAnomaly,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.6,
+					Timestamp:   entryCopy.DeletedTime,
+					Description: fmt.Sprintf("Deleted LOLBin/tool found in Recycle Bin: %s", entryCopy.OriginalPath),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Defense Evasion"},
+						Techniques: []string{"T1070.004"},
+					},
+					Details: map[string]interface{}{
+						"original_path": entryCopy.OriginalPath,
+						"deleted_time":  entryCopy.DeletedTime.Format(time.RFC3339),
+						"file_size":     entryCopy.FileSize,
+						"user":          entryCopy.User,
+						"reason":        "deleted_lolbin",
+					},
+				})
+				break
+			}
+		}
+
+		// Suspicious file types deleted recently
+		for _, ext := range d.rules.SuspiciousFileExtensions {
+			if strings.HasSuffix(pathLower, ext) {
+				if !entryCopy.DeletedTime.IsZero() && time.Since(entryCopy.DeletedTime) < 7*24*time.Hour {
+					detections = append(detections, types.Detection{
+						ID:          fmt.Sprintf("recbin-recent-%d", time.Now().UnixNano()),
+						Type:        types.DetectionTypeRecycleBinAnomaly,
+						Severity:    types.SeverityLow,
+						Confidence:  0.4,
+						Timestamp:   entryCopy.DeletedTime,
+						Description: fmt.Sprintf("Recently deleted executable: %s (%s)", entryCopy.OriginalPath, ext),
+						MITRE: &types.MITREMapping{
+							Tactics:    []string{"Defense Evasion"},
+							Techniques: []string{"T1070.004"},
+						},
+						Details: map[string]interface{}{
+							"original_path": entryCopy.OriginalPath,
+							"deleted_time":  entryCopy.DeletedTime.Format(time.RFC3339),
+							"file_size":     entryCopy.FileSize,
+							"reason":        "recently_deleted_executable",
+						},
+					})
+				}
+				break
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectWERAnomalies detects suspicious crash reports (e.g., LSASS crashes from credential dumping)
+func (d *Detector) DetectWERAnomalies(entries []types.WEREntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		entryCopy := entry
+		appLower := strings.ToLower(entryCopy.FaultingApp)
+		pathLower := strings.ToLower(entryCopy.FaultingPath)
+
+		// LSASS crash - strong credential dump indicator
+		if strings.Contains(appLower, "lsass") {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("wer-lsass-%d", time.Now().UnixNano()),
+				Type:        types.DetectionTypeWERAnomaly,
+				Severity:    types.SeverityHigh,
+				Confidence:  0.85,
+				Timestamp:   entryCopy.ReportTime,
+				Description: fmt.Sprintf("LSASS crash report found (potential credential dump attempt): %s", entryCopy.FaultingApp),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Credential Access"},
+					Techniques: []string{"T1003.001"},
+				},
+				Details: map[string]interface{}{
+					"faulting_app":   entryCopy.FaultingApp,
+					"faulting_path":  entryCopy.FaultingPath,
+					"exception_code": entryCopy.ExceptionCode,
+					"report_time":   entryCopy.ReportTime.Format(time.RFC3339),
+					"reason":        "lsass_crash",
+				},
+			})
+		}
+
+		// Security process crashes (skip lsass - handled above with higher severity)
+		for _, proc := range d.rules.CriticalSecurityProcesses {
+			if proc == "lsass" {
+				continue
+			}
+			if strings.Contains(appLower, proc) || strings.Contains(pathLower, proc) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("wer-security-%d", time.Now().UnixNano()),
+					Type:        types.DetectionTypeWERAnomaly,
+					Severity:    types.SeverityMedium,
+					Confidence:  0.6,
+					Timestamp:   entryCopy.ReportTime,
+					Description: fmt.Sprintf("Security process crash report: %s", entryCopy.FaultingApp),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Defense Evasion"},
+						Techniques: []string{"T1562.001"},
+					},
+					Details: map[string]interface{}{
+						"faulting_app":  entryCopy.FaultingApp,
+						"faulting_path": entryCopy.FaultingPath,
+						"report_time":  entryCopy.ReportTime.Format(time.RFC3339),
+						"reason":       "security_process_crash",
+					},
+				})
+				break
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectTimestomping detects timestamp manipulation by comparing $SI and $FN timestamps in MFT
+func (d *Detector) DetectTimestomping(entries []types.MFTEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		entryCopy := entry
+
+		// Skip entries without both timestamps
+		if entryCopy.SICreated.IsZero() || entryCopy.FNCreated.IsZero() {
+			continue
+		}
+
+		// $STANDARD_INFORMATION timestamps can be modified by user-mode programs
+		// $FILE_NAME timestamps can only be modified by the kernel
+		// If $SI is significantly earlier than $FN, timestomping is likely
+		siToFN := entryCopy.FNCreated.Sub(entryCopy.SICreated)
+		if siToFN > time.Duration(d.rules.TimestompingThresholdHours)*time.Hour {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("timestomp-%d-%d", entryCopy.RecordNumber, time.Now().UnixNano()),
+				Type:        types.DetectionTypeTimestomping,
+				Severity:    types.SeverityHigh,
+				Confidence:  0.85,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Timestamp manipulation detected on '%s': $SI created %s but $FN created %s (diff: %s)", entryCopy.FileName, entryCopy.SICreated.Format("2006-01-02"), entryCopy.FNCreated.Format("2006-01-02"), siToFN),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Defense Evasion"},
+					Techniques: []string{"T1070.006"},
+				},
+				Details: map[string]interface{}{
+					"file_name":     entryCopy.FileName,
+					"record_number": entryCopy.RecordNumber,
+					"si_created":    entryCopy.SICreated.Format(time.RFC3339),
+					"fn_created":    entryCopy.FNCreated.Format(time.RFC3339),
+					"si_modified":   entryCopy.SIModified.Format(time.RFC3339),
+					"difference":    siToFN.String(),
+					"reason":        "timestomping",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectEvidenceDestruction detects signs of evidence destruction from Recycle Bin and USN Journal
+func (d *Detector) DetectEvidenceDestruction(recycleBin []types.RecycleBinEntry, usnJournal []types.USNJournalEntry) []types.Detection {
+	var detections []types.Detection
+
+	// Check Recycle Bin for deleted evidence files
+	for _, entry := range recycleBin {
+		entryCopy := entry
+		nameLower := strings.ToLower(filepath.Base(entryCopy.OriginalPath))
+
+		for _, ext := range d.rules.EvidenceFileExtensions {
+			if strings.HasSuffix(nameLower, ext) {
+				severity := types.SeverityMedium
+				confidence := 0.65
+				technique := "T1070.004"
+				if ext == ".evtx" {
+					severity = types.SeverityHigh
+					confidence = 0.8
+					technique = "T1070.001"
+				}
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("evidence-recycle-%s-%d", ext[1:], time.Now().UnixNano()),
+					Type:        types.DetectionTypeEvidenceDestruction,
+					Severity:    severity,
+					Confidence:  confidence,
+					Timestamp:   entryCopy.DeletedTime,
+					Description: fmt.Sprintf("Evidence file found in Recycle Bin: %s", entryCopy.OriginalPath),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Defense Evasion"},
+						Techniques: []string{technique},
+					},
+					Details: map[string]interface{}{
+						"original_path": entryCopy.OriginalPath,
+						"extension":     ext,
+						"deleted_time":  entryCopy.DeletedTime.Format(time.RFC3339),
+						"file_size":     entryCopy.FileSize,
+						"user":          entryCopy.User,
+						"source":        "recycle_bin",
+					},
+				})
+				break
+			}
+		}
+	}
+
+	// Check USN journal for log deletion
+	for _, entry := range usnJournal {
+		entryCopy := entry
+		nameLower := strings.ToLower(entryCopy.FileName)
+		reasonLower := strings.ToLower(entryCopy.Reason)
+
+		// Evidence file deletion (event logs, prefetch, etc.)
+		if strings.Contains(reasonLower, "delete") {
+			for _, ext := range d.rules.EvidenceFileExtensions {
+				if strings.HasSuffix(nameLower, ext) {
+					severity := types.SeverityMedium
+					confidence := 0.7
+					technique := "T1070.004"
+					// Event log deletion is higher severity than other evidence files
+					if ext == ".evtx" {
+						severity = types.SeverityHigh
+						confidence = 0.85
+						technique = "T1070.001"
+					}
+					detections = append(detections, types.Detection{
+						ID:          fmt.Sprintf("evidence-%s-%d", ext[1:], time.Now().UnixNano()),
+						Type:        types.DetectionTypeEvidenceDestruction,
+						Severity:    severity,
+						Confidence:  confidence,
+						Timestamp:   entryCopy.Timestamp,
+						Description: fmt.Sprintf("Evidence file deleted: %s", entryCopy.FileName),
+						MITRE: &types.MITREMapping{
+							Tactics:    []string{"Defense Evasion"},
+							Techniques: []string{technique},
+						},
+						Details: map[string]interface{}{
+							"file_name": entryCopy.FileName,
+							"extension": ext,
+							"reason":    entryCopy.Reason,
+							"timestamp": entryCopy.Timestamp.Format(time.RFC3339),
+							"usn":       entryCopy.USN,
+							"source":    "usn_journal",
+						},
+					})
+					break
+				}
+			}
+		}
+	}
+
+	return detections
+}
+
+// DetectBeaconing detects periodic communication patterns (C2 beaconing)
+func (d *Detector) DetectBeaconing(connections []types.NetworkConnection) []types.Detection {
+	var detections []types.Detection
+
+	// Group connections by remote endpoint
+	endpointCounts := make(map[string]int)
+	for _, conn := range connections {
+		if conn.RemoteAddr != "" && !isPrivateIP(conn.RemoteAddr) && conn.State == "ESTABLISHED" {
+			key := fmt.Sprintf("%s:%d", conn.RemoteAddr, conn.RemotePort)
+			endpointCounts[key]++
+		}
+	}
+
+	// Multiple established connections to the same external endpoint is suspicious
+	for endpoint, count := range endpointCounts {
+		if count >= d.rules.BeaconingThreshold {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("beacon-%s-%d", endpoint, time.Now().UnixNano()),
+				Type:        types.DetectionTypeBeaconing,
+				Severity:    types.SeverityMedium,
+				Confidence:  0.5,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("Multiple connections (%d) to external endpoint %s (potential beaconing)", count, endpoint),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Command and Control"},
+					Techniques: []string{"T1071", "T1573"},
+				},
+				Details: map[string]interface{}{
+					"endpoint":         endpoint,
+					"connection_count": count,
+					"reason":           "multiple_connections",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// DetectJumplistAnomalies detects suspicious entries in Jumplist/LNK files
+func (d *Detector) DetectJumplistAnomalies(entries []types.JumplistEntry) []types.Detection {
+	var detections []types.Detection
+
+	for _, entry := range entries {
+		entryCopy := entry
+		targetLower := strings.ToLower(entryCopy.TargetPath)
+
+		// LOLBin targets in jumplist
+		for binName := range d.rules.AllLOLBins {
+			if strings.HasSuffix(targetLower, strings.ToLower(binName)) {
+				detections = append(detections, types.Detection{
+					ID:          fmt.Sprintf("jumplist-lolbin-%d", time.Now().UnixNano()),
+					Type:        types.DetectionTypeJumplistAnomaly,
+					Severity:    types.SeverityLow,
+					Confidence:  0.5,
+					Timestamp:   entryCopy.AccessTime,
+					Description: fmt.Sprintf("Jumplist/LNK shows LOLBin access: %s", entryCopy.TargetPath),
+					MITRE: &types.MITREMapping{
+						Tactics:    []string{"Execution"},
+						Techniques: []string{"T1218"},
+					},
+					Details: map[string]interface{}{
+						"target_path":  entryCopy.TargetPath,
+						"arguments":    entryCopy.Arguments,
+						"access_time":  entryCopy.AccessTime.Format(time.RFC3339),
+						"user":         entryCopy.User,
+						"reason":       "lolbin_jumplist",
+					},
+				})
+				break
+			}
+		}
+
+		// Remote path access (UNC paths)
+		if strings.HasPrefix(targetLower, `\\`) {
+			detections = append(detections, types.Detection{
+				ID:          fmt.Sprintf("jumplist-unc-%d", time.Now().UnixNano()),
+				Type:        types.DetectionTypeJumplistAnomaly,
+				Severity:    types.SeverityLow,
+				Confidence:  0.5,
+				Timestamp:   entryCopy.AccessTime,
+				Description: fmt.Sprintf("Jumplist shows remote path access: %s", entryCopy.TargetPath),
+				MITRE: &types.MITREMapping{
+					Tactics:    []string{"Lateral Movement"},
+					Techniques: []string{"T1021.002"},
+				},
+				Details: map[string]interface{}{
+					"target_path": entryCopy.TargetPath,
+					"access_time": entryCopy.AccessTime.Format(time.RFC3339),
+					"user":        entryCopy.User,
+					"reason":      "remote_path_access",
+				},
+			})
+		}
+	}
+
+	return detections
+}
+
+// extractDomainFromURL extracts the domain from a URL string
+func extractDomainFromURL(url string) string {
+	if idx := strings.Index(url, "://"); idx >= 0 {
+		url = url[idx+3:]
+	}
+	if idx := strings.IndexAny(url, "/?#"); idx >= 0 {
+		url = url[:idx]
+	}
+	if idx := strings.LastIndex(url, ":"); idx >= 0 {
+		url = url[:idx]
+	}
+	if idx := strings.Index(url, "@"); idx >= 0 {
+		url = url[idx+1:]
+	}
+	return url
 }
 
 // ExtractIOCs extracts Indicators of Compromise from scan results
